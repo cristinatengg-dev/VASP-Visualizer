@@ -465,6 +465,9 @@ const CopyrightStrip: React.FC = () => (
 const HeroSection: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useStore();
+  const handleAgentOpen = (route: string) => {
+    navigate(user ? route : "/login");
+  };
 
   return (
     <section
@@ -569,7 +572,7 @@ const HeroSection: React.FC = () => {
               <AgentCardItem
                 key={card.id}
                 card={card}
-                onClick={() => navigate(card.route)}
+                onClick={() => handleAgentOpen(card.route)}
               />
             ))}
           </motion.div>

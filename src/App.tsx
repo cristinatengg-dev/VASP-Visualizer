@@ -30,6 +30,12 @@ const AppRoute: React.FC = () => {
   );
 };
 
+const AgentRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const { user } = useStore();
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+};
+
 function App() {
   const { user, setUser } = useStore();
   
@@ -91,10 +97,10 @@ function App() {
       <Route path="/explore" element={<Explore />} />
       <Route path="/manual" element={<Manual />} />
       {/* Agent 工作台 */}
-      <Route path="/agent/rendering" element={<RenderingAgent />} />
-      <Route path="/agent/modeling" element={<ModelingAgent />} />
-      <Route path="/agent/compute" element={<ComputeAgent />} />
-      <Route path="/agent/runtime" element={<RuntimeInspector />} />
+      <Route path="/agent/rendering" element={<AgentRoute><RenderingAgent /></AgentRoute>} />
+      <Route path="/agent/modeling" element={<AgentRoute><ModelingAgent /></AgentRoute>} />
+      <Route path="/agent/compute" element={<AgentRoute><ComputeAgent /></AgentRoute>} />
+      <Route path="/agent/runtime" element={<AgentRoute><RuntimeInspector /></AgentRoute>} />
       {/* 旧路由兼容 */}
       <Route path="/hero" element={<Navigate to="/" replace />} />
     </Routes>
