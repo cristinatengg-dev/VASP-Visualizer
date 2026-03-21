@@ -15,6 +15,24 @@ import { getAtomProperties } from '../../../utils/atomData';
 const MODELING_PROVIDER_SET = new Set<string>(MODELING_PROVIDER_OPTIONS);
 const RUNTIME_SESSION_STORAGE_KEY = 'runtime_demo_session_id';
 
+const humanizeModelingError = (message: string) => {
+  const raw = String(message || '').trim();
+
+  if (!raw) {
+    return '建模请求暂时失败，请稍后再试。';
+  }
+
+  if (/GEMINI_API_KEY is not configured/i.test(raw)) {
+    return '智能解析暂时不可用，请直接调整下方参数或稍后再试。';
+  }
+
+  if (/runtime demo route is unavailable/i.test(raw) || /Cannot POST .*runtime-demo/i.test(raw)) {
+    return '运行时增强暂时不可用，系统已自动回退到标准建模流程。';
+  }
+
+  return raw.replace(/^HTTP\s+\d+:\s*/i, '');
+};
+
 export const useModeling = () => {
   const [isBuilding, setIsBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -246,12 +264,19 @@ export const useModeling = () => {
           providerPreferences: normalizedProviders,
         }),
       });
-      
+
       if (!response.ok) {
         const errText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errText}`);
+        let serverMessage = errText;
+        try {
+          const parsed = errText ? JSON.parse(errText) : null;
+          serverMessage = parsed?.error || parsed?.message || errText;
+        } catch (_error) {
+          serverMessage = errText;
+        }
+        throw new Error(serverMessage || `HTTP ${response.status}`);
       }
-      
+
       const result = await response.json();
       if (result.success) {
         setError(null);
@@ -262,12 +287,12 @@ export const useModeling = () => {
           ),
         };
       } else {
-        setError(result.error || 'Failed to parse intent');
+        setError(humanizeModelingError(result.error || 'Failed to parse intent'));
         return null;
       }
     } catch (err) {
       console.error('Parse error detail:', err);
-      setError(err instanceof Error ? err.message : String(err));
+      setError(humanizeModelingError(err instanceof Error ? err.message : String(err)));
       return null;
     } finally {
       setIsBuilding(false);
@@ -474,7 +499,7 @@ export const useModeling = () => {
       }
     } catch (err) {
       console.error('Build error:', err);
-      setError(err instanceof Error ? err.message : 'Network error');
+      setError(humanizeModelingError(err instanceof Error ? err.message : 'Network error'));
       return false;
     } finally {
       setIsBuilding(false);
@@ -501,7 +526,7 @@ export const useModeling = () => {
       return await replanModelRuntime(requestIntent, prompt);
     } catch (err) {
       console.error('Replan build error:', err);
-      setError(err instanceof Error ? err.message : 'Replan failed');
+      setError(humanizeModelingError(err instanceof Error ? err.message : 'Replan failed'));
       return false;
     } finally {
       setIsBuilding(false);

@@ -56,6 +56,29 @@ Important defaults:
 - If provider_preferences is not explicitly requested, keep the default search order.
 - Preferred provider order defaults to: ${DEFAULT_MODELING_PROVIDER_ORDER.join(', ')}.`;
 
+const SURFACE_TASK_RE = /(surface|slab|表面|吸附|adsorb|adsorption|vacuum|层)/i;
+const BULK_TASK_RE = /(bulk|crystal|晶体|体相)/i;
+const MOLECULE_TASK_RE = /(molecule|分子)/i;
+const FORMULA_RE = /\b(?:[A-Z][a-z]?\d*)+\b/g;
+const SITE_RE = /\b(top|bridge|hollow)\b/i;
+const COMMON_ADSORBATES = new Set([
+  'CO2',
+  'CO',
+  'H2O',
+  'NH3',
+  'NO',
+  'NO2',
+  'O2',
+  'N2',
+  'H2',
+  'CH4',
+  'OH',
+  'H',
+  'O',
+  'N',
+  'SO2',
+]);
+
 function safeJsonParse(value) {
   const raw = String(value || '').trim();
   if (!raw) {
@@ -207,6 +230,179 @@ function normalizeModelingIntent(intent, providerPreferences) {
   return nextIntent;
 }
 
+function normalizeSurfaceLabel(value) {
+  const normalized = String(value || '')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/，/g, ',');
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized.startsWith('(') ? normalized : `(${normalized})`;
+}
+
+function collectFormulaCandidates(prompt) {
+  const matches = String(prompt || '').match(FORMULA_RE) || [];
+  return matches.filter(Boolean);
+}
+
+function inferTaskType(prompt) {
+  if (SURFACE_TASK_RE.test(prompt)) {
+    return 'slab';
+  }
+  if (BULK_TASK_RE.test(prompt)) {
+    return 'crystal';
+  }
+  if (MOLECULE_TASK_RE.test(prompt)) {
+    return 'molecule';
+  }
+  return 'slab';
+}
+
+function inferSubstrate(prompt, taskType) {
+  const surfaceMatch = String(prompt || '').match(/([A-Z][A-Za-z0-9]*)\s*\(\s*([0-9,\- ]+)\s*\)/);
+  const formulas = collectFormulaCandidates(prompt);
+
+  let material = '';
+  let surface;
+
+  if (surfaceMatch) {
+    material = surfaceMatch[1];
+    surface = normalizeSurfaceLabel(surfaceMatch[2]);
+  } else {
+    const cnSurfaceMatch = String(prompt || '').match(/([A-Za-z0-9]+)\s*表面/);
+    const bulkMatch = String(prompt || '').match(/(?:bulk|crystal|晶体|体相)(?:\s+structure)?(?:\s+for)?\s*([A-Za-z][A-Za-z0-9]*)/i);
+    material = cnSurfaceMatch?.[1] || bulkMatch?.[1] || '';
+  }
+
+  if (!material) {
+    const firstNonAdsorbate = formulas.find((value) => !COMMON_ADSORBATES.has(value));
+    material = firstNonAdsorbate || formulas[0] || '';
+  }
+
+  const layersMatch = String(prompt || '').match(/(\d+)\s*(?:层|layers?)/i);
+  const supercellMatch = String(prompt || '').match(/(\d+)\s*[x×X]\s*(\d+)(?:\s*[x×X]\s*(\d+))?/);
+  const vacuumMatch = String(prompt || '').match(/(\d+(?:\.\d+)?)\s*(?:Å|A)\s*(?:vacuum)?/i)
+    || String(prompt || '').match(/vacuum\s*(\d+(?:\.\d+)?)/i);
+
+  const parsedLayers = Number(layersMatch?.[1]);
+  const layers = Number.isFinite(parsedLayers) && parsedLayers > 0
+    ? Math.max(1, Math.round(parsedLayers))
+    : undefined;
+
+  const supercell = supercellMatch
+    ? [
+        Math.max(1, Number(supercellMatch[1]) || 1),
+        Math.max(1, Number(supercellMatch[2]) || 1),
+        Math.max(1, Number(supercellMatch[3]) || 1),
+      ]
+    : [1, 1, 1];
+
+  const parsedVacuum = Number(vacuumMatch?.[1]);
+  const vacuum = Number.isFinite(parsedVacuum) && parsedVacuum > 0
+    ? parsedVacuum
+    : 15;
+
+  return {
+    material,
+    ...(taskType === 'slab' ? { surface: surface || '(111)' } : {}),
+    ...(layers ? { layers } : {}),
+    supercell,
+    vacuum,
+    min_slab_size: 8,
+  };
+}
+
+function inferAdsorbates(prompt, substrateMaterial) {
+  const formulas = collectFormulaCandidates(prompt).filter((value) => value !== substrateMaterial);
+  const directMatch = String(prompt || '').match(/(?:放(?:一|1|一个)?|add|put|adsorb(?:ate)?|吸附)(?:[^A-Za-z0-9]{0,10})([A-Z][A-Za-z0-9]*)/i);
+  const formula = directMatch?.[1] || formulas.find((value) => COMMON_ADSORBATES.has(value)) || formulas[0];
+
+  if (!formula || !/(放|add|put|adsorb|吸附|surface)/i.test(prompt)) {
+    return [];
+  }
+
+  const siteMatch = String(prompt || '').match(SITE_RE);
+  const countMatch = String(prompt || '').match(/(\d+)\s*(?:个|分子|molecules?)/i);
+  const count = Number.isFinite(Number(countMatch?.[1])) && Number(countMatch?.[1]) > 0
+    ? Math.max(1, Math.round(Number(countMatch[1])))
+    : 1;
+
+  return [
+    {
+      formula,
+      initial_site: String(siteMatch?.[1] || 'top').toLowerCase(),
+      count,
+    },
+  ];
+}
+
+function inferDoping(prompt) {
+  const replaceMatch = String(prompt || '').match(/replace\s+([A-Z][a-z]?)\s+with\s+([A-Z][a-z]?)/i)
+    || String(prompt || '').match(/把(?:其中一个|一个)?\s*([A-Z][a-z]?)\s*换成\s*([A-Z][a-z]?)/);
+
+  if (!replaceMatch) {
+    return undefined;
+  }
+
+  const countMatch = String(prompt || '').match(/(\d+)\s*(?:个|substitutions?)/i);
+  const count = Number.isFinite(Number(countMatch?.[1])) && Number(countMatch?.[1]) > 0
+    ? Math.max(1, Math.round(Number(countMatch[1])))
+    : 1;
+
+  return {
+    host_element: replaceMatch[1],
+    dopant_element: replaceMatch[2],
+    count,
+  };
+}
+
+function inferDefect(prompt) {
+  const vacancyMatch = String(prompt || '').match(/([A-Z][a-z]?)\s*vacancy/i)
+    || String(prompt || '').match(/(?:remove|delete|删(?:除)?|去掉)\s*(?:one|1|一个)?\s*([A-Z][a-z]?)/i);
+
+  if (!vacancyMatch) {
+    return undefined;
+  }
+
+  const countMatch = String(prompt || '').match(/(\d+)\s*(?:个|vacancies?)/i);
+  const count = Number.isFinite(Number(countMatch?.[1])) && Number(countMatch?.[1]) > 0
+    ? Math.max(1, Math.round(Number(countMatch[1])))
+    : 1;
+
+  return {
+    type: 'vacancy',
+    element: vacancyMatch[1],
+    count,
+  };
+}
+
+function parseModelingIntentHeuristically({ prompt, providerPreferences } = {}) {
+  const normalizedPrompt = String(prompt || '').trim();
+  const normalizedProviders = normalizeModelingProviderPreferences(providerPreferences);
+  const taskType = inferTaskType(normalizedPrompt);
+  const substrate = inferSubstrate(normalizedPrompt, taskType);
+  const adsorbates = taskType === 'slab'
+    ? inferAdsorbates(normalizedPrompt, substrate.material)
+    : [];
+  const doping = inferDoping(normalizedPrompt);
+  const defect = inferDefect(normalizedPrompt);
+
+  return normalizeModelingIntent(
+    {
+      task_type: taskType,
+      substrate,
+      adsorbates,
+      doping,
+      defect,
+      provider_preferences: normalizedProviders,
+    },
+    normalizedProviders
+  );
+}
+
 async function parseModelingIntent({ prompt, providerPreferences } = {}) {
   const normalizedPrompt = String(prompt || '').trim();
   if (!normalizedPrompt) {
@@ -214,26 +410,38 @@ async function parseModelingIntent({ prompt, providerPreferences } = {}) {
   }
 
   const normalizedProviders = normalizeModelingProviderPreferences(providerPreferences);
-  const content = await geminiChat(
-    [
-      {
-        role: 'system',
-        content: MODELING_INTENT_SYSTEM_PROMPT,
-      },
-      {
-        role: 'user',
-        content: `${normalizedPrompt}\n\nPreferred database order: ${normalizedProviders.join(', ')}`,
-      },
-    ],
-    true
-  );
+  try {
+    const content = await geminiChat(
+      [
+        {
+          role: 'system',
+          content: MODELING_INTENT_SYSTEM_PROMPT,
+        },
+        {
+          role: 'user',
+          content: `${normalizedPrompt}\n\nPreferred database order: ${normalizedProviders.join(', ')}`,
+        },
+      ],
+      true
+    );
 
-  return normalizeModelingIntent(safeJsonParse(content), normalizedProviders);
+    return normalizeModelingIntent(safeJsonParse(content), normalizedProviders);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || '');
+    if (/GEMINI_API_KEY is not configured/i.test(message)) {
+      return parseModelingIntentHeuristically({
+        prompt: normalizedPrompt,
+        providerPreferences: normalizedProviders,
+      });
+    }
+    throw error;
+  }
 }
 
 module.exports = {
   MODELING_INTENT_SYSTEM_PROMPT,
   normalizeModelingIntent,
+  parseModelingIntentHeuristically,
   parseModelingIntent,
   safeJsonParse,
 };

@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   MODELING_PROVIDER_OPTIONS,
   ModelingIntent,
@@ -13,10 +12,8 @@ interface ChatPanelProps {
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) => {
-  const navigate = useNavigate();
   const [input, setInput] = useState('');
   const [providerOrderInput, setProviderOrderInput] = useState(MODELING_PROVIDER_OPTIONS.join(','));
-  const [runtimeSessionInput, setRuntimeSessionInput] = useState('');
   const [editMaterial, setEditMaterial] = useState('');
   const [editSurface, setEditSurface] = useState('');
   const [editVacuum, setEditVacuum] = useState('');
@@ -38,16 +35,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
     isBuilding,
     error,
     diagnostics,
-    diagnosticsError,
     isLoadingDiagnostics,
     loadDiagnostics,
     latestBuildMeta,
     runtimeSession,
-    runtimeSessionError,
-    isLoadingRuntimeSession,
-    loadRuntimeSession,
-    connectRuntimeSession,
-    clearRuntimeSession,
   } = useModeling();
 
   const normalizedProviders = useMemo(() => {
@@ -78,12 +69,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
   }, [currentIntent?.provider_preferences, diagnostics?.defaultOrder, providerOrderInput]);
 
   useEffect(() => {
-    if (runtimeSession?.sessionId) {
-      setRuntimeSessionInput(runtimeSession.sessionId);
-    }
-  }, [runtimeSession?.sessionId]);
-
-  useEffect(() => {
     if (!currentIntent) {
       return;
     }
@@ -107,16 +92,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
     setEditDefectElement(currentIntent.defect?.element || '');
     setEditDefectCount(String(currentIntent.defect?.count || 1));
   }, [currentIntent]);
-
-  const shortId = (value?: string | null) => {
-    if (!value) {
-      return 'n/a';
-    }
-    if (value.length <= 16) {
-      return value;
-    }
-    return `${value.slice(0, 10)}...${value.slice(-4)}`;
-  };
 
   const handleSend = async () => {
     if (!input.trim() || isBuilding) return;
@@ -283,16 +258,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
             ⚠️ {error}
           </div>
         )}
-        {diagnosticsError && (
-          <div className="bg-amber-50 border border-amber-200 rounded-[16px] p-3 text-xs text-amber-700">
-            Provider diagnostics unavailable: {diagnosticsError}
-          </div>
-        )}
-        {runtimeSessionError && (
-          <div className="bg-amber-50 border border-amber-200 rounded-[16px] p-3 text-xs text-amber-700">
-            Runtime session warning: {runtimeSessionError}
-          </div>
-        )}
         <div className="bg-gray-50 border border-gray-200 rounded-[24px] p-6">
           <p className="text-sm text-gray-600">
             你好！我是您的 AI 建模助手。您可以尝试输入：
@@ -340,162 +305,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
           </div>
         </div>
 
-        <div className="bg-white border border-gray-100 rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] ring-1 ring-black/5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Runtime Session</h3>
-              <p className="mt-2 text-sm text-gray-600">
-                当前建模页会优先把新结构写进 runtime session，产出真正的 `structure artifact`。
-              </p>
-            </div>
-            <span className={`rounded-[16px] px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${
-              runtimeSession
-                ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
-                : 'bg-slate-50 text-slate-600 border border-slate-200'
-            }`}>
-              {runtimeSession ? 'Connected' : 'Detached'}
-            </span>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            <input
-              value={runtimeSessionInput}
-              onChange={(event) => setRuntimeSessionInput(event.target.value)}
-              placeholder="Paste runtime session id to attach..."
-              className="w-full rounded-[16px] border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-mono text-gray-600 outline-none transition focus:border-gray-300 focus:bg-white"
-            />
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void connectRuntimeSession(runtimeSessionInput)}
-                disabled={isLoadingRuntimeSession || !runtimeSessionInput.trim()}
-                className="px-4 py-3 bg-[#0A1128] text-white rounded-[32px] hover:bg-[#162044] transition-colors shadow-sm font-medium text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200 disabled:shadow-none disabled:cursor-not-allowed"
-              >
-                {isLoadingRuntimeSession ? '连接中...' : '切换 Session'}
-              </button>
-              <button
-                type="button"
-                onClick={() => void loadRuntimeSession()}
-                disabled={isLoadingRuntimeSession}
-                className="px-4 py-3 bg-gray-50 border border-gray-200 text-gray-700 rounded-[32px] hover:bg-gray-100 transition-colors text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                刷新
-              </button>
-              <button
-                type="button"
-                onClick={clearRuntimeSession}
-                disabled={!runtimeSession}
-                className="px-4 py-3 bg-gray-50 border border-gray-200 text-gray-700 rounded-[32px] hover:bg-gray-100 transition-colors text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                清空复用
-              </button>
-              {runtimeSession?.sessionId ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const params = new URLSearchParams({ sessionId: runtimeSession.sessionId });
-                    navigate(`/agent/runtime?${params.toString()}`);
-                  }}
-                  className="px-4 py-3 bg-white border border-cyan-200 text-cyan-700 rounded-[32px] hover:bg-cyan-50 transition-colors text-sm font-medium"
-                >
-                  打开 Inspector
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          {runtimeSession ? (
-            <div className="mt-4 grid grid-cols-2 gap-3 text-[11px] text-gray-600">
-              <div className="rounded-[16px] bg-gray-50 border border-gray-100 px-3 py-3">
-                <div className="text-gray-400 uppercase tracking-widest text-[9px] font-bold">Session</div>
-                <div className="mt-1 font-mono">{shortId(runtimeSession.sessionId)}</div>
-              </div>
-              <div className="rounded-[16px] bg-gray-50 border border-gray-100 px-3 py-3">
-                <div className="text-gray-400 uppercase tracking-widest text-[9px] font-bold">Status</div>
-                <div className="mt-1 font-mono">{runtimeSession.status}</div>
-              </div>
-              <div className="rounded-[16px] bg-gray-50 border border-gray-100 px-3 py-3">
-                <div className="text-gray-400 uppercase tracking-widest text-[9px] font-bold">Artifacts / Tasks</div>
-                <div className="mt-1 font-mono">{runtimeSession.artifactCount ?? 0} / {runtimeSession.taskRunCount ?? 0}</div>
-              </div>
-              <div className="rounded-[16px] bg-gray-50 border border-gray-100 px-3 py-3">
-                <div className="text-gray-400 uppercase tracking-widest text-[9px] font-bold">Jobs / Approvals</div>
-                <div className="mt-1 font-mono">{runtimeSession.jobRunCount ?? 0} / {runtimeSession.approvalCount ?? 0}</div>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4 rounded-[16px] border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-500">
-              当前没有绑定 runtime session。下一次 runtime-backed build 会自动创建或复用一条 session。
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white border border-gray-100 rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] ring-1 ring-black/5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Provider & Engine Health</h3>
-              <p className="mt-2 text-sm text-gray-600">
-                {diagnostics?.engineHealth?.healthy ? 'Python 建模引擎已就绪。' : 'Python 建模引擎当前降级，请先处理环境问题。'}
-              </p>
-            </div>
-            <span className={`rounded-[16px] px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${
-              diagnostics?.engineHealth?.healthy
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-amber-50 text-amber-700 border border-amber-200'
-            }`}>
-              {diagnostics?.engineHealth?.healthy ? 'Healthy' : 'Degraded'}
-            </span>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3 text-[11px] text-gray-600">
-            <div className="rounded-[16px] bg-gray-50 border border-gray-100 px-3 py-3">
-              <div className="text-gray-400 uppercase tracking-widest text-[9px] font-bold">Python</div>
-              <div className="mt-1 font-mono">{diagnostics?.engineHealth?.pythonVersion || 'N/A'}</div>
-            </div>
-            <div className="rounded-[16px] bg-gray-50 border border-gray-100 px-3 py-3">
-              <div className="text-gray-400 uppercase tracking-widest text-[9px] font-bold">Pymatgen</div>
-              <div className="mt-1 font-mono">{diagnostics?.engineHealth?.pymatgenVersion || 'N/A'}</div>
-            </div>
-            <div className="rounded-[16px] bg-gray-50 border border-gray-100 px-3 py-3">
-              <div className="text-gray-400 uppercase tracking-widest text-[9px] font-bold">NumPy</div>
-              <div className="mt-1 font-mono">{diagnostics?.engineHealth?.numpyVersion || 'N/A'}</div>
-            </div>
-            <div className="rounded-[16px] bg-gray-50 border border-gray-100 px-3 py-3">
-              <div className="text-gray-400 uppercase tracking-widest text-[9px] font-bold">CSD Python API</div>
-              <div className="mt-1 font-mono">{diagnostics?.engineHealth?.ccdcAvailable ? 'available' : 'not available'}</div>
-            </div>
-          </div>
-
-          {diagnostics?.engineHealth?.issues?.length ? (
-            <div className="mt-4 rounded-[16px] border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700">Runtime Issues</p>
-              <div className="mt-2 space-y-1 text-xs text-amber-800">
-                {diagnostics.engineHealth.issues.map((issue) => (
-                  <div key={issue}>{issue}</div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {(diagnostics?.providers || []).map((provider) => (
-              <div
-                key={provider.provider}
-                className={`rounded-[16px] border px-3 py-2 text-[11px] ${
-                  provider.configured
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                    : 'border-gray-200 bg-gray-50 text-gray-600'
-                }`}
-              >
-                <div className="font-semibold">{provider.label}</div>
-                <div className="mt-1 font-mono uppercase tracking-wider text-[9px]">
-                  {provider.mode}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {currentIntent && (
           <div className="bg-white border border-gray-100 rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] ring-1 ring-black/5">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">PARSED INTENT</h3>
@@ -534,40 +343,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
               >
                 进入修改
               </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!currentIntent || !runtimeSession?.sessionId) {
-                    return;
-                  }
-                  const replanPrompt = input.trim() || buildEditablePromptFromIntent(currentIntent);
-                  if (!replanPrompt) {
-                    return;
-                  }
-
-                  const nextIntent: ModelingIntent = {
-                    ...currentIntent,
-                    provider_preferences: normalizedProviders.length
-                      ? normalizedProviders
-                      : currentIntent.provider_preferences,
-                  };
-                  onIntentChange(nextIntent);
-                  const success = await replanModel(replanPrompt, nextIntent, normalizedProviders);
-                  if (success) {
-                    console.log('Model replanned successfully');
-                  }
-                }}
-                disabled={isBuilding || !runtimeSession?.sessionId}
-                className="px-4 py-3 bg-white border border-cyan-200 text-cyan-700 rounded-[32px] hover:bg-cyan-50 transition-colors text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                重规划并生成
-              </button>
             </div>
-            {runtimeSession?.sessionId ? (
-              <p className="mt-3 text-[11px] text-gray-500">
-                这会在当前 runtime session 上 supersede 旧 goal/plan，并立即重新 build 新结构。
-              </p>
-            ) : null}
           </div>
         )}
 
@@ -577,7 +353,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
               <div>
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Structured Edit</h3>
                 <p className="mt-2 text-sm text-gray-600">
-                  这组编辑会直接 patch 当前 intent，再进入 build 或 runtime replan，不再重新让 LLM 猜参数。
+                  这组编辑会直接更新当前参数并重新生成结构，不再重复让模型猜参数。
                 </p>
               </div>
               <span className="rounded-[16px] px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-cyan-50 text-cyan-700 border border-cyan-200">
@@ -733,7 +509,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
                 disabled={isBuilding}
                 className="px-4 py-3 bg-[#173B7A] text-white rounded-[32px] hover:bg-[#224A91] transition-colors shadow-sm font-medium text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200 disabled:shadow-none disabled:cursor-not-allowed"
               >
-                {runtimeSession?.sessionId ? '应用结构化编辑并重规划' : '应用结构化编辑并生成'}
+                应用结构化编辑并生成
               </button>
               <button
                 type="button"
@@ -770,43 +546,41 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
         ) : null}
 
         {latestBuildMeta && (
-          <div className="bg-[#0A1128] text-white rounded-[24px] p-6 shadow-[0_12px_32px_rgba(10,17,40,0.16)]">
+          <div className="bg-white border border-gray-100 rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] ring-1 ring-black/5">
             <div className="flex items-start justify-between gap-3">
-              <h3 className="text-xs font-bold text-white/50 uppercase tracking-widest">Latest Build</h3>
-              <span className={`rounded-[16px] px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${
-                latestBuildMeta.runtimeBacked
-                  ? 'bg-cyan-400/10 border border-cyan-300/30 text-cyan-100'
-                  : 'bg-white/10 border border-white/15 text-white/70'
-              }`}>
-                {latestBuildMeta.runtimeBacked ? 'Runtime Artifact' : 'Legacy Build'}
-              </span>
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Latest Build</h3>
+              {latestBuildMeta.databaseSourceLabel || latestBuildMeta.databaseSource ? (
+                <span className="rounded-[16px] px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-gray-50 border border-gray-200 text-gray-600">
+                  {latestBuildMeta.databaseSourceLabel || latestBuildMeta.databaseSource}
+                </span>
+              ) : null}
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+            <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-gray-700">
               <div>
-                <div className="text-white/50 uppercase tracking-widest text-[9px]">Source</div>
+                <div className="text-gray-400 uppercase tracking-widest text-[9px]">Source</div>
                 <div className="mt-1 font-semibold">{latestBuildMeta.databaseSourceLabel || latestBuildMeta.databaseSource || 'Unknown'}</div>
               </div>
               <div>
-                <div className="text-white/50 uppercase tracking-widest text-[9px]">Atoms</div>
+                <div className="text-gray-400 uppercase tracking-widest text-[9px]">Atoms</div>
                 <div className="mt-1 font-semibold">{latestBuildMeta.totalAtoms ?? '--'}</div>
               </div>
               <div>
-                <div className="text-white/50 uppercase tracking-widest text-[9px]">Formula</div>
+                <div className="text-gray-400 uppercase tracking-widest text-[9px]">Formula</div>
                 <div className="mt-1 font-semibold">{latestBuildMeta.formula || '--'}</div>
               </div>
               <div>
-                <div className="text-white/50 uppercase tracking-widest text-[9px]">System</div>
+                <div className="text-gray-400 uppercase tracking-widest text-[9px]">System</div>
                 <div className="mt-1 font-semibold">{latestBuildMeta.system || '--'}</div>
               </div>
             </div>
 
             {latestBuildMeta.hkl?.length ? (
-              <div className="mt-4 text-xs text-white/80">
+              <div className="mt-4 text-xs text-gray-600">
                 HKL: <span className="font-mono">{latestBuildMeta.hkl.join(', ')}</span>
               </div>
             ) : null}
 
-            <div className="mt-4 space-y-2 text-xs text-white/75">
+            <div className="mt-4 space-y-2 text-xs text-gray-600">
               <div>
                 Provider Order:{' '}
                 <span className="font-mono">
@@ -858,29 +632,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
                 </div>
               ) : null}
             </div>
-
-            {latestBuildMeta.sessionId ? (
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const params = new URLSearchParams({ sessionId: String(latestBuildMeta.sessionId) });
-                    if (latestBuildMeta.structureArtifactId) {
-                      params.set('artifactId', String(latestBuildMeta.structureArtifactId));
-                    }
-                    navigate(`/agent/runtime?${params.toString()}`);
-                  }}
-                  className="px-4 py-3 bg-white text-[#0A1128] rounded-[32px] hover:bg-white/90 transition-colors shadow-sm font-medium text-sm"
-                >
-                  打开 Runtime Session
-                </button>
-                {latestBuildMeta.structureArtifactId ? (
-                  <div className="px-4 py-3 rounded-[32px] border border-white/15 bg-white/5 text-[11px] font-mono text-white/70">
-                    {latestBuildMeta.structureArtifactId}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
           </div>
         )}
       </div>
