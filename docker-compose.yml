@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  backend:
+    image: vasp-visualizer-backend
+    build: ./server
+    # Expose port only to other containers (via network), not to host public interface
+    # unless you want direct access. Proxying via nginx is safer.
+    # ports:
+    #   - "3000:3000" 
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/sci_visualizer
+      - SMTP_HOST=smtp.qq.com
+      - SMTP_PORT=465
+      - SMTP_USER=2218114919@qq.com
+      - SMTP_PASS=qztivdbksclieabe
+      - TOKEN_SECRET=vasp_token_secret_2026_scivisualizer
+      - ADMIN_SECRET=vasp_admin_secret_2026_secure
+    volumes:
+      - ./server/.env:/app/.env:ro
+      - ./server/db.json:/app/db.json
+      - ./server/uploads:/app/uploads
+    depends_on:
+      - mongo
+    restart: always
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    restart: always
+
+  frontend:
+    image: vasp-visualizer-frontend
+    build: .
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  mongo-data:

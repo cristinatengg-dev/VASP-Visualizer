@@ -1,0 +1,31 @@
+#!/usr/bin/expect
+
+set timeout 120
+set password "1Yitengteng_"
+set server "root@43.154.165.254"
+set project_dir "/root/VASP-Visualizer"
+
+puts "🚀 Uploading updated server/index.js..."
+
+# Upload only the updated server/index.js
+spawn scp -F /dev/null -o StrictHostKeyChecking=no server/index.js $server:$project_dir/server/index.js
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+puts "🔄 Restarting backend container..."
+spawn ssh -F /dev/null -o StrictHostKeyChecking=no $server "cd $project_dir && docker compose restart backend"
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+puts "✅ Done! Testing admin API..."
+spawn ssh -F /dev/null -o StrictHostKeyChecking=no $server "sleep 3 && curl -s -X POST http://localhost:3000/api/health"
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+puts "\n🎉 Upload complete!"

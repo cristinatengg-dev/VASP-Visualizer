@@ -1,0 +1,48 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+*.tar.gz
+*.tgz
+*.pem
+*.crt
+*.csr
+*.key
+
+# Local environment / deployment secrets
+.env
+.env.*
+!.env.example
+deploy.env
+server/.env
+server/.env.local
+
+# Local runtime / generated data
+core_code_bundle.txt
+ffmpeg
+server/db.json
+server/uploads/
+server/runtime-storage/
+server/.venv-modeling/
+ssl/*
+!ssl/.gitkeep
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

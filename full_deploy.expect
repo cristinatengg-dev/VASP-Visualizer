@@ -1,0 +1,143 @@
+#!/usr/bin/expect -f
+
+set timeout 300
+set password "1Yitengteng_"
+set server "root@43.154.165.254"
+set project_dir "/root/VASP-Visualizer"
+
+puts "\n========================================"
+puts "🚀 VASP-Visualizer Full Deploy Script"
+puts "========================================\n"
+
+# Step 1: Create remote directory structure
+puts "📂 Step 1: Creating remote directories..."
+spawn ssh -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $server "mkdir -p $project_dir/server/uploads $project_dir/ssl && echo MKDIR_OK"
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    "MKDIR_OK" { puts "✅ Directories created." }
+    timeout { puts "❌ Timeout creating directories"; exit 1 }
+    eof
+}
+
+# Step 2: Upload docker-compose.yml
+puts "\n📦 Step 2: Uploading docker-compose.yml..."
+spawn scp -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null /Users/a1234/VASP-Visualizer/docker-compose.yml $server:$project_dir/docker-compose.yml
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+# Step 3: Upload nginx.conf
+puts "\n📦 Step 3: Uploading nginx.conf..."
+spawn scp -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null /Users/a1234/VASP-Visualizer/nginx.conf $server:$project_dir/nginx.conf
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+# Step 4: Upload Dockerfile
+puts "\n📦 Step 4: Uploading Dockerfile..."
+spawn scp -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null /Users/a1234/VASP-Visualizer/Dockerfile $server:$project_dir/Dockerfile
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+# Step 5: Upload deploy_to_tencent.sh
+puts "\n📦 Step 5: Uploading deploy script..."
+spawn scp -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null /Users/a1234/VASP-Visualizer/deploy_to_tencent.sh $server:$project_dir/deploy_to_tencent.sh
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+puts "\n✅ Key config files uploaded.\n"
+puts "📦 Step 6: Uploading server/ directory (index.js + utils/)..."
+
+# Step 6: Upload server directory files
+spawn scp -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r /Users/a1234/VASP-Visualizer/server $server:$project_dir/
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+puts "\n✅ Server code uploaded."
+
+# Step 7: Upload dist/ (frontend build)
+puts "\n📦 Step 7: Uploading dist/ (frontend build)..."
+spawn scp -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r /Users/a1234/VASP-Visualizer/dist $server:$project_dir/
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+puts "\n✅ Frontend dist/ uploaded."
+
+# Step 8: Upload package.json and package-lock.json (for Dockerfile build context)
+puts "\n📦 Step 8: Uploading package.json..."
+spawn scp -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null /Users/a1234/VASP-Visualizer/package.json /Users/a1234/VASP-Visualizer/package-lock.json $server:$project_dir/
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+# Step 9: Upload index.html, vite.config.ts etc (needed for Docker build)
+puts "\n📦 Step 9: Uploading frontend source files..."
+spawn scp -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null /Users/a1234/VASP-Visualizer/index.html /Users/a1234/VASP-Visualizer/tsconfig.json /Users/a1234/VASP-Visualizer/vite.config.ts /Users/a1234/VASP-Visualizer/tailwind.config.js /Users/a1234/VASP-Visualizer/postcss.config.js $server:$project_dir/
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+# Step 10: Upload src/ directory
+puts "\n📦 Step 10: Uploading src/ directory..."
+spawn scp -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r /Users/a1234/VASP-Visualizer/src $server:$project_dir/
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+# Step 11: Upload public/ directory
+puts "\n📦 Step 11: Uploading public/ directory..."
+spawn scp -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r /Users/a1234/VASP-Visualizer/public $server:$project_dir/
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+# Step 12: Upload .env.production
+puts "\n📦 Step 12: Uploading .env.production..."
+spawn scp -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null /Users/a1234/VASP-Visualizer/.env.production $server:$project_dir/.env.production
+expect {
+    "password:" { send "$password\r"; exp_continue }
+    eof
+}
+
+puts "\n✅ All files uploaded!"
+
+# Step 13: Execute deploy on server
+puts "\n🚀 Step 13: Executing docker compose deploy on server..."
+puts "   (This may take 3-5 minutes to build...)\n"
+
+spawn ssh -F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $server "cd $project_dir && chmod +x deploy_to_tencent.sh && ./deploy_to_tencent.sh 2>&1"
+expect {
+    "password:" { 
+        send "$password\r"
+        exp_continue
+    }
+    "Deployment Complete!" {
+        puts "\n🎉 Deploy script completed!"
+        exp_continue
+    }
+    timeout { 
+        puts "\n⚠️  Deploy timed out (300s). Check server manually."
+        exit 1
+    }
+    eof
+}
+
+puts "\n=========================================="
+puts "✅ Deployment Complete!"
+puts "=========================================="
+puts "🌐 Frontend: http://43.154.165.254"
+puts "🔧 API:      http://43.154.165.254/api/health"
+puts "==========================================\n"
