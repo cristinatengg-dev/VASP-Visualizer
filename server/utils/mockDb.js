@@ -2,18 +2,34 @@ const fs = require('fs');
 const path = require('path');
 
 const DB_PATH = path.join(__dirname, '../db.json');
+const FALLBACK_DB_PATH = path.join(__dirname, '../db.fallback.json');
+
+function resolveDbPath() {
+    try {
+        if (fs.existsSync(DB_PATH) && fs.statSync(DB_PATH).isDirectory()) {
+            console.warn(`[mockDb] ${DB_PATH} is a directory; falling back to ${FALLBACK_DB_PATH}.`);
+            return FALLBACK_DB_PATH;
+        }
+    } catch (error) {
+        console.warn(`[mockDb] Failed to stat ${DB_PATH}; falling back to ${FALLBACK_DB_PATH}.`, error);
+        return FALLBACK_DB_PATH;
+    }
+    return DB_PATH;
+}
+
+const ACTIVE_DB_PATH = resolveDbPath();
 
 // Global In-Memory Cache
 let dbCache = null;
 
 // Initialize DB if not exists
-if (!fs.existsSync(DB_PATH)) {
+if (!fs.existsSync(ACTIVE_DB_PATH)) {
     const initialData = { users: {}, invitationCodes: [], verificationCodes: [], usageLogs: [] };
-    fs.writeFileSync(DB_PATH, JSON.stringify(initialData, null, 2));
+    fs.writeFileSync(ACTIVE_DB_PATH, JSON.stringify(initialData, null, 2));
     dbCache = initialData;
 } else {
     try {
-        dbCache = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+        dbCache = JSON.parse(fs.readFileSync(ACTIVE_DB_PATH, 'utf8'));
     } catch (e) {
         console.error("Failed to load DB on startup:", e);
         dbCache = { users: {}, invitationCodes: [], verificationCodes: [], usageLogs: [] };
@@ -33,9 +49,9 @@ class MockModel {
     _writeDB(data) {
         dbCache = data;
         try {
-            const tempPath = DB_PATH + '.tmp';
+            const tempPath = ACTIVE_DB_PATH + '.tmp';
             fs.writeFileSync(tempPath, JSON.stringify(data, null, 2));
-            fs.renameSync(tempPath, DB_PATH);
+            fs.renameSync(tempPath, ACTIVE_DB_PATH);
         } catch (e) {
             console.error("DB Write Error:", e);
         }
