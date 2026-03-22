@@ -428,7 +428,15 @@ async function parseModelingIntent({ prompt, providerPreferences } = {}) {
     return normalizeModelingIntent(safeJsonParse(content), normalizedProviders);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error || '');
-    if (/GEMINI_API_KEY is not configured/i.test(message)) {
+    if (
+      /GEMINI_API_KEY is not configured/i.test(message)
+      || /Gemini API error\s+(400|401|403|429)/i.test(message)
+      || /API key expired/i.test(message)
+      || /invalid token/i.test(message)
+      || /invalid api key/i.test(message)
+      || /quota exceeded/i.test(message)
+      || /resource_exhausted/i.test(message)
+    ) {
       return parseModelingIntentHeuristically({
         prompt: normalizedPrompt,
         providerPreferences: normalizedProviders,

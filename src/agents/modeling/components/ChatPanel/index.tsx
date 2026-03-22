@@ -35,8 +35,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
     isBuilding,
     error,
     diagnostics,
-    isLoadingDiagnostics,
-    loadDiagnostics,
     latestBuildMeta,
     runtimeSession,
   } = useModeling();
@@ -278,39 +276,16 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
               </button>
             ))}
           </div>
-
-          <div className="mt-5 border-t border-gray-200 pt-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Provider Order</p>
-                <p className="mt-1 text-xs text-gray-500">
-                  Materials Project / Atomly / CSD / ICSD / OPTIMADE / fallback
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void loadDiagnostics()}
-                disabled={isLoadingDiagnostics}
-                className="px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-[16px] hover:bg-gray-100 transition-colors text-[11px] font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isLoadingDiagnostics ? '刷新中...' : '刷新状态'}
-              </button>
-            </div>
-            <input
-              value={providerOrderInput}
-              onChange={(event) => setProviderOrderInput(event.target.value)}
-              placeholder="materials_project,atomly,csd,icsd,optimade,fallback"
-              className="w-full rounded-[16px] border border-gray-200 bg-white px-3 py-2 text-xs font-mono text-gray-600 outline-none transition focus:border-gray-300"
-            />
-          </div>
         </div>
 
         {currentIntent && (
           <div className="bg-white border border-gray-100 rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] ring-1 ring-black/5">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">PARSED INTENT</h3>
-            <pre className="text-[10px] font-mono bg-gray-50 border border-gray-100 p-4 rounded-[16px] overflow-x-auto text-gray-600">
-              {JSON.stringify(currentIntent, null, 2)}
-            </pre>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Ready to Build</h3>
+            <div className="rounded-[20px] border border-gray-100 bg-gray-50 p-4">
+              <p className="text-sm font-medium text-[#0A1128] leading-relaxed">
+                {buildEditablePromptFromIntent(currentIntent) || '当前建模意图已解析完成，可以直接生成结构。'}
+              </p>
+            </div>
             <div className="mt-4 flex gap-2">
               <button 
                 onClick={async () => {
@@ -581,18 +556,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
             ) : null}
 
             <div className="mt-4 space-y-2 text-xs text-gray-600">
-              <div>
-                Provider Order:{' '}
-                <span className="font-mono">
-                  {(latestBuildMeta.providerPreferences || []).join(' → ') || '--'}
-                </span>
-              </div>
-              <div>
-                Providers Tried:{' '}
-                <span className="font-mono">
-                  {(latestBuildMeta.providersTried || []).join(' → ') || '--'}
-                </span>
-              </div>
               {latestBuildMeta.adsorbates?.length ? (
                 <div>
                   Adsorbates:{' '}
@@ -672,7 +635,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
           </button>
         </div>
         <p className="mt-2 text-[10px] text-gray-400 text-center">
-          Shift + Enter 换行 | Enter 发送 | 当前 provider 顺序: {normalizedProviders.join(' → ') || 'default'}
+          Shift + Enter 换行 | Enter 发送
         </p>
       </div>
     </div>

@@ -252,6 +252,33 @@ export const compilePlanAPrompt = (
 
 import { API_BASE_URL } from '../../config';
 
+const humanizeRenderingApiError = (message: string, fallback: string) => {
+  const raw = String(message || '').trim();
+
+  if (!raw) {
+    return fallback;
+  }
+
+  if (/GEMINI_API_KEY is not configured/i.test(raw)) {
+    return '图像分析服务尚未配置，请联系管理员补充 Gemini 凭据。';
+  }
+
+  if (
+    /Gemini API error\s*401/i.test(raw)
+    || /invalid token/i.test(raw)
+    || /无效的令牌/i.test(raw)
+    || /new_api_error/i.test(raw)
+  ) {
+    return 'Gemini 图像网关鉴权失败，请联系管理员更新令牌或上游网关配置。';
+  }
+
+  if (/Gemini API error\s*429/i.test(raw) || /quota exceeded/i.test(raw) || /resource_exhausted/i.test(raw)) {
+    return '图像分析服务当前繁忙，请稍后再试。';
+  }
+
+  return raw || fallback;
+};
+
 /**
  * parseScience — Phase 1 real implementation
  * Calls /api/agent/parse-science which uses Gemini 2.0 Flash to extract
@@ -265,7 +292,7 @@ export const parseScience = async (text: string): Promise<ParsedScience> => {
   });
   const data = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error || `Parse API error ${res.status}`);
+    throw new Error(humanizeRenderingApiError(data.error || `Parse API error ${res.status}`, 'Science parsing failed'));
   }
   return data.data as ParsedScience;
 };
@@ -284,7 +311,7 @@ export const parsePdf = async (file: File): Promise<ParsedScience> => {
   });
   const data = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error || `PDF parse API error ${res.status}`);
+    throw new Error(humanizeRenderingApiError(data.error || `PDF parse API error ${res.status}`, 'PDF parsing failed'));
   }
   return data.data as ParsedScience;
 };
@@ -352,7 +379,7 @@ export const generateBaseImages = async (
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      throw new Error(`Request failed to ${endpoint}: ${msg}`);
+      throw new Error(humanizeRenderingApiError(`Request failed to ${endpoint}: ${msg}`, 'Image generation request failed'));
     }
   
     const text = await res.text();
@@ -365,7 +392,7 @@ export const generateBaseImages = async (
     }
 
     if (!res.ok || !data.success) {
-      throw new Error(data.error || `Image generation error ${res.status}`);
+      throw new Error(humanizeRenderingApiError(data.error || `Image generation error ${res.status}`, 'Image generation failed'));
     }
     
     // Ensure images array exists and contains valid data strings
@@ -402,7 +429,7 @@ export const refineImage = async (
   });
   const data = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error || `Refine API error ${res.status}`);
+    throw new Error(humanizeRenderingApiError(data.error || `Refine API error ${res.status}`, 'Image refinement failed'));
   }
   return data.image as string;
 };
