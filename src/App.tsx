@@ -90,7 +90,7 @@ function App() {
       {/* 默认首页：HeroSection */}
       <Route path="/" element={<HeroSection />} />
       {/* 登录页 */}
-      <Route path="/login" element={user ? <Navigate to="/app" replace /> : <LoginPage />} />
+      <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
       {/* 主应用（需要登录） */}
       <Route path="/app" element={<AppRoute />} />
       {/* 其他页面 */}

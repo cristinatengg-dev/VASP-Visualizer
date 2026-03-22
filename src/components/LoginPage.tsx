@@ -67,8 +67,8 @@ export const LoginPage: React.FC = () => {
         setIsLoggingIn(true);
         try {
             await login(email, code);
-            // Login successful — navigate to main app
-            navigate('/app', { replace: true });
+            // Login successful — return to the main landing page
+            navigate('/', { replace: true });
         } catch (e: any) {
             setError(e.message || 'Login failed');
         } finally {
