@@ -1,31 +1,13 @@
 import React from 'react';
 import { useStore } from '../../store/useStore';
-import { Crown, ShieldCheck, LogIn } from 'lucide-react';
+import { Crown, ShieldCheck } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export const AccountWidget: React.FC = () => {
-  const { user, login } = useStore();
+  const { user } = useStore();
 
   if (!user) {
-    return (
-      <div className="bg-white rounded-3xl p-6 shadow-soft flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-snap-pill flex items-center justify-center">
-            <LogIn size={20} className="text-snap-secondary" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-snap-text">Welcome</h3>
-            <p className="text-xs text-snap-secondary">Please log in to continue</p>
-          </div>
-        </div>
-        <button 
-          onClick={() => window.location.reload()} // Quick hack to show login page again or trigger auth flow
-          className="w-full py-3 bg-snap-text text-white rounded-2xl font-medium text-sm hover:opacity-90 transition-opacity"
-        >
-          Log In / Sign Up
-        </button>
-      </div>
-    );
+    return null;
   }
 
   const isVIP = user.tier === 'vip' || user.tier === 'svip';

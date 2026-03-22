@@ -26,11 +26,36 @@ const humanizeModelingError = (message: string) => {
     return '智能解析暂时不可用，请直接调整下方参数或稍后再试。';
   }
 
+  if (
+    /Gemini API error\s+(400|401|403|429)/i.test(raw)
+    || /API key expired/i.test(raw)
+    || /invalid token/i.test(raw)
+    || /quota exceeded/i.test(raw)
+    || /resource_exhausted/i.test(raw)
+  ) {
+    return '智能解析暂时不可用，系统已自动回退到基础建模解析。';
+  }
+
   if (/runtime demo route is unavailable/i.test(raw) || /Cannot POST .*runtime-demo/i.test(raw)) {
     return '运行时增强暂时不可用，系统已自动回退到标准建模流程。';
   }
 
+  if (/Transaction numbers are only allowed on a replica set member or mongos/i.test(raw)) {
+    return '运行时增强暂时不可用，系统已自动回退到无事务模式。';
+  }
+
   return raw.replace(/^HTTP\s+\d+:\s*/i, '');
+};
+
+const shouldFallbackToLegacyModelingBuild = (error: unknown) => {
+  const code = (error as Error & { code?: string })?.code;
+  const message = String((error as Error)?.message || error || '');
+
+  return (
+    code === 'runtime_route_unavailable'
+    || /Transaction numbers are only allowed on a replica set member or mongos/i.test(message)
+    || /运行时增强暂时不可用/i.test(message)
+  );
 };
 
 export const useModeling = () => {
@@ -315,7 +340,7 @@ export const useModeling = () => {
     extras: Partial<ModelingBuildMeta> = {},
   ) => {
     if (!(result && (result.success || result.ok) && result.data)) {
-      setError(result?.error || 'Failed to build model');
+      setError(humanizeModelingError(result?.error || 'Failed to build model'));
       return false;
     }
 
@@ -492,7 +517,7 @@ export const useModeling = () => {
       try {
         return await buildModelRuntime(requestIntent);
       } catch (runtimeError) {
-        if ((runtimeError as Error & { code?: string }).code !== 'runtime_route_unavailable') {
+        if (!shouldFallbackToLegacyModelingBuild(runtimeError)) {
           throw runtimeError;
         }
         return await buildModelLegacy(requestIntent);

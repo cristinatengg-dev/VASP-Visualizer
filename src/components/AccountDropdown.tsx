@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
-import { User, LogOut, CreditCard, ChevronDown, User as UserIcon, Crown, Zap } from 'lucide-react';
+import { User, LogOut, CreditCard, ChevronDown, User as UserIcon, Crown, Zap, LogIn } from 'lucide-react';
 import { clsx } from 'clsx';
 import { SubscriptionPanel } from './SubscriptionPanel';
 
@@ -215,6 +216,7 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
 export const AccountDropdown: React.FC = () => {
     const { user, logout } = useStore();
+    const navigate = useNavigate();
     const [isOpen, setIsOpen] = useState(false);
     const [showSubscription, setShowSubscription] = useState(false);
     const [showProfile, setShowProfile] = useState(false);
@@ -243,9 +245,13 @@ export const AccountDropdown: React.FC = () => {
 
     if (!user) {
         return (
-            <div className="absolute top-4 right-4 z-50">
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 font-medium text-sm transition-all">
-                    Login / Register
+            <div className="absolute top-6 right-6 z-50">
+                <button
+                    onClick={() => navigate('/login')}
+                    className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-[32px] shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 hover:shadow-[0_8px_25px_rgba(0,0,0,0.08)] transition-all group ring-1 ring-black/5 text-[#0A1128] text-sm font-semibold"
+                >
+                    <LogIn className="w-4 h-4 text-[#2E4A8E]" />
+                    登录
                 </button>
             </div>
         );

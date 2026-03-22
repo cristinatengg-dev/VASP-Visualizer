@@ -251,8 +251,8 @@ const BaseGenerationPanel: React.FC<{
       <div className="flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-100 rounded-[14px]">
         <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" strokeWidth={2} />
         <div>
-          <p className="text-xs font-bold text-red-600">Generation Failed</p>
-          <p className="text-[10px] text-red-500 mt-0.5 font-mono">{baseError}</p>
+          <p className="text-xs font-bold text-red-600">Generation Unavailable</p>
+          <p className="text-[11px] text-red-500 mt-0.5 leading-relaxed">{baseError}</p>
         </div>
       </div>
     )}
@@ -338,6 +338,25 @@ const BaseGenerationPanel: React.FC<{
 const RenderingAgent: React.FC = () => {
   const navigate = useNavigate();
 
+  const presentRenderingError = useCallback((message: string) => {
+    const raw = String(message || '').trim();
+
+    if (
+      /Gemini API error\s*401/i.test(raw)
+      || /invalid token/i.test(raw)
+      || /无效的令牌/i.test(raw)
+      || /new_api_error/i.test(raw)
+    ) {
+      return 'Gemini 图像服务鉴权失败，请联系管理员检查上游令牌或网关配置。';
+    }
+
+    if (/GEMINI_API_KEY is not configured/i.test(raw)) {
+      return 'Gemini 图像服务尚未配置，请联系管理员补充可用凭据。';
+    }
+
+    return raw || '图像分析暂时不可用，请稍后再试。';
+  }, []);
+
   // ── Input state ──
   const [abstractText, setAbstractText] = useState('');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -387,7 +406,9 @@ const RenderingAgent: React.FC = () => {
       setCurrentStep('plan-selection');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      const friendly = message === 'This operation was aborted' ? 'PDF/分析请求超时，请重试或换更小的 PDF' : message;
+      const friendly = message === 'This operation was aborted'
+        ? 'PDF/分析请求超时，请重试或换更小的 PDF。'
+        : presentRenderingError(message);
       setParseError(friendly);
       setCurrentStep('input');
     } finally {
@@ -454,7 +475,7 @@ const RenderingAgent: React.FC = () => {
       setSelectedBaseIndex(0);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      setBaseError(message);
+      setBaseError(presentRenderingError(message));
     } finally {
       setIsGeneratingBase(false);
       baseGenInFlightRef.current = false;
@@ -567,8 +588,8 @@ const RenderingAgent: React.FC = () => {
                 <div className="flex items-start gap-2 px-4 py-3 mb-4 bg-red-50 border border-red-100 rounded-[14px]">
                   <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" strokeWidth={2} />
                   <div>
-                    <p className="text-xs font-bold text-red-600">Analysis Failed</p>
-                    <p className="text-[10px] text-red-500 mt-0.5 font-mono">{parseError}</p>
+                    <p className="text-xs font-bold text-red-600">Analysis Unavailable</p>
+                    <p className="text-[11px] text-red-500 mt-0.5 leading-relaxed">{parseError}</p>
                   </div>
                 </div>
               )}
