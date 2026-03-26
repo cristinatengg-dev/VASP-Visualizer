@@ -95,6 +95,43 @@ Successful deploy indicators:
 - `runtime-demo/health` includes `runtimeDemo: true`
 - `runtime-demo/skills?domain=modeling` returns JSON instead of `404`
 
+## Network environment notes
+
+The local development machine (`/Users/a1234`) has a complex network stack:
+
+- **aTrust (深信服零信任 VPN)** runs at system level via `utun1024` interface. It intercepts ALL DNS queries and returns fake IPs in the `198.18.0.0/15` range. It **cannot** be bypassed from application level. Do NOT confuse `198.18.x.x` with Cloudflare WARP — it is aTrust.
+- **Clash** runs on `127.0.0.1:7897` as an HTTP/SOCKS proxy. All outbound HTTPS requests from Node.js require the proxy (built-in `fetch` does NOT respect env proxy vars). The project uses a custom `server/src/proxy-agent.js` module (CONNECT tunnel via `http.Agent`) to route `https.request` calls through Clash.
+- **SSH to GitHub**: Use key `/Users/a1234/.ssh/github_cristina` (ED25519, **has passphrase**: must `ssh-add` before pushing). SSH config routes `github.com` to `ssh.github.com:443`. If Clash is running with TUN/fake-ip mode, SSH may fail — temporarily quit Clash app (not just disable proxy toggle) if `git push` hangs.
+
+### Pushing to GitHub (verified 2026-03-27)
+
+```bash
+# 1. Load SSH key (has passphrase — will prompt or use expect)
+ssh-add /Users/a1234/.ssh/github_cristina
+
+# 2. Push
+git push origin main
+```
+
+If push fails with `Connection closed by 198.18.0.x`: quit Clash entirely, flush DNS (`sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`), retry.
+
+### Server access
+
+- **Server IP**: `43.154.165.254`
+- **SSH port**: `2222` (NOT default 22)
+- **User**: `root`
+- **Auth**: password (`keyboard-interactive`), NOT publickey
+- **Direct SSH from local does NOT work** — aTrust VPN intercepts the connection. Use **Tencent Cloud VNC console** to access the server instead.
+- **Deploy from server console**: after pushing to GitHub, log into the server via VNC console and run the routine deploy command.
+
+### Recommended deploy workflow
+
+1. `ssh-add ~/.ssh/github_cristina` (enter passphrase)
+2. `git push origin main`
+3. Log into server via Tencent Cloud VNC console
+4. `cd /home/deploy/VASP-Visualizer && bash scripts/pull-and-deploy.sh origin main`
+5. Verify with `docker compose ps`
+
 ## Reporting
 
 When using this skill, always report:
