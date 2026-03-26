@@ -3,12 +3,14 @@ import { Scene3D } from './components/Scene3D';
 import { LoginPage } from './components/LoginPage';
 import { AccountDropdown } from './components/AccountDropdown';
 import HeroSection from './components/HeroSection';
+import SplashScreen from './components/SplashScreen';
 import Explore from './pages/Explore';
 import Manual from './pages/Manual';
 import RenderingAgent from './agents/rendering';
 import ModelingAgent from './agents/modeling';
 import ComputeAgent from './agents/compute';
 import RuntimeInspector from './agents/runtime';
+import RetrievalAgent from './agents/retrieval';
 import { useStore } from './store/useStore';
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
@@ -34,6 +36,25 @@ const AgentRoute: React.FC<{ children: React.ReactElement }> = ({ children }) =>
   const { user } = useStore();
   if (!user) return <Navigate to="/login" replace />;
   return children;
+};
+
+const HomePage: React.FC = () => {
+  const [splashDone, setSplashDone] = useState(() => {
+    // Only show splash once per session
+    return sessionStorage.getItem('splash_shown') === '1';
+  });
+
+  const handleSplashComplete = () => {
+    sessionStorage.setItem('splash_shown', '1');
+    setSplashDone(true);
+  };
+
+  return (
+    <>
+      {!splashDone && <SplashScreen onComplete={handleSplashComplete} />}
+      <HeroSection />
+    </>
+  );
 };
 
 function App() {
@@ -75,7 +96,7 @@ function App() {
     if (isAuthChecking) {
         checkAuth();
     }
-  }, []);
+  }, [isAuthChecking, setUser, user]);
 
   if (isAuthChecking) {
       return (
@@ -88,7 +109,7 @@ function App() {
   return (
     <Routes>
       {/* 默认首页：HeroSection */}
-      <Route path="/" element={<HeroSection />} />
+      <Route path="/" element={<HomePage />} />
       {/* 登录页 */}
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
       {/* 主应用（需要登录） */}
@@ -98,6 +119,7 @@ function App() {
       <Route path="/manual" element={<Manual />} />
       {/* Agent 工作台 */}
       <Route path="/agent/rendering" element={<AgentRoute><RenderingAgent /></AgentRoute>} />
+      <Route path="/agent/retrieval" element={<AgentRoute><RetrievalAgent /></AgentRoute>} />
       <Route path="/agent/modeling" element={<AgentRoute><ModelingAgent /></AgentRoute>} />
       <Route path="/agent/compute" element={<AgentRoute><ComputeAgent /></AgentRoute>} />
       <Route path="/agent/runtime" element={<AgentRoute><RuntimeInspector /></AgentRoute>} />

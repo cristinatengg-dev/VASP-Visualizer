@@ -1,16 +1,48 @@
-const GEMINI_BASE_URL = process.env.GEMINI_BASE_URL || 'https://once.novai.su/v1';
+const GEMINI_BASE_URL = process.env.GEMINI_BASE_URL || 'https://api.aipaibox.com/v1';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-3-flash-preview';
+const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash';
+const https = require('https');
+const { proxyAgent } = require('../proxy-agent');
 
 async function fetchWithTimeout(url, init, timeoutMs = 45000) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || 443,
+      path: parsed.pathname + parsed.search,
+      method: init.method || 'GET',
+      headers: init.headers || {},
+    };
+    if (proxyAgent) options.agent = proxyAgent;
 
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
-  }
+    const timeoutId = setTimeout(() => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    }, timeoutMs);
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        clearTimeout(timeoutId);
+        resolve({
+          ok: res.statusCode >= 200 && res.statusCode < 400,
+          status: res.statusCode,
+          text: () => Promise.resolve(data),
+          json: () => Promise.resolve(JSON.parse(data)),
+        });
+      });
+    });
+
+    req.on('error', (error) => {
+      clearTimeout(timeoutId);
+      reject(error);
+    });
+
+    if (init.body) req.write(init.body);
+    req.end();
+  });
 }
 
 function safeJsonParse(value) {

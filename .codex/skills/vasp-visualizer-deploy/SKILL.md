@@ -1,14 +1,15 @@
 ---
 name: vasp-visualizer-deploy
-description: Use this skill when deploying the latest VASP Visualizer code to the Tencent production server after local changes have already been committed and pushed to GitHub. This skill contains only the clean, successful deployment workflow: pull the latest main branch on the server, preserve server-local config, run the production deploy script, and verify runtime health.
+description: Use this skill when deploying the latest VASP Visualizer code to the Tencent production server through the known-good GitHub to server workflow. Prefer routine pull-and-deploy on the server after pushing local commits; use bootstrap only when the server directory is not yet Git-managed.
 ---
 
 # VASP Visualizer Deploy
 
-Use this skill only for the known-good Tencent production deploy path.
+Use this skill only for the known-good Tencent production deploy path that has already been verified in production.
 
 This skill assumes:
-- local code has already been pushed to GitHub
+- local changes are committed on `/Users/a1234/VASP-Visualizer`
+- GitHub is the source of truth
 - the production server is reachable
 - server-local files must survive deploys
 
@@ -35,9 +36,25 @@ cd /Users/a1234/VASP-Visualizer
 git push origin main
 ```
 
-## First server bootstrap
+Successful push should update `origin/main` before any server work begins.
 
-Use this only when the server is not yet managed from the GitHub repo or needs to be re-seeded from a fresh clone:
+## Routine deploy
+
+This is the default deployment path once the server directory is already Git-managed:
+
+```bash
+cd /home/deploy/VASP-Visualizer
+bash scripts/pull-and-deploy.sh origin main
+```
+
+This path:
+- fetches the latest `origin/main`
+- fast-forwards the working tree
+- runs `deploy_to_tencent.sh`
+
+## First server bootstrap or re-seed
+
+Use this only when `/home/deploy/VASP-Visualizer` is not yet a Git checkout or must be re-seeded from GitHub:
 
 ```bash
 cd /home/deploy/VASP-Visualizer
@@ -48,20 +65,6 @@ This path:
 - backs up the current deploy directory
 - clones the latest repository
 - restores preserved server-local files
-- runs `deploy_to_tencent.sh`
-
-## Routine deploy
-
-For normal updates on a server that is already Git-managed:
-
-```bash
-cd /home/deploy/VASP-Visualizer
-bash scripts/pull-and-deploy.sh origin main
-```
-
-This path:
-- fetches the latest `origin/main`
-- fast-forwards the working tree
 - runs `deploy_to_tencent.sh`
 
 ## Preserved server-local files
@@ -79,20 +82,24 @@ Do not replace these with repository defaults.
 After deploy, verify:
 
 ```bash
+git rev-parse --is-inside-work-tree
 docker compose ps
 curl -i http://localhost/api/runtime-demo/health
 curl -i "http://localhost/api/runtime-demo/skills?domain=modeling"
 ```
 
 Successful deploy indicators:
+- `git rev-parse --is-inside-work-tree` returns `true`
 - `frontend`, `backend`, and `mongo` are `Up`
 - `runtime-demo/health` returns `200`
+- `runtime-demo/health` includes `runtimeDemo: true`
 - `runtime-demo/skills?domain=modeling` returns JSON instead of `404`
 
 ## Reporting
 
 When using this skill, always report:
 - whether the GitHub sync succeeded
-- whether preserved server files remained in place
+- whether routine deploy or bootstrap was used
+- whether preserved server-local files remained in place
 - whether `deploy_to_tencent.sh` completed
-- whether runtime health checks passed
+- whether runtime health and skills checks passed

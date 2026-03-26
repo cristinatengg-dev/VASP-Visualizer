@@ -12,7 +12,9 @@
 | 次品牌色（按钮悬停） | `#162044` |
 | 深蓝按钮 | `#1A2A4E` / hover `#24365E` |
 | 蓝色导出按钮 | `#2E4A8E` / hover `#3D5BA6` |
-| 主背景 | `bg-white` |
+| 页面背景（米黄） | `bg-[#F5F5F0]` — 所有 Agent 页面、登录页统一使用 |
+| HeroSection 背景 | `bg-white` — 首屏保持白色不变 |
+| 面板/卡片背景 | `bg-white` |
 | 次背景 | `bg-gray-50` |
 | 边框 | `border-gray-100` / `border-gray-200` |
 

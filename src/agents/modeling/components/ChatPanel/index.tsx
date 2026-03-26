@@ -4,15 +4,14 @@ import {
   ModelingIntent,
   ModelingProviderName,
 } from '../../types/modeling';
-import { useModeling } from '../../hooks/useModeling';
-
-interface ChatPanelProps {
+import { useModeling } from '../../hooks/useModeling';interface ChatPanelProps {
   onIntentChange: (intent: ModelingIntent) => void;
   currentIntent: ModelingIntent | null;
+  prefillPrompt?: string | null;
 }
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) => {
-  const [input, setInput] = useState('');
+const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, prefillPrompt }) => {
+  const [input, setInput] = useState(prefillPrompt ?? '');
   const [providerOrderInput, setProviderOrderInput] = useState(MODELING_PROVIDER_OPTIONS.join(','));
   const [editMaterial, setEditMaterial] = useState('');
   const [editSurface, setEditSurface] = useState('');
@@ -38,6 +37,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent }) 
     latestBuildMeta,
     runtimeSession,
   } = useModeling();
+
+  // Sync prefill prompt from handoff when it changes
+  useEffect(() => {
+    if (prefillPrompt) {
+      setInput(prefillPrompt);
+    }
+  }, [prefillPrompt]);
 
   const normalizedProviders = useMemo(() => {
     const nextProviders: ModelingProviderName[] = [];

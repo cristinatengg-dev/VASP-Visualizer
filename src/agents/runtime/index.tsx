@@ -1440,7 +1440,7 @@ const RuntimeInspector: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(46,74,142,0.10),_transparent_32%),linear-gradient(180deg,_#F7F8FC_0%,_#EEF2F8_100%)] px-4 py-6 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#F5F5F0] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-[1600px] flex-col gap-6">
         <div className="flex flex-col gap-4 rounded-[30px] border border-white/80 bg-white/85 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.08)] backdrop-blur-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">

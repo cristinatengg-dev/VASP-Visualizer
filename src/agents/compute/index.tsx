@@ -79,7 +79,7 @@ const ComputeAgent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col">
+    <div className="min-h-screen bg-[#F5F5F0] flex flex-col">
       {/* Top Bar */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-8 py-4 flex items-center justify-between">

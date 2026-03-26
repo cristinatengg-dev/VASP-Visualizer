@@ -27,6 +27,7 @@ const { parseSciencePdfFile } = require('./src/rendering/parse-pdf');
 const { parseScienceText } = require('./src/rendering/parse-science');
 const { validateRenderingImage } = require('./src/rendering/validate-image');
 const { generateRenderingImages } = require('./src/rendering/generate-image');
+const { runRetrievalAgentStream } = require('./src/retrieval/agent');
 
 // --- Fail-fast: required environment variables ---
 const REQUIRED_ENV = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'TOKEN_SECRET'];
@@ -1390,18 +1391,51 @@ app.post('/api/deploy-static', deployUpload.single('dist'), async (req, res) => 
 // Scientific Cover Agent — AI API Routes
 // ─────────────────────────────────────────────────────────────────────────────
 
-const GEMINI_BASE_URL   = process.env.GEMINI_BASE_URL   || 'https://once.novai.su/v1';
+const GEMINI_BASE_URL   = process.env.GEMINI_BASE_URL   || 'https://api.aipaibox.com/v1';
 const GEMINI_API_KEY    = process.env.GEMINI_API_KEY    || '';
-const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-3-flash-preview';
+const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash';
+
+const { proxyAgent: _proxyAgent } = require('./src/proxy-agent');
 
 const fetchWithTimeout = async (url, init, timeoutMs) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-        return await fetch(url, { ...init, signal: controller.signal });
-    } finally {
-        clearTimeout(timeoutId);
-    }
+    return new Promise((resolve, reject) => {
+        const parsed = new URL(url);
+        const options = {
+            hostname: parsed.hostname,
+            port: parsed.port || 443,
+            path: parsed.pathname + parsed.search,
+            method: init.method || 'GET',
+            headers: init.headers || {},
+        };
+        if (_proxyAgent) options.agent = _proxyAgent;
+
+        const timeoutId = setTimeout(() => {
+            req.destroy();
+            reject(new Error('Request timeout'));
+        }, timeoutMs);
+
+        const req = require('https').request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                clearTimeout(timeoutId);
+                resolve({
+                    ok: res.statusCode >= 200 && res.statusCode < 400,
+                    status: res.statusCode,
+                    text: () => Promise.resolve(data),
+                    json: () => Promise.resolve(JSON.parse(data)),
+                });
+            });
+        });
+
+        req.on('error', (error) => {
+            clearTimeout(timeoutId);
+            reject(error);
+        });
+
+        if (init.body) req.write(init.body);
+        req.end();
+    });
 };
 
 // Helper: OpenAI-compatible chat completion (used for Gemini text model)
@@ -1530,6 +1564,29 @@ app.post('/api/agent/parse-science', async (req, res) => {
     } catch (err) {
         console.error('[agent/parse-science]', err.message);
         return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── Route: POST /api/agent/retrieve ───────────────────────────────────────────
+// Phase 1: Literature and MP search with SSE stream
+app.post('/api/agent/retrieve', async (req, res) => {
+    const { prompt } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const sendChunk = (data) => {
+        res.write(`data: ${data}\n\n`);
+    };
+
+    try {
+        await runRetrievalAgentStream(prompt, sendChunk);
+    } catch (e) {
+        sendChunk(JSON.stringify({ type: 'error', content: e.message }));
+    } finally {
+        res.end();
     }
 });
 

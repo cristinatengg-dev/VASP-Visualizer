@@ -28,10 +28,10 @@ import {
   ArrowRight,
   Atom,
   Cpu,
-  BarChart3,
   ChevronRight,
   LogIn,
   Box,
+  BookOpen,
 } from "lucide-react";
 import { useStore } from "../store/useStore";
 
@@ -66,6 +66,16 @@ interface AgentCard {
 }
 
 const AGENTS: AgentCard[] = [
+  {
+    id: "retrieval",
+    route: "/agent/retrieval",
+    icon: <BookOpen size={16} strokeWidth={1.5} className="text-white" />,
+    label: "Idea Agent",
+    title: "Idea Creator",
+    description:
+      "Automated literature and database search for batteries and materials. Think -> Search -> Import.",
+    tag: "Beta",
+  },
   {
     id: "modeling",
     route: "/agent/modeling",
@@ -373,9 +383,9 @@ const AgentCardItem: React.FC<{ card: AgentCard; onClick: () => void }> = ({
   <button
     onClick={onClick}
     className="
-      group relative w-full text-left
-      flex flex-col gap-4
-      p-6
+      group relative text-left
+      flex flex-col gap-3
+      p-4
       bg-white/75 backdrop-blur-md
       border border-white/60
       rounded-[24px]
@@ -389,51 +399,50 @@ const AgentCardItem: React.FC<{ card: AgentCard; onClick: () => void }> = ({
     "
     aria-label={`Open ${card.label}`}
   >
-    {/* 右上角状态徽章 */}
-    <span
-      className={`
-        absolute top-4 right-4
-        px-2 py-0.5 text-[9px] font-mono font-bold tracking-widest uppercase
-        rounded-[8px]
-        ${
-          card.tag === "Live"
-            ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
-            : "bg-gray-50/80 text-gray-400 border border-gray-100"
-        }
-      `}
-    >
-      {card.tag}
-    </span>
-
     {/* 图标框 */}
-    <div
-      className="
-        flex-shrink-0 w-9 h-9
-        rounded-[12px]
-        bg-[#0A1128]/90
-        flex items-center justify-center
-        shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_2px_8px_rgba(10,17,40,0.2)]
-      "
-    >
-      {card.icon}
+    <div className="flex items-center justify-between">
+      <div
+        className="
+          flex-shrink-0 w-9 h-9
+          rounded-[12px]
+          bg-[#0A1128]/90
+          flex items-center justify-center
+          shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_2px_8px_rgba(10,17,40,0.2)]
+        "
+      >
+        {card.icon}
+      </div>
+      <span
+        className={`
+          px-2 py-0.5 text-[9px] font-mono font-bold tracking-widest uppercase
+          rounded-[8px]
+          ${
+            card.tag === "Live"
+              ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+              : "bg-gray-50/80 text-gray-400 border border-gray-100"
+          }
+        `}
+      >
+        {card.tag}
+      </span>
     </div>
 
     {/* 文字区 */}
-    <div className="flex-1">
-      <p className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-[0.15em] mb-1.5">
+    <div className="flex-1 min-w-0">
+      <p className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">
         {card.label}
       </p>
-      <h3 className="text-[0.875rem] font-bold text-[#0A1128] mb-2 leading-snug tracking-tight">
+      <h3 className="text-[0.8rem] font-bold text-[#0A1128] leading-snug tracking-tight">
         {card.title}
       </h3>
-      <p className="text-[11px] text-gray-500 leading-relaxed">
+      <p className="text-[10px] text-gray-500 leading-relaxed mt-1 line-clamp-2">
         {card.description}
       </p>
     </div>
 
     {/* hover 箭头 */}
     <div className="flex items-center gap-1 text-[#2E4A8E] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-      <span className="text-[11px] font-mono font-semibold">Open Agent</span>
+      <span className="text-[10px] font-mono font-semibold">Open</span>
       <ChevronRight size={11} strokeWidth={2.5} />
     </div>
   </button>
@@ -495,7 +504,7 @@ const HeroSection: React.FC = () => {
               transition-all duration-200
             "
           >
-            Go to App
+            Go
             <ArrowRight size={12} strokeWidth={2.5} />
           </button>
         ) : (
@@ -529,7 +538,7 @@ const HeroSection: React.FC = () => {
       {/* 层 3：主内容卡片（白底 z-10，覆盖代码雨） */}
       <div
         className="
-          relative z-10 w-full max-w-4xl
+          relative z-10 w-full max-w-6xl
           bg-white/92 backdrop-blur-sm
           border border-gray-100/80
           rounded-[24px]
@@ -563,10 +572,10 @@ const HeroSection: React.FC = () => {
             <CTAButton onClick={() => navigate("/explore")} />
           </motion.div>
 
-          {/* ⑤ 四张 Agent 卡片（玻璃态） */}
+          {/* ⑤ Agent 卡片（横向一行，不溢出） */}
           <motion.div
             variants={itemVariants}
-            className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-2"
+            className="w-full grid grid-cols-5 gap-3 mt-2"
           >
             {AGENTS.map((card) => (
               <AgentCardItem
