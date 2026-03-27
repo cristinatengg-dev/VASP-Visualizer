@@ -43,21 +43,31 @@ const itemVariants = {
  *   - YouTube/Vimeo embed → 用 <iframe>
  *   - 本地 mp4 → 用 <video>
  */
-const VIDEO_URL = ""; // ← 填入真实视频 URL（YouTube embed / mp4）
+const VIDEO_URL = "/promo-video.mp4"; // 宣传视频
 
 const VideoPlayer: React.FC = () => {
   const [playing, setPlaying] = useState(false);
 
   if (VIDEO_URL) {
+    const isEmbed = VIDEO_URL.includes('youtube') || VIDEO_URL.includes('vimeo');
     return (
       <div className="w-full aspect-video rounded-[24px] overflow-hidden border border-gray-100 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
-        <iframe
-          src={VIDEO_URL}
-          title="SCI Visualizer Platform Demo"
-          className="w-full h-full"
-          allow="autoplay; fullscreen"
-          allowFullScreen
-        />
+        {isEmbed ? (
+          <iframe
+            src={VIDEO_URL}
+            title="SCI Visualizer Platform Demo"
+            className="w-full h-full"
+            allow="autoplay; fullscreen"
+            allowFullScreen
+          />
+        ) : (
+          <video
+            src={VIDEO_URL}
+            controls
+            className="w-full h-full bg-black"
+            preload="metadata"
+          />
+        )}
       </div>
     );
   }

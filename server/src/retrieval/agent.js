@@ -265,8 +265,8 @@ async function searchMaterialsProject(formula) {
 
 // ─── LLM helpers ─────────────────────────────────────────────────────────────
 
-async function llm(messages) {
-  return geminiChat(messages, false);
+async function llm(messages, opts = {}) {
+  return geminiChat(messages, false, opts);
 }
 
 function cleanJson(raw) {
@@ -490,93 +490,110 @@ async function runRetrievalAgentStream(userPrompt, onChunk) {
   };
 
   try {
-    // Stage 1: intent understanding (LLM optional)
+    // ── Parallel Phase 1: LLM intent + heuristic search kick off simultaneously ──
+
+    // Heuristic: extract formulas and build a quick English query immediately
+    const heuristicFormula = inferFallbackFormula(userPrompt);
+    const hasChinese = /[\u4e00-\u9fff]/.test(userPrompt);
+    const heuristicQuery = hasChinese
+      ? (userPrompt.match(/[A-Z][a-z]?(?:\d+)?(?:[A-Z][a-z]?(?:\d+)?)*/g) || []).join(' ') + ' battery DFT calculation'
+      : userPrompt;
+
+    // Start LLM intent understanding (merged with translation)
     emit({ type: 'stage', stage: 'goal_understanding', title: 'Understanding research goal', status: 'active' });
 
-    try {
-      const intentRaw = await llm([
-        {
-          role: 'user',
-          content: `You are a battery / computational materials science expert advisor.
-A student (undergraduate or grad-level knowledge, not a pure beginner) typed the following research question.
+    const llmIntentPromise = llm([{
+      role: 'user',
+      content: `You are a battery / computational materials science expert advisor.
+A student typed the following research question (may be in Chinese or English).
 Analyse their intent and return ONLY a JSON object — no prose, no markdown fences.
 
 JSON schema:
 {
-  "interpreted_goal": "one sentence: what research outcome they need",
+  "interpreted_goal": "one sentence in the SAME language as the user's input: what research outcome they need",
   "user_profile": "theory-starter | experimental-needs-theory | general",
   "depth": "starter | paper-support | advanced",
-  "literature_query": "best 4-6 keyword string to search scientific databases",
+  "literature_query": "best 4-6 ENGLISH keyword string to search academic databases (CrossRef, arXiv, OpenAlex). MUST be English even if input is Chinese.",
   "candidate_formulas": ["formula1", "formula2"],
   "research_type": "bulk_stability | voltage | diffusion | doping | surface | general"
 }
 
 User prompt: "${userPrompt}"`,
-        },
-      ]);
-      intent = cleanJson(intentRaw) || intent;
-    } catch (_error) {
-      // continue with heuristic intent
-    }
-
-    emit({
-      type: 'stage',
-      stage: 'goal_understanding',
-      title: 'Research goal understood',
-      status: 'done',
-      content: intent.interpreted_goal,
+    }], { timeoutMs: 12000, maxRetries: 1 }).then((raw) => {
+      const parsed = cleanJson(raw);
+      if (parsed) {
+        intent = parsed;
+        intent.research_type = intent.research_type || inferResearchType(userPrompt);
+      }
+      emit({ type: 'stage', stage: 'goal_understanding', title: 'Research goal understood', status: 'done', content: intent.interpreted_goal });
+      return intent;
+    }).catch(() => {
+      emit({ type: 'stage', stage: 'goal_understanding', title: 'Research goal understood', status: 'done', content: intent.interpreted_goal });
+      return intent;
     });
 
-    // Stage 2: translate query to English for literature search
-    let litQuery = intent.literature_query || userPrompt;
-    const hasChinese = /[\u4e00-\u9fff]/.test(litQuery);
-    if (hasChinese) {
-      emit({ type: 'stage', stage: 'translate', title: 'Translating query to English…', status: 'active' });
-      try {
-        const translated = await llm([{
-          role: 'user',
-          content: `Translate the following scientific research query into an English keyword string suitable for searching academic databases (CrossRef, arXiv, OpenAlex). Return ONLY the translated English keywords, nothing else.\n\nQuery: "${litQuery}"`,
-        }]);
-        const cleaned = String(translated || '').replace(/```/g, '').replace(/"/g, '').trim();
-        if (cleaned && cleaned.length > 3) {
-          litQuery = cleaned;
-        }
-        emit({ type: 'stage', stage: 'translate', title: 'Query translated', status: 'done', content: litQuery });
-      } catch (_e) {
-        // Fallback: extract chemical formulas and known terms
-        const formulaMatch = litQuery.match(/[A-Z][a-z]?(?:\d+)?(?:[A-Z][a-z]?(?:\d+)?)*/g);
-        if (formulaMatch) litQuery = formulaMatch.join(' ') + ' battery DFT calculation';
-        emit({ type: 'stage', stage: 'translate', title: 'Translation fallback', status: 'done', content: litQuery });
-      }
-    }
-
-    // Stage 3: literature evidence — search each source with individual progress
+    // Start literature search immediately with heuristic query (don't wait for LLM)
     emit({ type: 'stage', stage: 'lit_crossref', title: 'Searching CrossRef…', status: 'active' });
     emit({ type: 'stage', stage: 'lit_openalex', title: 'Searching OpenAlex…', status: 'active' });
     emit({ type: 'stage', stage: 'lit_arxiv', title: 'Searching arXiv…', status: 'active' });
     emit({ type: 'stage', stage: 'lit_core', title: 'Searching CORE…', status: 'active' });
 
-    const litResults = await Promise.all([
-      searchCrossRef(litQuery, 4).then((r) => {
-        emit({ type: 'stage', stage: 'lit_crossref', title: `CrossRef — ${r.length} papers`, status: 'done', content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results' });
+    const litSearchPromise = Promise.all([
+      searchCrossRef(heuristicQuery, 4).then((r) => {
+        emit({ type: 'stage', stage: 'lit_crossref', title: `CrossRef — ${r.length} papers`, status: 'done', content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results', papers: r });
         return r;
       }).catch(() => { emit({ type: 'stage', stage: 'lit_crossref', title: 'CrossRef — unavailable', status: 'done' }); return []; }),
 
-      searchOpenAlex(litQuery, 4).then((r) => {
-        emit({ type: 'stage', stage: 'lit_openalex', title: `OpenAlex — ${r.length} papers`, status: 'done', content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results' });
+      searchOpenAlex(heuristicQuery, 4).then((r) => {
+        emit({ type: 'stage', stage: 'lit_openalex', title: `OpenAlex — ${r.length} papers`, status: 'done', content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results', papers: r });
         return r;
       }).catch(() => { emit({ type: 'stage', stage: 'lit_openalex', title: 'OpenAlex — unavailable', status: 'done' }); return []; }),
 
-      searchArxiv(litQuery, 3).then((r) => {
-        emit({ type: 'stage', stage: 'lit_arxiv', title: `arXiv — ${r.length} preprints`, status: 'done', content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results' });
+      searchArxiv(heuristicQuery, 3).then((r) => {
+        emit({ type: 'stage', stage: 'lit_arxiv', title: `arXiv — ${r.length} preprints`, status: 'done', content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results', papers: r });
         return r;
       }).catch(() => { emit({ type: 'stage', stage: 'lit_arxiv', title: 'arXiv — unavailable', status: 'done' }); return []; }),
 
-      searchCORE(litQuery, 3).then((r) => {
-        emit({ type: 'stage', stage: 'lit_core', title: `CORE — ${r.length} papers`, status: 'done', content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results' });
+      searchCORE(heuristicQuery, 3).then((r) => {
+        emit({ type: 'stage', stage: 'lit_core', title: `CORE — ${r.length} papers`, status: 'done', content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results', papers: r });
         return r;
       }).catch(() => { emit({ type: 'stage', stage: 'lit_core', title: 'CORE — unavailable', status: 'done' }); return []; }),
     ]);
+
+    // Start MP structure lookup in parallel (use heuristic formula)
+    const mpFormulas = heuristicFormula ? [heuristicFormula] : [];
+    emit({
+      type: 'stage', stage: 'structure_lookup',
+      title: mpFormulas.length > 0 ? `Searching Materials Project — ${mpFormulas.join(', ')}` : 'Searching Materials Project',
+      status: 'active',
+    });
+
+    const mpSearchPromise = (async () => {
+      // Wait for LLM to finish to get better formulas, but with a timeout
+      const raceResult = await Promise.race([
+        llmIntentPromise.then(() => intent.candidate_formulas?.slice(0, 2) || []),
+        new Promise((resolve) => setTimeout(() => resolve([]), 5000)), // 5s max wait
+      ]);
+      const finalFormulas = (Array.isArray(raceResult) && raceResult.length > 0) ? raceResult : mpFormulas;
+
+      for (const formula of finalFormulas.slice(0, 2)) {
+        const mpResult = await searchMaterialsProject(formula);
+        if (mpResult.success) allStructures.push(...mpResult.results);
+      }
+
+      emit({
+        type: 'stage', stage: 'structure_lookup',
+        title: allStructures.length > 0 ? `Materials Project — ${allStructures.length} structures` : 'Materials Project — no structures found',
+        status: 'done',
+        content: allStructures.length > 0
+          ? allStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (${s.crystal_system}, E_hull=${s.energy_above_hull})`).join('\n')
+          : 'Using literature guidance only.',
+        structures: allStructures,
+      });
+    })();
+
+    // ── Wait for all parallel work to complete ──
+    const [litResults] = await Promise.all([litSearchPromise, mpSearchPromise, llmIntentPromise]);
 
     // Deduplicate papers
     const allPapers = litResults.flat();
@@ -590,37 +607,22 @@ User prompt: "${userPrompt}"`,
     }
     papers = papers.slice(0, 10);
 
-    // Stage 3: MP lookup
-    const formulas = intent.candidate_formulas?.length ? [...intent.candidate_formulas] : [];
-    if (formulas.length === 0) {
-      const fallbackFormula = inferFallbackFormula(userPrompt);
-      if (fallbackFormula) formulas.push(fallbackFormula);
-    }
-    const searchFormulas = formulas.slice(0, 2);
-    emit({
-      type: 'stage', stage: 'structure_lookup',
-      title: searchFormulas.length > 0 ? `Searching Materials Project — ${searchFormulas.join(', ')}` : 'Searching Materials Project',
-      status: 'active',
-    });
-
-    for (const formula of searchFormulas) {
-      const mpResult = await searchMaterialsProject(formula);
-      if (mpResult.success) {
-        allStructures.push(...mpResult.results);
+    // If LLM gave us a better literature query and we got few results, do a supplementary search
+    const llmQuery = intent.literature_query || '';
+    if (llmQuery && llmQuery !== heuristicQuery && papers.length < 3) {
+      const extraResults = await Promise.all([
+        searchCrossRef(llmQuery, 3).catch(() => []),
+        searchArxiv(llmQuery, 2).catch(() => []),
+      ]);
+      for (const paper of extraResults.flat()) {
+        const key = paper.doi || paper.title.slice(0, 80).toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          papers.push(paper);
+        }
       }
+      papers = papers.slice(0, 10);
     }
-
-    emit({
-      type: 'stage',
-      stage: 'structure_lookup',
-      title: allStructures.length > 0
-        ? `Materials Project — ${allStructures.length} structures`
-        : 'Materials Project — no structures found',
-      status: 'done',
-      content: allStructures.length > 0
-        ? allStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (${s.crystal_system}, E_hull=${s.energy_above_hull})`).join('\n')
-        : 'Using literature guidance only.',
-    });
 
     // Stage 4: idea generation (LLM with deterministic fallback)
     emit({ type: 'stage', stage: 'idea_generation', title: 'Generating research ideas', status: 'active' });
@@ -708,7 +710,7 @@ Return ONLY a JSON object — no markdown, no prose:
   "overall_summary": "string"
 }`,
         },
-      ]);
+      ], { timeoutMs: 15000, maxRetries: 1 });
 
       const ideaData = cleanJson(ideaRaw);
       ideaCards = ideaData?.idea_cards || [];

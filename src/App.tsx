@@ -11,6 +11,7 @@ import ModelingAgent from './agents/modeling';
 import ComputeAgent from './agents/compute';
 import RuntimeInspector from './agents/runtime';
 import RetrievalAgent from './agents/retrieval';
+import VideoGenerator from './pages/VideoGenerator';
 import { useStore } from './store/useStore';
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
@@ -117,6 +118,7 @@ function App() {
       {/* 其他页面 */}
       <Route path="/explore" element={<Explore />} />
       <Route path="/manual" element={<Manual />} />
+      <Route path="/admin/video-generator" element={<VideoGenerator />} />
       {/* Agent 工作台 */}
       <Route path="/agent/rendering" element={<AgentRoute><RenderingAgent /></AgentRoute>} />
       <Route path="/agent/retrieval" element={<AgentRoute><RetrievalAgent /></AgentRoute>} />

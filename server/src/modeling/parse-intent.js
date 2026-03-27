@@ -273,7 +273,7 @@ function inferSubstrate(prompt, taskType) {
     surface = normalizeSurfaceLabel(surfaceMatch[2]);
   } else {
     const cnSurfaceMatch = String(prompt || '').match(/([A-Za-z0-9]+)\s*表面/);
-    const bulkMatch = String(prompt || '').match(/(?:bulk|crystal|晶体|体相)(?:\s+structure)?(?:\s+for)?\s*([A-Za-z][A-Za-z0-9]*)/i);
+    const bulkMatch = String(prompt || '').match(/(?:bulk|crystal|晶体|体相)(?:\s+(?:starter|structure|model|parent))?\s+(?:(?:structure|model|for)\s+)*([A-Z][a-z]?(?:\d*[A-Z][a-z]?\d*)*)/i);
     material = cnSurfaceMatch?.[1] || bulkMatch?.[1] || '';
   }
 
@@ -305,8 +305,12 @@ function inferSubstrate(prompt, taskType) {
     ? parsedVacuum
     : 15;
 
+  // Extract Materials Project ID if present (e.g. mp-867515)
+  const mpIdMatch = String(prompt || '').match(/\b(mp-\d+)\b/i);
+
   return {
     material,
+    ...(mpIdMatch ? { material_id: mpIdMatch[1], source: 'mp' } : {}),
     ...(taskType === 'slab' ? { surface: surface || '(111)' } : {}),
     ...(layers ? { layers } : {}),
     supercell,
@@ -422,27 +426,18 @@ async function parseModelingIntent({ prompt, providerPreferences } = {}) {
           content: `${normalizedPrompt}\n\nPreferred database order: ${normalizedProviders.join(', ')}`,
         },
       ],
-      true
+      true,
+      { timeoutMs: 6000, maxRetries: 1 }
     );
 
     return normalizeModelingIntent(safeJsonParse(content), normalizedProviders);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error || '');
-    if (
-      /GEMINI_API_KEY is not configured/i.test(message)
-      || /Gemini API error\s+(400|401|403|429)/i.test(message)
-      || /API key expired/i.test(message)
-      || /invalid token/i.test(message)
-      || /invalid api key/i.test(message)
-      || /quota exceeded/i.test(message)
-      || /resource_exhausted/i.test(message)
-    ) {
-      return parseModelingIntentHeuristically({
-        prompt: normalizedPrompt,
-        providerPreferences: normalizedProviders,
-      });
-    }
-    throw error;
+    // Any LLM failure → fall back to heuristic parsing so modeling never blocks
+    console.warn('[modeling/parse-intent] LLM failed, using heuristic fallback:', error?.message || error);
+    return parseModelingIntentHeuristically({
+      prompt: normalizedPrompt,
+      providerPreferences: normalizedProviders,
+    });
   }
 }
 

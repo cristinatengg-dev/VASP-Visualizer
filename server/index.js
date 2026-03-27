@@ -1616,6 +1616,62 @@ app.post('/api/agent/generate-image', async (req, res) => {
     }
 });
 
+// ── Route: POST /api/video/generate ──────────────────────────────────────────
+// Generate a single video clip via Seedance 2.0
+const { createVideoTask, getVideoTaskStatus } = require('./src/video/seedance');
+const { PROMO_SHOTS } = require('./src/video/promo-prompts');
+
+app.post('/api/video/generate', async (req, res) => {
+    const { prompt, duration = 8, ratio = '16:9' } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+    try {
+        const result = await createVideoTask({ prompt, duration, ratio });
+        res.json({ success: true, ...result });
+    } catch (e) {
+        console.error('[video/generate]', e.message);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// ── Route: GET /api/video/status/:taskId ─────────────────────────────────────
+app.get('/api/video/status/:taskId', async (req, res) => {
+    try {
+        const result = await getVideoTaskStatus(req.params.taskId);
+        res.json({ success: true, ...result });
+    } catch (e) {
+        console.error('[video/status]', e.message);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// ── Route: GET /api/video/promo-shots ────────────────────────────────────────
+// Return the predefined promo storyboard shots
+app.get('/api/video/promo-shots', (_req, res) => {
+    res.json({ shots: PROMO_SHOTS });
+});
+
+// ── Route: POST /api/video/generate-promo ────────────────────────────────────
+// Generate all promo shots in parallel
+app.post('/api/video/generate-promo', async (req, res) => {
+    try {
+        const results = await Promise.allSettled(
+            PROMO_SHOTS.map((shot) =>
+                createVideoTask({ prompt: shot.prompt, duration: shot.duration, ratio: '16:9' })
+                    .then((r) => ({ shotId: shot.id, ...r }))
+            )
+        );
+        const tasks = results.map((r, i) => ({
+            shotId: PROMO_SHOTS[i].id,
+            label: PROMO_SHOTS[i].label,
+            ...(r.status === 'fulfilled' ? r.value : { error: r.reason?.message }),
+        }));
+        res.json({ success: true, tasks });
+    } catch (e) {
+        console.error('[video/generate-promo]', e.message);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {

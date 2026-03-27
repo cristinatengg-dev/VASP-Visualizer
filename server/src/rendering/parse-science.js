@@ -100,7 +100,7 @@ async function fetchWithTimeout(url, init, timeoutMs = 20000) {
   });
 }
 
-async function geminiChat(messages, jsonMode = false) {
+async function geminiChat(messages, jsonMode = false, { timeoutMs = 20000, maxRetries = 2 } = {}) {
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is not configured');
   }
@@ -116,7 +116,6 @@ async function geminiChat(messages, jsonMode = false) {
   }
 
   let lastError = null;
-  const maxRetries = 2;
 
   for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
     try {
@@ -130,7 +129,7 @@ async function geminiChat(messages, jsonMode = false) {
           },
           body: JSON.stringify(body),
         },
-        20000
+        timeoutMs
       );
 
       if (!response.ok) {

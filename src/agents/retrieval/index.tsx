@@ -16,6 +16,8 @@ interface StageEvent {
   title: string;
   status: 'active' | 'done';
   content?: string;
+  papers?: Paper[];
+  structures?: Structure[];
 }
 
 interface ErrorEvent { type: 'error'; content: string; }
@@ -115,11 +117,11 @@ const StageRow: React.FC<{ ev: StageEvent }> = ({ ev }) => (
   <div className="flex items-start gap-3">
     <div className="mt-0.5 shrink-0">
       {ev.status === 'active'
-        ? <Loader2 size={14} className="text-indigo-400 animate-spin" />
+        ? <div className="relative"><Loader2 size={14} className="text-indigo-400 animate-spin" /><span className="absolute inset-0 rounded-full bg-indigo-400/20 animate-ping" /></div>
         : <span className="block w-3.5 h-3.5 rounded-full bg-emerald-400" />}
     </div>
     <div className="min-w-0 flex-1">
-      <p className={`text-xs font-semibold ${ev.status === 'active' ? 'text-gray-500' : 'text-gray-700'}`}>
+      <p className={`text-xs font-semibold ${ev.status === 'active' ? 'text-indigo-600' : 'text-gray-700'}`}>
         {ev.title}
       </p>
       {ev.content && ev.status === 'done' && (
@@ -353,6 +355,8 @@ const IdeaAgent: React.FC = () => {
   const [result, setResult] = useState<CompleteData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
+  const [streamingPapers, setStreamingPapers] = useState<Paper[]>([]);
+  const [streamingStructures, setStreamingStructures] = useState<Structure[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const selectedCard = result?.idea_cards.find((c) => c.id === selectedIdeaId) ?? null;
@@ -367,6 +371,13 @@ const IdeaAgent: React.FC = () => {
       }
       return [...prev, ev];
     });
+    // Extract streaming papers/structures from done events
+    if (ev.status === 'done' && ev.papers && ev.papers.length > 0) {
+      setStreamingPapers((prev) => [...prev, ...ev.papers!]);
+    }
+    if (ev.status === 'done' && ev.structures && ev.structures.length > 0) {
+      setStreamingStructures((prev) => [...prev, ...ev.structures!]);
+    }
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   }, []);
 
@@ -377,6 +388,8 @@ const IdeaAgent: React.FC = () => {
     setResult(null);
     setError(null);
     setSelectedIdeaId(null);
+    setStreamingPapers([]);
+    setStreamingStructures([]);
 
     try {
       const response = await fetch(`${API_BASE_URL}/agent/retrieve`, {
@@ -437,6 +450,9 @@ const IdeaAgent: React.FC = () => {
   };
 
   const hasResult = result !== null;
+  const doneStages = stages.filter((s) => s.status === 'done').length;
+  const totalStages = 8; // goal, translate, 4x lit, structure, ideas
+  const activeStage = stages.find((s) => s.status === 'active');
 
   return (
     <div className="flex h-screen w-full bg-[#F5F5F0] p-5 gap-4 overflow-hidden">
@@ -473,8 +489,8 @@ const IdeaAgent: React.FC = () => {
               <div className="flex flex-col gap-1.5 w-full mt-1">
                 {[
                   'NaCoO2 理论计算，我做实验想补充计算内容',
-                  '研究掺杂改善 Na-ion 正极倍率性能',
-                  'Li-ion 扩散机制，NEB 计算怎么起步',
+                  '研究掺杂改善 Na⁺ 正极倍率性能',
+                  'Li⁺ 扩散机制，NEB 计算怎么起步',
                 ].map((s) => (
                   <button key={s} onClick={() => setQuery(s)}
                     className="text-left text-[11px] text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-[12px] px-3 py-1.5 hover:bg-indigo-100 transition-colors">
@@ -526,6 +542,23 @@ const IdeaAgent: React.FC = () => {
           {hasResult && (
             <p className="mt-0.5 text-[10px] text-gray-400">{result.idea_cards.length} ideas generated</p>
           )}
+          {/* Progress bar during streaming */}
+          {isStreaming && !hasResult && (
+            <div className="mt-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-bold text-indigo-500">
+                  {activeStage?.title || 'Initializing...'}
+                </span>
+                <span className="text-[10px] font-mono text-gray-400">{doneStages}/{totalStages}</span>
+              </div>
+              <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-indigo-500 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${Math.max(5, (doneStages / totalStages) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -538,10 +571,53 @@ const IdeaAgent: React.FC = () => {
             </div>
           )}
 
+          {/* Progressive streaming results */}
           {isStreaming && !hasResult && (
-            <div className="flex items-center justify-center h-full gap-2 text-gray-400">
-              <Loader2 size={18} className="animate-spin" />
-              <span className="text-xs">Generating ideas...</span>
+            <div className="space-y-3">
+              {streamingPapers.length === 0 && streamingStructures.length === 0 && (
+                <div className="flex items-center justify-center py-12 gap-2 text-gray-400">
+                  <Search size={16} className="animate-pulse" />
+                  <span className="text-xs">Searching databases...</span>
+                </div>
+              )}
+
+              {streamingPapers.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1.5">
+                    <BookOpen size={11} /> Papers Found ({streamingPapers.length})
+                  </p>
+                  <div className="space-y-2">
+                    {streamingPapers.slice(0, 8).map((p, i) => <PaperCard key={`stream-${i}`} paper={p} />)}
+                  </div>
+                </div>
+              )}
+
+              {streamingStructures.length > 0 && (
+                <div className="pt-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1.5">
+                    <Database size={11} /> Structures ({streamingStructures.length})
+                  </p>
+                  <div className="space-y-1.5">
+                    {streamingStructures.slice(0, 6).map((s, i) => (
+                      <div key={`struct-${i}`} className="rounded-[12px] border border-gray-100 bg-gray-50/50 p-2.5 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-[#0A1128]">{s.formula}</span>
+                          <span className="text-[10px] text-gray-400 font-mono">{s.material_id}</span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{s.crystal_system} · E_hull={s.energy_above_hull} eV/atom</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tail indicator */}
+              {(streamingPapers.length > 0 || streamingStructures.length > 0) && (
+                <div className="flex items-center justify-center gap-2 py-3 text-indigo-400">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span className="text-[11px] font-medium">Synthesizing research ideas...</span>
+                </div>
+              )}
             </div>
           )}
 
