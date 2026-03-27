@@ -32,7 +32,7 @@ const Manual: React.FC = () => {
             SCI Visualizer 1.0 是专为科研人员和超算平台打造的 <strong>Web 端高性能结构可视化平台</strong>。它利用 WebGL 与 WebCodecs 硬件加速技术，无需安装任何插件，即可在浏览器中实现 结构与轨迹的秒级渲染与导出。
           </p>
           <p className="mb-4 leading-relaxed">
-            平台包含五大 AI Agent，覆盖从 <strong>研究构思 → 建模 → 计算 → 运行时管理 → 封面生成</strong> 的完整科研工作流。
+            平台包含五大智能 Agent，覆盖从 <strong>研究构思 → 建模 → 计算 → 运行时管理 → 封面生成</strong> 的完整科研工作流。
           </p>
           <div className="bg-gray-50 p-4 rounded border border-gray-100 mb-4">
             <p className="font-bold mb-2">支持格式:</p>
@@ -44,11 +44,11 @@ const Manual: React.FC = () => {
           <div className="bg-gray-50 p-4 rounded border border-gray-100 mb-4">
             <p className="font-bold mb-2">平台 Agent 一览:</p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>Idea Agent:</strong> 文献检索 + 结构数据库查询 + AI 研究方案生成</li>
+              <li><strong>Idea Agent:</strong> 文献检索 + 结构数据库查询 + 智能研究方案生成</li>
               <li><strong>Modeling Agent:</strong> 对话式晶体结构建模（自然语言 → 3D 结构）</li>
               <li><strong>Compute Agent:</strong> VASP 输入文件编译 + HPC 集群配置 + 任务提交</li>
               <li><strong>Runtime Agent:</strong> 运行时 Artifact 管理与检查</li>
-              <li><strong>Rendering Agent:</strong> 基于科研论文内容的 AI 期刊封面生成</li>
+              <li><strong>Scientific Cover Agent:</strong> 基于科研论文内容的期刊封面自动生成</li>
             </ul>
           </div>
         </section>
@@ -186,7 +186,7 @@ const Manual: React.FC = () => {
         <section>
           <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">6. Idea Agent — 研究方案智能生成</h2>
           <p className="mb-4 leading-relaxed">
-            Idea Agent 帮助科研人员从一句研究需求出发，自动检索学术文献、查询 Materials Project 数据库，并利用 AI 生成有文献依据的计算研究方案。
+            Idea Agent 帮助科研人员从一句研究需求出发，自动检索学术文献、查询 Materials Project 数据库，并生成有文献依据的计算研究方案。
           </p>
 
           <div className="mb-6">
@@ -194,7 +194,7 @@ const Manual: React.FC = () => {
             <p className="mb-2">Idea Agent 采用三栏式布局：</p>
             <ul className="list-disc pl-5 space-y-2 mb-4">
               <li><strong>左栏 — 推理时间线</strong>：展示 Agent 的思考过程，包括意图理解、查询翻译、文献搜索、结构检索和方案生成等阶段。底部是输入框。</li>
-              <li><strong>中栏 — Research Ideas</strong>：展示 AI 生成的研究方案卡片和检索到的文献列表。</li>
+              <li><strong>中栏 — Research Ideas</strong>：展示生成的研究方案卡片和检索到的文献列表。</li>
               <li><strong>右栏 — Modeling Blueprint</strong>：点击某个研究方案卡片后展示详细的建模蓝图，包括结构来源、建模配方、文献依据和推荐路径。</li>
             </ul>
           </div>
@@ -203,8 +203,8 @@ const Manual: React.FC = () => {
             <h3 className="text-xl font-bold mb-2">6.2 使用步骤</h3>
             <ol className="list-decimal pl-5 space-y-2 mb-4">
               <li><strong>输入研究需求</strong>：在左栏底部的输入框中，用自然语言描述你的研究目标。支持中英文（中文查询会自动翻译为英文进行文献检索）。例如："NaCoO2 理论计算，我做实验想补充计算内容"。</li>
-              <li><strong>观察推理过程</strong>：左栏时间线实时展示各阶段进度——意图理解、查询翻译、CrossRef/OpenAlex/arXiv/CORE 文献搜索、Materials Project 结构查询、AI 方案生成。</li>
-              <li><strong>浏览研究方案</strong>：中栏显示生成的 Idea 卡片，每张标注了难度等级（Starter / Intermediate / Advanced）、模型类型和目标性质。带 "Recommended" 标签的是 AI 推荐的最佳方案。</li>
+              <li><strong>观察推理过程</strong>：左栏时间线实时展示各阶段进度——意图理解、查询翻译、CrossRef/OpenAlex/arXiv/CORE 文献搜索、Materials Project 结构查询、方案生成。</li>
+              <li><strong>浏览研究方案</strong>：中栏显示生成的 Idea 卡片，每张标注了难度等级（Starter / Intermediate / Advanced）、模型类型和目标性质。带 "Recommended" 标签的是系统推荐的最佳方案。</li>
               <li><strong>查看建模蓝图</strong>：点击某张 Idea 卡片，右栏展示详细蓝图：为什么选这个方向、可以计算什么性质、结构来源（含 Materials Project ID）、建模配方（起始结构、超胞大小、缺陷/掺杂等）、文献依据和注意事项。</li>
               <li><strong>发送到 Modeling Agent</strong>：点击蓝图底部的 "Send to Modeling Agent" 按钮，自动将建模参数传递到 Modeling Agent，开始实际建模工作。</li>
             </ol>
@@ -232,7 +232,7 @@ const Manual: React.FC = () => {
           <div className="mb-6">
             <h3 className="text-xl font-bold mb-2">7.1 界面布局</h3>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>左侧 — 对话面板 (Chat Panel)</strong>：与 AI 对话，描述你想要构建的结构。AI 会解析你的意图并生成建模参数。</li>
+              <li><strong>左侧 — 对话面板 (Chat Panel)</strong>：与系统对话，描述你想要构建的结构。系统会解析你的意图并生成建模参数。</li>
               <li><strong>右侧 — 3D 画布 (Canvas Panel)</strong>：实时预览生成的晶体结构，支持旋转、缩放、平移操作。</li>
             </ul>
           </div>
@@ -241,7 +241,7 @@ const Manual: React.FC = () => {
             <h3 className="text-xl font-bold mb-2">7.2 使用步骤</h3>
             <ol className="list-decimal pl-5 space-y-2 mb-4">
               <li><strong>描述目标结构</strong>：在左侧对话框中输入你想构建的结构描述，例如 "Build a bulk NaCoO2 crystal using Materials Project entry mp-867515"。</li>
-              <li><strong>AI 解析意图</strong>：Modeling Agent 会自动解析你的需求，识别化学式、晶型、数据源等信息。</li>
+              <li><strong>系统解析意图</strong>：Modeling Agent 会自动解析你的需求，识别化学式、晶型、数据源等信息。</li>
               <li><strong>预览结构</strong>：生成的结构会在右侧 3D 画布中实时显示。</li>
               <li><strong>迭代优化</strong>：你可以继续对话来调整结构参数，如修改超胞大小、添加缺陷、调整掺杂等。</li>
             </ol>
@@ -308,21 +308,21 @@ const Manual: React.FC = () => {
           </div>
         </section>
 
-        {/* 10. Rendering Agent */}
+        {/* 10. Scientific Cover Agent */}
         <section>
-          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">10. Rendering Agent — AI 期刊封面生成</h2>
+          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">10. Scientific Cover Agent — 期刊封面生成</h2>
           <p className="mb-4 leading-relaxed">
-            Rendering Agent 可以根据你的科研论文内容，利用 AI 自动生成高品质的期刊封面图片。
+            Scientific Cover Agent 可以根据你的科研论文内容，自动生成高品质的期刊封面图片。
           </p>
 
           <div className="mb-6">
             <h3 className="text-xl font-bold mb-2">10.1 六步工作流 (6-Step Pipeline)</h3>
             <ol className="list-decimal pl-5 space-y-2 mb-4">
               <li><strong>Input (输入)</strong>：粘贴论文摘要/关键段落，或上传 PDF。支持五个输入区域：核心文本、补充说明、风格偏好、参考图片、高级开关。</li>
-              <li><strong>Parsing (科学实体提取)</strong>：Gemini AI 自动解析文本，提取科学实体（化学式、反应物、产物、中间体、活性位点、反应机理等），生成结构化的 JSON 表示。</li>
-              <li><strong>Plan Selection (方案选择)</strong>：AI 生成三种不同风格的视觉方案卡片供选择。每种方案包含不同的构图思路和视觉重点。</li>
-              <li><strong>Prompt Review (提示词确认)</strong>：查看 AI 编译的完整图像生成提示词，可以手动微调后确认。</li>
-              <li><strong>Base Generation (图像生成)</strong>：Gemini 图像模型生成高清封面图片。支持多张候选图供选择。</li>
+              <li><strong>Parsing (科学实体提取)</strong>：系统自动解析文本，提取科学实体（化学式、反应物、产物、中间体、活性位点、反应机理等），生成结构化的 JSON 表示。</li>
+              <li><strong>Plan Selection (方案选择)</strong>：系统生成三种不同风格的视觉方案卡片供选择。每种方案包含不同的构图思路和视觉重点。</li>
+              <li><strong>Prompt Review (提示词确认)</strong>：查看编译的完整图像生成提示词，可以手动微调后确认。</li>
+              <li><strong>Base Generation (图像生成)</strong>：图像模型生成高清封面图片。支持多张候选图供选择。</li>
               <li><strong>Export (导出)</strong>：下载最终的高分辨率封面图片。</li>
             </ol>
           </div>
