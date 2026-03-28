@@ -301,6 +301,7 @@ async function generateOneRenderingImage({
   maxAttemptsPerImage,
 }) {
   let lastError = null;
+  let bestCandidate = null;
 
   for (let attemptIndex = 0; attemptIndex < maxAttemptsPerImage; attemptIndex += 1) {
     let candidate = null;
@@ -446,6 +447,9 @@ async function generateOneRenderingImage({
       continue;
     }
 
+    // Save every successfully generated candidate as fallback
+    bestCandidate = candidate;
+
     const verdict = await validateGeneratedImage({
       dataUrl: candidate,
       requiredSpecies,
@@ -477,6 +481,11 @@ async function generateOneRenderingImage({
     } else {
       lastError = new Error('validator_reject');
     }
+  }
+
+  // If all validation attempts failed but we have a generated image, return it anyway
+  if (bestCandidate) {
+    return bestCandidate;
   }
 
   throw lastError || new Error('image generation failed');
