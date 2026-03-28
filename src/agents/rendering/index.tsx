@@ -214,6 +214,50 @@ const PromptReviewPanel: React.FC<{
 
 // ─── Phase 5: Image Generation & Export Panel ────────────────────────────────
 
+const JOURNAL_STYLES: Record<string, { fontFamily: string; fontSize: string; lineHeight: string; position: string }> = {
+  'Nature': { fontFamily: "'Georgia', serif", fontSize: '8%', lineHeight: '1', position: 'top-left' },
+  'Nature Catalysis': { fontFamily: "'Georgia', serif", fontSize: '6%', lineHeight: '1', position: 'top-left' },
+  'Nature Materials': { fontFamily: "'Georgia', serif", fontSize: '6%', lineHeight: '1', position: 'top-left' },
+  'JACS': { fontFamily: "'Arial', sans-serif", fontSize: '5%', lineHeight: '1.2', position: 'top-center' },
+  'Angewandte Chemie': { fontFamily: "'Times New Roman', serif", fontSize: '5%', lineHeight: '1.2', position: 'top-left' },
+  'ACS Catalysis': { fontFamily: "'Arial', sans-serif", fontSize: '5%', lineHeight: '1.2', position: 'top-left' },
+  'Advanced Materials': { fontFamily: "'Helvetica', sans-serif", fontSize: '5%', lineHeight: '1.2', position: 'top-left' },
+};
+
+const JournalNameOverlay: React.FC<{ journal: string }> = ({ journal }) => {
+  const style = JOURNAL_STYLES[journal] || JOURNAL_STYLES['Nature'];
+  const parts = journal.split(' ');
+  const isNatureFamily = journal.startsWith('Nature');
+
+  return (
+    <div className="absolute inset-0 pointer-events-none" style={{ padding: '6%' }}>
+      {isNatureFamily ? (
+        <div style={{ fontFamily: style.fontFamily, color: 'white', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}>
+          <div style={{ fontSize: style.fontSize, fontWeight: 400, fontStyle: 'italic', lineHeight: style.lineHeight, letterSpacing: '-0.02em' }}>
+            {parts[0]?.toLowerCase()}
+          </div>
+          {parts.length > 1 && (
+            <div style={{ fontSize: `calc(${style.fontSize} * 1.3)`, fontWeight: 700, lineHeight: style.lineHeight, letterSpacing: '-0.02em' }}>
+              {parts.slice(1).join(' ').toLowerCase()}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{
+          fontFamily: style.fontFamily,
+          fontSize: style.fontSize,
+          fontWeight: 700,
+          color: 'white',
+          textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+          lineHeight: style.lineHeight,
+        }}>
+          {journal}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const BaseGenerationPanel: React.FC<{
   compiledPrompt: CompiledPrompt;
   outputParams: OutputParams;
@@ -227,6 +271,7 @@ const BaseGenerationPanel: React.FC<{
   onBack: () => void;
 }> = ({
   compiledPrompt,
+  outputParams,
   baseImages,
   selectedBaseIndex,
   isGeneratingBase,
@@ -235,7 +280,10 @@ const BaseGenerationPanel: React.FC<{
   onSelectBase,
   onExport,
   onBack,
-}) => (
+}) => {
+  const [showJournalPreview, setShowJournalPreview] = useState(true);
+
+  return (
   <div className="space-y-5">
     <div>
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
@@ -284,6 +332,9 @@ const BaseGenerationPanel: React.FC<{
               alt="Generated image"
               className="w-full h-auto"
             />
+            {showJournalPreview && selectedBaseIndex === idx && (
+              <JournalNameOverlay journal={outputParams.journal} />
+            )}
             {selectedBaseIndex === idx && (
               <div className="absolute top-2 right-2 w-5 h-5 bg-[#0A1128] rounded-full flex items-center justify-center">
                 <Check size={10} className="text-white" strokeWidth={3} />
@@ -305,7 +356,7 @@ const BaseGenerationPanel: React.FC<{
       </div>
     )}
 
-    <div className="flex gap-2 flex-wrap">
+    <div className="flex gap-2 flex-wrap items-center">
       <button
         onClick={onBack}
         className="flex items-center gap-1.5 px-4 py-2.5 border border-gray-100 rounded-[32px] text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-all"
@@ -320,18 +371,35 @@ const BaseGenerationPanel: React.FC<{
         <RefreshCw size={12} strokeWidth={2} className={isGeneratingBase ? 'animate-spin' : ''} />
         Generate
       </button>
+      {baseImages.length > 0 && (
+        <button
+          onClick={() => setShowJournalPreview(!showJournalPreview)}
+          className={`flex items-center gap-1.5 px-4 py-2.5 border rounded-[32px] text-xs font-semibold transition-all ${
+            showJournalPreview
+              ? 'border-[#0A1128] bg-[#0A1128] text-white'
+              : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          {showJournalPreview ? '✓ Journal Preview ON' : 'Journal Preview'}
+        </button>
+      )}
       {baseImages.length > 0 && selectedBaseIndex >= 0 && (
         <button
           onClick={() => onExport(selectedBaseIndex)}
           className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 bg-emerald-600 text-white text-xs font-bold rounded-[32px] hover:bg-emerald-700 hover:-translate-y-0.5 transition-all duration-200"
         >
           <Download size={12} strokeWidth={2} />
-          Export for Publication
+          Export Clean Image (No Text)
         </button>
       )}
     </div>
+    {baseImages.length > 0 && showJournalPreview && (
+      <p className="text-[10px] text-gray-400 text-center">
+        Preview shows journal title overlay — exported image will be clean (no text).
+      </p>
+    )}
   </div>
-);
+);};
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
