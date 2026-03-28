@@ -38,11 +38,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "18443:18443"
     volumes:
       - ./ssl:/etc/nginx/ssl
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       - backend
     restart: always
