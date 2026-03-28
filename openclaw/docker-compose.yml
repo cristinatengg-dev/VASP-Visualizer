@@ -5,7 +5,9 @@ services:
     image: ghcr.io/openclaw/openclaw:latest
     container_name: openclaw
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "0.0.0.0:18789:18789"
+      - "0.0.0.0:18791:18791"
     user: "0:0"
     environment:
       - OPENAI_API_KEY=${GEMINI_API_KEY}
@@ -15,6 +17,7 @@ services:
       - ./config:/app/config
       - ./workspace:/app/workspace
       - ./logs:/app/logs
+      - openclaw-data:/root/.openclaw
     tmpfs:
       - /tmp:size=256m
     working_dir: /app
@@ -28,3 +31,6 @@ services:
       - "2532:2532"
     volumes:
       - ./gewe-data:/root/temp
+
+volumes:
+  openclaw-data:
