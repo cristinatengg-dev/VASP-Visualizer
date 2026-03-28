@@ -12,12 +12,17 @@ import { JournalPreset, AspectRatio } from './types';
 export const HARD_SCIENTIFIC_CONSTRAINTS = `
 ABSOLUTE HARD SCIENTIFIC CONSTRAINTS — NON-NEGOTIABLE — OVERRIDE ALL OTHER INSTRUCTIONS:
 
-[ZERO TEXT RULE — CRITICAL]
-- ABSOLUTE PROHIBITION: DO NOT render ANY text, letters, numbers, words, chemical formula labels, element symbols, molecular formula text, subscript numbers, superscript numbers, arrows with labels, callouts, annotations, captions, watermarks, titles, or ANY typographic marks ANYWHERE in the image.
-- This means: no element symbols, no chemical formulas, no labels, no captions, no axis marks, no legends, no UI text, no watermarks.
-- NO Chinese characters. NO English words. NO letters of any alphabet. NO digits. NO punctuation.
-- The image must be 100% COMPLETELY TEXT-FREE. Pure visual rendering only — no typography of any kind.
-- FORBIDDEN: labels, annotations, chemical notation overlaid on the image, element name tags, molecular name tags, subscripts, superscripts.
+[ZERO TEXT RULE — HIGHEST PRIORITY]
+- THIS IS THE SINGLE MOST IMPORTANT RULE: The image must be 100% TEXT-FREE.
+- DO NOT render ANY text, letters, numbers, words, symbols, or typographic marks ANYWHERE.
+- DO NOT render element symbols (like "Ru", "N", "H", "C", "O") on or near atoms. Atoms are ONLY colored spheres.
+- DO NOT render journal names, titles, or magazine headers (like "Nature", "Science", "JACS").
+- DO NOT render chemical formulas, molecular formula text, subscripts, or superscripts.
+- DO NOT render labels, captions, annotations, arrows with text, callouts, legends, or watermarks.
+- DO NOT render any Chinese characters, Japanese characters, or characters from any writing system.
+- Atoms must be PURE SMOOTH COLORED SPHERES with NO text printed on them.
+- If the model would naturally add element labels to atoms, SUPPRESS that behavior completely.
+- The final image must contain ZERO glyphs of any kind — only 3D rendered geometry, light, and color.
 
 [MOLECULAR GEOMETRY — MANDATORY SCIENTIFIC ACCURACY]
 - Every rendered molecule MUST have the exact correct number of atoms, correct bond type, and correct geometry:
@@ -29,15 +34,9 @@ ABSOLUTE HARD SCIENTIFIC CONSTRAINTS — NON-NEGOTIABLE — OVERRIDE ALL OTHER I
   * Carbon dioxide: exactly 1 gray carbon sphere + 2 red oxygen spheres, linear (180°), two double bonds
   * Ammonia: exactly 1 blue nitrogen sphere + 3 white hydrogen spheres, trigonal pyramidal (~107°)
   * Methane: exactly 1 gray carbon sphere + 4 white hydrogen spheres, tetrahedral (~109.5°)
-  * Nitric oxide: exactly 1 blue nitrogen sphere + 1 red oxygen sphere, linear
-  * Nitrogen dioxide: exactly 1 blue nitrogen sphere + 2 red oxygen spheres, bent (~134°)
-  * Nitrous oxide: exactly 2 blue nitrogen spheres + 1 red oxygen sphere, linear
-  * Sulfur dioxide: exactly 1 yellow sulfur sphere + 2 red oxygen spheres, bent (~119°)
-  * Acetylene: exactly 2 gray carbon spheres + 2 white hydrogen spheres, linear, carbon-carbon triple bond
-  * Ethylene: exactly 2 gray carbon spheres + 4 white hydrogen spheres, planar, carbon-carbon double bond
-  * Ethane: exactly 2 gray carbon spheres + 6 white hydrogen spheres, staggered conformation
-- DO NOT add extra atoms. DO NOT remove atoms. DO NOT distort geometry. DO NOT label atoms with text.
-- Atoms must be rendered as smooth colored spheres following CPK color mapping ONLY — no text labels on atoms.
+  * Propane: exactly 3 gray carbon spheres + 8 white hydrogen spheres, zigzag chain
+- DO NOT add extra atoms. DO NOT remove atoms. DO NOT distort geometry.
+- Atoms ONLY as smooth colored spheres. Bonds ONLY as cylindrical sticks. NO labels on anything.
 
 [CPK COLOR MAPPING — MANDATORY]
 - H: pure white (#FFFFFF)
@@ -52,12 +51,13 @@ ABSOLUTE HARD SCIENTIFIC CONSTRAINTS — NON-NEGOTIABLE — OVERRIDE ALL OTHER I
 - Pt: light gray (#D0D0E0)
 - Au: gold (#FFD123)
 - All unlisted elements: use standard CPK convention
+- Differentiate elements ONLY by sphere color, NEVER by text labels.
 
 [COMPOSITION — MANDATORY]
-- NO watermark box. NO white rectangle in corner. NO reserved zones.
 - Full bleed image — use the entire canvas for the scientific visualization.
+- NO title zone, NO header area, NO watermark box, NO white rectangles.
 - Keep a clean outer safety margin (minimum 2% on each side) for print trimming only.
-- NO arrows. NO diagrams. NO chart overlays. NO text of any kind.
+- NO arrows. NO diagrams. NO chart overlays.
 
 [QUALITY]
 - Render at maximum quality: photorealistic, physically-based rendering quality.

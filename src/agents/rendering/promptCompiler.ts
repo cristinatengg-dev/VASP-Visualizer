@@ -133,7 +133,7 @@ export const compilePlanAPrompt = (
   ];
 
   // ── Slot 1: Main Theme
-  const mainTheme = `A journal cover image for ${outputParams.journal} featuring ${science.core_theme}. Scientific domain: ${science.domain} / ${science.subdomain}. Visual metaphor: ${plan.visualMetaphor}. ${plan.tagline}`;
+  const mainTheme = `A pure scientific visualization image (NO title text, NO journal name, NO watermark) featuring ${science.core_theme}. Scientific domain: ${science.domain} / ${science.subdomain}. Visual metaphor: ${plan.visualMetaphor}. ${plan.tagline}`;
 
   // ── Slot 2: Focus Area
   const focusArea = `Primary focal object: ${science.central_object}. Scale level: ${science.scale_level}. Composition type: ${plan.compositionType}. Focal point: ${plan.focalObject}.`;
