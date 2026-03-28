@@ -488,46 +488,10 @@ const RenderingAgent: React.FC = () => {
     if (!image) return;
     const dataUrl = image.startsWith('data:') ? image : `data:image/png;base64,${image}`;
 
-    const imgEl = new Image();
-    imgEl.onload = () => {
-      const srcW = imgEl.naturalWidth || imgEl.width;
-      const srcH = imgEl.naturalHeight || imgEl.height;
-      if (!srcW || !srcH) return;
-
-      const targetRatio = 9 / 16;
-      const srcRatio = srcW / srcH;
-
-      let sx = 0;
-      let sy = 0;
-      let sw = srcW;
-      let sh = srcH;
-
-      if (srcRatio > targetRatio) {
-        sw = Math.round(srcH * targetRatio);
-        sx = Math.round((srcW - sw) / 2);
-      } else if (srcRatio < targetRatio) {
-        sh = Math.round(srcW / targetRatio);
-        sy = Math.round((srcH - sh) / 2);
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = sw;
-      canvas.height = sh;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.drawImage(imgEl, sx, sy, sw, sh, 0, 0, sw, sh);
-
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `sci-cover-${Date.now()}-9x16.png`;
-        link.click();
-        URL.revokeObjectURL(url);
-      }, 'image/png');
-    };
-    imgEl.src = dataUrl;
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `sci-cover-${Date.now()}.png`;
+    link.click();
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
