@@ -17,7 +17,7 @@ services:
     working_dir: /app
 
   gewe:
-    image: registry.cn-chengdu.aliyuncs.com/gewe/gewe:latest
+    image: registry.cn-hangzhou.aliyuncs.com/gewe/gewe:latest
     container_name: gewe
     restart: unless-stopped
     ports:

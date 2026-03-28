@@ -25,17 +25,39 @@ if [ -f "$SCI_ENV" ]; then
   GEMINI_BASE_URL=$(grep '^GEMINI_BASE_URL=' "$SCI_ENV" | cut -d= -f2)
   GEMINI_TEXT_MODEL=$(grep '^GEMINI_TEXT_MODEL=' "$SCI_ENV" | cut -d= -f2)
   echo "[✓] 从 server/.env 读取 Gemini 配置"
-  echo "    API Key: ${GEMINI_API_KEY:0:10}..."
-  echo "    Base URL: $GEMINI_BASE_URL"
-  echo "    Model: $GEMINI_TEXT_MODEL"
 else
-  echo "[✗] 未找到 $SCI_ENV，请手动配置 Gemini API"
+  echo "[!] 未找到 $SCI_ENV，使用默认值"
   GEMINI_API_KEY=""
-  GEMINI_BASE_URL="https://api.aipaibox.com/v1"
-  GEMINI_TEXT_MODEL="gemini-2.5-flash"
+  GEMINI_BASE_URL=""
+  GEMINI_TEXT_MODEL=""
 fi
 
-# ── Step 2: 写入 .env 给 docker-compose 使用
+# 确保使用正确的配置（覆盖旧值）
+GEMINI_BASE_URL="${GEMINI_BASE_URL:-https://api.aipaibox.com/v1}"
+GEMINI_TEXT_MODEL="${GEMINI_TEXT_MODEL:-gemini-2.5-flash}"
+
+# 如果 Base URL 是旧的 novai.su，自动修正
+if echo "$GEMINI_BASE_URL" | grep -q "novai.su"; then
+  GEMINI_BASE_URL="https://api.aipaibox.com/v1"
+  echo "[!] 检测到旧 Base URL，已自动修正为 aipaibox"
+fi
+if echo "$GEMINI_TEXT_MODEL" | grep -q "gemini-3"; then
+  GEMINI_TEXT_MODEL="gemini-2.5-flash"
+  echo "[!] 检测到旧模型名，已自动修正为 gemini-2.5-flash"
+fi
+
+echo "    API Key: ${GEMINI_API_KEY:0:10}..."
+echo "    Base URL: $GEMINI_BASE_URL"
+echo "    Model: $GEMINI_TEXT_MODEL"
+
+# ── Step 2: 同步修正 server/.env 中的旧配置
+if [ -f "$SCI_ENV" ]; then
+  sed -i 's|GEMINI_BASE_URL=https://once.novai.su/v1|GEMINI_BASE_URL=https://api.aipaibox.com/v1|g' "$SCI_ENV"
+  sed -i 's|GEMINI_TEXT_MODEL=gemini-3-flash-preview|GEMINI_TEXT_MODEL=gemini-2.5-flash|g' "$SCI_ENV"
+  echo "[✓] 已同步修正 server/.env"
+fi
+
+# ── Step 4: 写入 .env 给 docker-compose 使用
 cat > .env <<EOF
 GEMINI_API_KEY=$GEMINI_API_KEY
 GEMINI_BASE_URL=$GEMINI_BASE_URL
