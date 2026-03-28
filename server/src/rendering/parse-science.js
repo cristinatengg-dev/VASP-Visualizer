@@ -59,7 +59,7 @@ function buildScienceExtractionMessages(text) {
   ];
 }
 
-async function fetchWithTimeout(url, init, timeoutMs = 20000) {
+async function fetchWithTimeout(url, init, timeoutMs = 60000) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const options = {
@@ -100,7 +100,7 @@ async function fetchWithTimeout(url, init, timeoutMs = 20000) {
   });
 }
 
-async function geminiChat(messages, jsonMode = false, { timeoutMs = 20000, maxRetries = 2 } = {}) {
+async function geminiChat(messages, jsonMode = false, { timeoutMs = 60000, maxRetries = 2 } = {}) {
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is not configured');
   }
