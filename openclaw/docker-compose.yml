@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: openclaw
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - OPENAI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_BASE=${GEMINI_BASE_URL}
+      - OPENAI_MODEL=${GEMINI_TEXT_MODEL}
+    volumes:
+      - ./config:/app/config
+      - ./workspace:/app/workspace
+      - ./logs:/app/logs
+    working_dir: /app
+
+  gewe:
+    image: registry.cn-chengdu.aliyuncs.com/gewe/gewe:latest
+    container_name: gewe
+    restart: unless-stopped
+    ports:
+      - "2531:2531"
+      - "2532:2532"
+    volumes:
+      - ./gewe-data:/root/temp

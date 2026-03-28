@@ -1,0 +1,104 @@
+{
+  "name": "SCI Visualizer Assistant",
+  "description": "SCI Visualizer 微信智能助手 — 通过微信消息控制科研平台",
+
+  "llm": {
+    "provider": "openai",
+    "model": "gemini-2.5-flash",
+    "apiKey": "${GEMINI_API_KEY}",
+    "baseUrl": "${GEMINI_BASE_URL}",
+    "temperature": 0.3,
+    "maxTokens": 2048
+  },
+
+  "gateway": {
+    "bind": "lan",
+    "port": 18789,
+    "allowedOrigins": ["*"]
+  },
+
+  "channels": {
+    "gewe-openclaw": {
+      "enabled": true,
+      "baseUrl": "http://127.0.0.1:2531/v2/api",
+      "callbackPort": 18790,
+      "appId": "",
+      "token": ""
+    }
+  },
+
+  "skills": [
+    {
+      "name": "idea_search",
+      "description": "搜索学术文献并生成研究方案。用户说'搜文献'、'研究方案'、'idea'时触发。",
+      "trigger": ["搜文献", "研究方案", "idea", "文献检索", "研究思路"],
+      "type": "http",
+      "config": {
+        "method": "POST",
+        "url": "http://127.0.0.1:3000/api/agent/retrieve",
+        "headers": { "Content-Type": "application/json" },
+        "bodyTemplate": "{\"prompt\": \"{{message}}\"}"
+      },
+      "responseParser": {
+        "type": "sse",
+        "extractField": "data",
+        "summaryPrompt": "从以下 Idea Agent 的 SSE 结果中，提取并简洁总结：1) 找到了几篇文献 2) 找到了几个 MP 结构 3) 推荐的研究方案标题和关键建议。用中文回复。"
+      }
+    },
+    {
+      "name": "build_model",
+      "description": "构建晶体/分子结构模型。用户说'建模'、'构建结构'、'build'时触发。",
+      "trigger": ["建模", "构建结构", "build", "模型", "晶体结构"],
+      "type": "http_chain",
+      "steps": [
+        {
+          "name": "parse_intent",
+          "method": "POST",
+          "url": "http://127.0.0.1:3000/api/modeling/parse-intent",
+          "headers": { "Content-Type": "application/json" },
+          "bodyTemplate": "{\"prompt\": \"{{message}}\"}"
+        },
+        {
+          "name": "build",
+          "method": "POST",
+          "url": "http://127.0.0.1:3000/api/modeling/build",
+          "headers": { "Content-Type": "application/json" },
+          "bodyTemplate": "{{steps.parse_intent.intent}}"
+        }
+      ],
+      "responseParser": {
+        "summaryPrompt": "从建模结果中提取：1) 化学式 2) 原子数 3) 数据来源 4) 晶系。用中文回复，简洁明了。"
+      }
+    },
+    {
+      "name": "server_status",
+      "description": "查看服务器状态。用户说'服务器状态'、'状态'、'status'时触发。",
+      "trigger": ["服务器状态", "状态", "status", "健康检查"],
+      "type": "shell",
+      "config": {
+        "command": "cd /home/deploy/VASP-Visualizer && docker compose ps --format 'table {{.Name}}\t{{.Status}}' && echo '---' && curl -s http://localhost/api/runtime-demo/health | python3 -m json.tool 2>/dev/null || echo 'Health check unavailable'"
+      }
+    },
+    {
+      "name": "deploy",
+      "description": "部署最新代码到服务器。用户说'部署'、'deploy'、'更新'时触发。",
+      "trigger": ["部署", "deploy", "更新代码", "上线"],
+      "type": "shell",
+      "config": {
+        "command": "cd /home/deploy/VASP-Visualizer && bash scripts/pull-and-deploy.sh origin main 2>&1 | tail -20",
+        "timeout": 300
+      }
+    },
+    {
+      "name": "restart_services",
+      "description": "重启服务。用户说'重启'、'restart'时触发。",
+      "trigger": ["重启", "restart", "重启服务"],
+      "type": "shell",
+      "config": {
+        "command": "cd /home/deploy/VASP-Visualizer && docker compose restart && docker compose ps --format 'table {{.Name}}\t{{.Status}}'"
+      }
+    }
+  ],
+
+  "systemPrompt": "你是 SCI Visualizer 科研平台的微信智能助手。你可以帮用户：\n1. 搜索学术文献并生成研究方案（Idea Agent）\n2. 构建晶体/分子结构模型（Modeling Agent）\n3. 查看服务器运行状态\n4. 一键部署更新\n5. 重启服务\n\n请用简洁的中文回复。如果用户的请求不在以上范围内，友好地引导他们使用网页版 scivisualizer.com 获得完整功能。"
+}
