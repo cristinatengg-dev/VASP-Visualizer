@@ -21,14 +21,43 @@ import { HARD_SCIENTIFIC_CONSTRAINTS, JOURNAL_PRESETS, CPK_COLORS } from './cons
 
 // ─── Chemical Species Formatter ───────────────────────────────────────────────
 
+// Precise molecular geometry from computational chemistry — overrides AI-guessed descriptions
+const PRECISE_SPECIES: Record<string, string> = {
+  H2: '2 white spheres, 1 single bond, linear, total 2 atoms',
+  N2: '2 blue spheres, 1 triple bond (3 sticks), linear, total 2 atoms',
+  O2: '2 red spheres, 1 double bond (2 sticks), linear, total 2 atoms',
+  CO: '1 gray(C) + 1 red(O), triple bond, linear, total 2 atoms',
+  NO: '1 blue(N) + 1 red(O), linear, total 2 atoms',
+  CO2: '1 gray(C) center + 2 red(O) sides, linear 180°, 2 double bonds, total 3 atoms',
+  H2O: '1 red(O) apex + 2 white(H), bent 104.5°, 2 single bonds, total 3 atoms',
+  NO2: '1 blue(N) + 2 red(O), bent ~134°, total 3 atoms',
+  SO2: '1 yellow(S) + 2 red(O), bent ~119°, total 3 atoms',
+  N2O: '2 blue(N) + 1 red(O), linear N-N-O, total 3 atoms',
+  O3: '3 red(O), bent ~117°, total 3 atoms',
+  NH3: '1 blue(N) apex + 3 white(H), trigonal pyramidal 107°, total 4 atoms',
+  CH4: '1 gray(C) center + 4 white(H), tetrahedral 109.5°, total 5 atoms',
+  C2H2: '2 gray(C) + 2 white(H), linear H-C≡C-H, triple bond, total 4 atoms',
+  C2H4: '2 gray(C) + 4 white(H), planar, C=C double bond, total 6 atoms',
+  C2H6: '2 gray(C) + 6 white(H), C-C single bond, total 8 atoms',
+  C3H6: '3 gray(C) + 6 white(H), CH2=CH-CH3, 1 double + 1 single C-C bond, total 9 atoms',
+  C3H8: '3 gray(C) zigzag + 8 white(H), CH3-CH2-CH3, 2 C-C single bonds, NO double bonds, NO rings, total 11 atoms',
+  C4H10: '4 gray(C) zigzag + 10 white(H), 3 C-C single bonds, NO rings, total 14 atoms',
+  C6H6: '6 gray(C) hexagonal ring + 6 white(H), alternating bonds, planar, total 12 atoms',
+  HCN: '1 white(H) + 1 gray(C) + 1 blue(N), linear H-C≡N, total 3 atoms',
+};
+
 const formatChemicalSpecies = (species: ChemicalSpecies[]): string => {
   if (species.length === 0) return '';
   return species
     .map((s) => {
+      const precise = PRECISE_SPECIES[s.formula_en];
+      if (precise) {
+        return `${s.formula_en}: ${precise}. NO text labels on atoms.`;
+      }
       const colorEntries = Object.entries(s.color_rule)
         .map(([atom, color]) => `${atom}=${color}`)
         .join(', ');
-      return `${s.formula_en} (${s.geometry_hint}, bonds: ${s.bond_topology}, CPK colors: ${colorEntries || 'standard CPK'})`;
+      return `${s.formula_en} (${s.geometry_hint}, bonds: ${s.bond_topology}, CPK colors: ${colorEntries || 'standard CPK'}). NO text labels on atoms.`;
     })
     .join('; ');
 };
@@ -69,6 +98,10 @@ const formatChemicalSpeciesNoFormula = (species: ChemicalSpecies[]): string => {
   if (species.length === 0) return '';
   return species
     .map((s) => {
+      const precise = PRECISE_SPECIES[s.formula_en];
+      if (precise) {
+        return `[${s.role || 'species'}] ${precise}. NO text labels on atoms.`;
+      }
       const counts: Record<string, number> = {};
       for (const a of s.atoms || []) {
         counts[a] = (counts[a] || 0) + 1;
@@ -79,7 +112,7 @@ const formatChemicalSpeciesNoFormula = (species: ChemicalSpecies[]): string => {
       const colorPhrase = Object.entries(s.color_rule)
         .map(([atom, color]) => `${elementName(atom)}=${color}`)
         .join(', ');
-      return `molecule with ${atomPhrase}; geometry: ${s.geometry_hint}; bond topology: ${s.bond_topology}; CPK colors: ${colorPhrase || 'standard CPK'}`;
+      return `molecule with ${atomPhrase}; geometry: ${s.geometry_hint}; bond topology: ${s.bond_topology}; CPK colors: ${colorPhrase || 'standard CPK'}. NO text labels on atoms.`;
     })
     .join('; ');
 };

@@ -18,17 +18,58 @@ function normalizeGeminiModel(model) {
 const GEMINI_IMAGE_MODEL = normalizeGeminiModel(GEMINI_IMAGE_MODEL_RAW);
 
 const SPECIES_CANON = {
-  C3H8: 'Propane (C3H8): linear 3-carbon chain CH3–CH2–CH3; exactly 2 C–C single bonds; no double bonds; no rings; total 3 carbon atoms.',
-  C3H6: 'Propene (C3H6): CH2=CH–CH3; exactly one C=C double bond between carbon 1 and 2; exactly one C–C single bond between carbon 2 and 3; no rings; total 3 carbon atoms.',
-  C4H10: 'Butane (C4H10): linear 4-carbon chain CH3–CH2–CH2–CH3; exactly 3 C–C single bonds; no rings; total 4 carbon atoms.',
-  C2H4: 'Ethene (C2H4): CH2=CH2; exactly one C=C double bond; total 2 carbon atoms.',
-  CO: 'CO: linear diatomic molecule with a C≡O triple bond; exactly 2 atoms.',
-  CO2: 'CO2: linear O=C=O; carbon double-bonded to each oxygen; exactly 3 atoms.',
-  O2: 'O2: diatomic oxygen with one O=O double bond; exactly 2 atoms.',
-  N2: 'N2: diatomic nitrogen with one N≡N triple bond; exactly 2 atoms.',
-  H2: 'H2: diatomic hydrogen with one H–H single bond; exactly 2 atoms.',
-  Ru: 'Ruthenium single-atom site: exactly 1 metallic sphere anchored on the support; do not label; do not print any symbol; represent only by color and material appearance.',
-  N: 'Nitrogen dopant atoms in a carbon lattice: blue spheres embedded in the lattice; do not label; do not print any symbol.',
+  // ── Diatomics ──
+  H2: 'Diatomic hydrogen: exactly 2 white spheres connected by 1 single bond stick; linear; total 2 atoms. NO labels.',
+  N2: 'Diatomic nitrogen: exactly 2 blue (#3050F8) spheres connected by 1 triple bond (3 parallel sticks); linear; total 2 atoms. NO labels.',
+  O2: 'Diatomic oxygen: exactly 2 red (#FF0D0D) spheres connected by 1 double bond (2 parallel sticks); linear; total 2 atoms. NO labels.',
+  CO: 'Carbon monoxide: exactly 1 gray sphere (C) + 1 red sphere (O) connected by triple bond; linear; total 2 atoms. NO labels.',
+  NO: 'Nitric oxide: exactly 1 blue sphere (N) + 1 red sphere (O); linear; total 2 atoms. NO labels.',
+  HF: 'Hydrogen fluoride: exactly 1 white sphere (H) + 1 green sphere (F); linear; total 2 atoms. NO labels.',
+  HCl: 'Hydrogen chloride: exactly 1 white sphere (H) + 1 green sphere (Cl); linear; total 2 atoms. NO labels.',
+
+  // ── Triatomics ──
+  CO2: 'Carbon dioxide: exactly 1 gray sphere (C) in center + 2 red spheres (O) on either side; perfectly linear 180°; 2 double bonds; total 3 atoms. NO labels.',
+  H2O: 'Water: exactly 1 red sphere (O) at apex + 2 white spheres (H); bent geometry 104.5°; 2 single bonds; total 3 atoms. NO labels.',
+  NO2: 'Nitrogen dioxide: exactly 1 blue sphere (N) + 2 red spheres (O); bent ~134°; total 3 atoms. NO labels.',
+  SO2: 'Sulfur dioxide: exactly 1 yellow sphere (S) + 2 red spheres (O); bent ~119°; total 3 atoms. NO labels.',
+  H2S: 'Hydrogen sulfide: exactly 1 yellow sphere (S) + 2 white spheres (H); bent ~92°; total 3 atoms. NO labels.',
+  N2O: 'Nitrous oxide: exactly 2 blue spheres (N) + 1 red sphere (O); linear N-N-O; total 3 atoms. NO labels.',
+  O3: 'Ozone: exactly 3 red spheres (O); bent ~117°; total 3 atoms. NO labels.',
+
+  // ── 4-5 atom molecules ──
+  NH3: 'Ammonia: exactly 1 blue sphere (N) at apex + 3 white spheres (H); trigonal pyramidal ~107°; total 4 atoms. NO labels.',
+  CH4: 'Methane: exactly 1 gray sphere (C) at center + 4 white spheres (H); tetrahedral ~109.5°; total 5 atoms. NO labels.',
+  SO3: 'Sulfur trioxide: exactly 1 yellow sphere (S) center + 3 red spheres (O); trigonal planar 120°; total 4 atoms. NO labels.',
+
+  // ── Hydrocarbons ──
+  C2H2: 'Acetylene: exactly 2 gray spheres (C) + 2 white spheres (H); linear H-C≡C-H; carbon triple bond; total 4 atoms. NO labels.',
+  C2H4: 'Ethylene: exactly 2 gray spheres (C) + 4 white spheres (H); planar; C=C double bond; total 6 atoms. NO labels.',
+  C2H6: 'Ethane: exactly 2 gray spheres (C) + 6 white spheres (H); C-C single bond; staggered; total 8 atoms. NO labels.',
+  C3H6: 'Propene: exactly 3 gray spheres (C) + 6 white spheres (H); CH2=CH-CH3; one C=C double bond + one C-C single bond; total 9 atoms. NO labels.',
+  C3H8: 'Propane: exactly 3 gray spheres (C) in zigzag chain + 8 white spheres (H); CH3-CH2-CH3; 2 C-C single bonds only; NO double bonds; NO rings; total 11 atoms. NO labels.',
+  C4H10: 'Butane: exactly 4 gray spheres (C) in zigzag chain + 10 white spheres (H); 3 C-C single bonds; NO rings; total 14 atoms. NO labels.',
+  C6H6: 'Benzene: exactly 6 gray spheres (C) forming a regular hexagonal ring + 6 white spheres (H); alternating single/double bonds in ring; planar; total 12 atoms. NO labels.',
+
+  // ── Common inorganic ──
+  HNO3: 'Nitric acid: 1 blue N center + 3 red O + 1 white H; total 5 atoms. NO labels.',
+  H2SO4: 'Sulfuric acid: 1 yellow S center + 4 red O + 2 white H; tetrahedral S; total 7 atoms. NO labels.',
+  HCN: 'Hydrogen cyanide: H-C≡N; linear; 1 white + 1 gray + 1 blue sphere; total 3 atoms. NO labels.',
+
+  // ── Single atoms / dopants (for catalysis) ──
+  Ru: 'Ruthenium single-atom site: exactly 1 silver-blue metallic sphere anchored on the support; represent ONLY by sphere color and metallic material — absolutely NO text or symbol printed on the sphere.',
+  Pt: 'Platinum single-atom site: exactly 1 light gray (#D0D0E0) metallic sphere; NO text on sphere.',
+  Pd: 'Palladium single-atom site: exactly 1 silver (#9B9B9B) metallic sphere; NO text on sphere.',
+  Ni: 'Nickel single-atom: exactly 1 green (#50D050) sphere; NO text on sphere.',
+  Fe: 'Iron single-atom: exactly 1 rust orange (#E06633) sphere; NO text on sphere.',
+  Cu: 'Copper single-atom: exactly 1 copper (#C88033) sphere; NO text on sphere.',
+  Au: 'Gold single-atom: exactly 1 gold (#FFD123) sphere; NO text on sphere.',
+  Co: 'Cobalt single-atom: exactly 1 pink (#F090A0) sphere; NO text on sphere.',
+
+  // ── Dopant atoms ──
+  N: 'Nitrogen dopant atoms in a carbon/graphene lattice: blue (#3050F8) spheres embedded in the lattice replacing gray carbon spheres; NO text printed on any sphere.',
+  B: 'Boron dopant atoms: pink (#FFB5B5) spheres embedded in the lattice; NO text on sphere.',
+  S: 'Sulfur dopant atoms: yellow (#FFFF30) spheres; NO text on sphere.',
+  P: 'Phosphorus dopant: orange (#FF8000) sphere; NO text on sphere.',
 };
 
 function speciesToConstraint(species) {

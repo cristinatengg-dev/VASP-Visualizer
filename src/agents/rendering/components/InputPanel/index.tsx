@@ -183,7 +183,7 @@ const InputPanel: React.FC<InputPanelProps> = ({
         />
       </Section>
 
-      {/* Section B - Hidden: not yet connected to backend
+      {/* Section B */}
       <Section
         id="B"
         label={sections[1].label}
@@ -198,7 +198,6 @@ const InputPanel: React.FC<InputPanelProps> = ({
           onStructureBaseImageChange={onStructureBaseImageChange}
         />
       </Section>
-      */}
 
       {/* Section C */}
       <Section
