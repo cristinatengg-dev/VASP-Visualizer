@@ -462,7 +462,7 @@ const RenderingAgent: React.FC = () => {
 
       const images = await generateBaseImages(
         compiledPrompt.fullPrompt,
-        '9:16',
+        outputParams.aspectRatio === 'Custom' ? `${outputParams.customWidth}:${outputParams.customHeight}` : outputParams.aspectRatio,
         1,
         {
           strictNoText: true,

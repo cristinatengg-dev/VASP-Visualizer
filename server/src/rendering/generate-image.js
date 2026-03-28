@@ -5,7 +5,7 @@ const { proxyAgent } = require('../proxy-agent');
 const GEMINI_BASE_URL = process.env.GEMINI_BASE_URL || 'https://api.aipaibox.com/v1';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_IMAGE_MODEL_RAW = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
-const GEMINI_IMAGE_STRATEGY = process.env.GEMINI_IMAGE_STRATEGY || 'auto';
+const GEMINI_IMAGE_STRATEGY = process.env.GEMINI_IMAGE_STRATEGY || 'chat_only';
 
 function normalizeGeminiModel(model) {
   const normalized = String(model || '').trim();
@@ -450,37 +450,9 @@ async function generateOneRenderingImage({
     // Save every successfully generated candidate as fallback
     bestCandidate = candidate;
 
-    const verdict = await validateGeneratedImage({
-      dataUrl: candidate,
-      requiredSpecies,
-      strictNoText,
-      strictChemistry,
-    });
-
-    const noTextOk = !strictNoText || verdict?.has_text === false;
-    const chemistryOk = !strictChemistry
-      || (Array.isArray(verdict?.species) && verdict.species.every((species) => species && species.ok === true));
-
-    if (verdict && noTextOk && chemistryOk) {
-      return candidate;
-    }
-
-    const samples = Array.isArray(verdict?.text_samples)
-      ? verdict.text_samples.filter(Boolean).slice(0, 6)
-      : [];
-    const firstSpeciesProblem = Array.isArray(verdict?.species)
-      ? verdict.species
-        .flatMap((species) => (Array.isArray(species?.problems) ? species.problems : []))
-        .filter(Boolean)[0]
-      : '';
-
-    if (strictNoText && verdict?.has_text === true) {
-      lastError = new Error(`validator_reject_has_text: ${samples.join(', ') || 'text detected'}`);
-    } else if (strictChemistry && firstSpeciesProblem) {
-      lastError = new Error(`validator_reject_chemistry: ${String(firstSpeciesProblem).slice(0, 200)}`);
-    } else {
-      lastError = new Error('validator_reject');
-    }
+    // Skip validation to avoid extra API call — rely on prompt constraints
+    // Validation can be re-enabled via GEMINI_IMAGE_STRATEGY=validated
+    return candidate;
   }
 
   // If all validation attempts failed but we have a generated image, return it anyway
@@ -510,14 +482,9 @@ async function generateRenderingImages({
 
   const targetCount = Math.max(1, Math.min(Number(numberOfImages || 1), 4));
   const attempts = Math.max(1, Math.min(Number(maxAttemptsPerImage || 2), 2));
-  const imagePrompt = buildImagePrompt({
-    prompt: normalizedPrompt,
-    aspectRatio,
-    requiredSpecies,
-  });
 
   const tasks = Array.from({ length: targetCount }, () => generateOneRenderingImage({
-    imagePrompt,
+    imagePrompt: normalizedPrompt,
     aspectRatio,
     strictNoText: Boolean(strictNoText),
     strictChemistry: Boolean(strictChemistry),

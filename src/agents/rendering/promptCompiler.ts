@@ -498,7 +498,7 @@ export const generateVisualPlans = (science: ParsedScience): PlanCard[] => {
       scaleLevel: science.scale_level,
       riskWarning: 'High structural accuracy required — any molecular error will be scientifically significant. Best for chemistry/materials journals.',
       suitableForRefImage: true,
-      recommendedModel: 'Nano Banana 2 → Seedream HD',
+      recommendedModel: 'Gemini 3.1 Flash Image',
       previewGradient: 'linear-gradient(135deg, #1A1A2E 0%, #0F3460 50%, #E94560 100%)',
     },
     {
@@ -514,7 +514,7 @@ export const generateVisualPlans = (science: ParsedScience): PlanCard[] => {
       scaleLevel: science.scale_level,
       riskWarning: 'Strong artistic interpretation — some structural liberties taken for visual impact. Suitable for Nature, Angewandte covers.',
       suitableForRefImage: false,
-      recommendedModel: 'Nano Banana 2 → Seedream HD',
+      recommendedModel: 'Gemini 3.1 Flash Image',
       previewGradient: 'linear-gradient(135deg, #0A0A0A 0%, #FF6B00 40%, #FFD700 100%)',
     },
     {
