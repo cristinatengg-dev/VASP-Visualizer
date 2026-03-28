@@ -9,8 +9,8 @@ services:
     user: "0:0"
     environment:
       - OPENAI_API_KEY=${GEMINI_API_KEY}
-      - OPENAI_API_BASE=${GEMINI_BASE_URL}
-      - OPENAI_MODEL=${GEMINI_TEXT_MODEL}
+      - OPENAI_API_BASE=https://api.aipaibox.com/v1
+      - OPENAI_MODEL=gemini-2.5-flash
     volumes:
       - ./config:/app/config
       - ./workspace:/app/workspace
