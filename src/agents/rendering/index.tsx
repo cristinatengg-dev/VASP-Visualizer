@@ -267,7 +267,7 @@ const BaseGenerationPanel: React.FC<{
         </div>
       </div>
     ) : baseImages.length > 0 ? (
-      <div className="grid grid-cols-1 gap-3 max-w-sm">
+      <div className="grid grid-cols-1 gap-3 max-w-2xl mx-auto">
         {baseImages.map((img, idx) => (
           <button
             key={idx}
@@ -282,7 +282,7 @@ const BaseGenerationPanel: React.FC<{
             <img
               src={img.startsWith('data:') ? img : `data:image/png;base64,${img}`}
               alt="Generated image"
-              className="w-full aspect-[9/16] object-cover"
+              className="w-full h-auto"
             />
             {selectedBaseIndex === idx && (
               <div className="absolute top-2 right-2 w-5 h-5 bg-[#0A1128] rounded-full flex items-center justify-center">
