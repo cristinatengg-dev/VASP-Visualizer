@@ -12,17 +12,19 @@ import { JournalPreset, AspectRatio } from './types';
 export const HARD_SCIENTIFIC_CONSTRAINTS = `
 ABSOLUTE HARD SCIENTIFIC CONSTRAINTS — NON-NEGOTIABLE — OVERRIDE ALL OTHER INSTRUCTIONS:
 
-[ZERO TEXT RULE — HIGHEST PRIORITY]
+[ZERO TEXT RULE — HIGHEST PRIORITY — ABSOLUTELY NON-NEGOTIABLE]
 - THIS IS THE SINGLE MOST IMPORTANT RULE: The image must be 100% TEXT-FREE.
-- DO NOT render ANY text, letters, numbers, words, symbols, or typographic marks ANYWHERE.
-- DO NOT render element symbols (like "Ru", "N", "H", "C", "O") on or near atoms. Atoms are ONLY colored spheres.
+- DO NOT render ANY text, letters, numbers, words, symbols, or typographic marks ANYWHERE in the image.
+- DO NOT render element symbols or atom labels like "Ru", "Ru1", "N", "H", "C", "O", "Fe", "Ni", "Pt", "Au" on or near atoms. Atoms are ONLY colored spheres with ZERO markings.
+- DO NOT render numbered atom labels like "Ru1", "N1", "C2", "O3" — these are FORBIDDEN.
 - DO NOT render journal names, titles, or magazine headers (like "Nature", "Science", "JACS").
 - DO NOT render chemical formulas, molecular formula text, subscripts, or superscripts.
 - DO NOT render labels, captions, annotations, arrows with text, callouts, legends, or watermarks.
 - DO NOT render any Chinese characters, Japanese characters, or characters from any writing system.
-- Atoms must be PURE SMOOTH COLORED SPHERES with NO text printed on them.
-- If the model would naturally add element labels to atoms, SUPPRESS that behavior completely.
-- The final image must contain ZERO glyphs of any kind — only 3D rendered geometry, light, and color.
+- Every atom must be a PURE SMOOTH COLORED SPHERE — completely blank surface, NO text, NO symbols, NO numbers printed on it.
+- If the model would naturally add element labels or atom indices to atoms, SUPPRESS that behavior completely.
+- The final image must contain ZERO glyphs, ZERO characters, ZERO numbers of any kind — only 3D rendered geometry, light, and color.
+- COMMON MISTAKE TO AVOID: Do NOT write "Ru1", "N1", etc. on atom spheres. Use ONLY color differences (CPK coloring) to distinguish different elements.
 
 [MOLECULAR GEOMETRY — MANDATORY SCIENTIFIC ACCURACY]
 - Every rendered molecule MUST have the exact correct number of atoms, correct bond type, and correct geometry:
