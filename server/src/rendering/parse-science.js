@@ -8,13 +8,19 @@ const SCIENCE_EXTRACTION_SYSTEM_PROMPT = `You are a scientific entity extractor 
 Your task: analyze the provided scientific text and return ONLY a valid JSON object with this exact schema.
 No markdown, no explanation — raw JSON only.
 
+IMPORTANT for "support_or_substrate":
+- ONLY fill this field if the text EXPLICITLY describes a specific substrate/support with clear molecular or crystallographic structure (e.g. "CeO2(111) surface", "graphene sheet", "MoS2 monolayer", "TiO2 nanoparticles").
+- If the text only vaguely mentions a support (e.g. "metal oxide support", "catalyst support") WITHOUT specific structural details, set this to null.
+- If no substrate/support is mentioned at all, set this to null.
+- DO NOT guess or infer substrate structures that are not explicitly stated in the text.
+
 Schema:
 {
   "domain": "Chemistry|Materials|Biology|Physics|Interdisciplinary",
   "subdomain": "string, e.g. Heterogeneous Catalysis",
   "core_theme": "string, 1 concise sentence summarizing the research",
   "central_object": "string, the main visual subject (e.g. single-atom Ni catalyst)",
-  "support_or_substrate": "string or null",
+  "support_or_substrate": "string with explicit structural details, or null if not clearly described in the text",
   "active_site": "string or null",
   "environment": "string, e.g. gas-solid interface at elevated temperature",
   "scale_level": "string, e.g. nanoscale (1-10 nm)",

@@ -172,13 +172,29 @@ export const compilePlanAPrompt = (
   const focusArea = `Primary focal object: ${science.central_object}. Scale level: ${science.scale_level}. Composition type: ${plan.compositionType}. Focal point: ${plan.focalObject}.`;
 
   // ── Slot 3: Core Scientific Structure
-  const coreScientificStructure = `Core entity: ${science.central_object}. Support/substrate: ${science.support_or_substrate || 'none specified'}. Active site: ${science.active_site || 'none specified'}. Environment: ${science.environment}.`;
+  // If the substrate/support is not explicitly described with a specific molecular structure,
+  // use abstract artistic representation instead of forcing incorrect molecular structures
+  const hasExplicitSubstrate = science.support_or_substrate
+    && science.support_or_substrate !== 'none specified'
+    && science.support_or_substrate !== 'none'
+    && science.support_or_substrate !== 'null'
+    && science.support_or_substrate.trim().length > 0;
+
+  const substrateDescription = hasExplicitSubstrate
+    ? `Support/substrate: ${science.support_or_substrate}.`
+    : `Support/substrate: Render as an abstract artistic surface — use gradient color fields, soft glow layers, crystalline textures, or flowing energy surfaces rather than explicit molecular ball-and-stick structures. The substrate should serve as an aesthetic background or platform, NOT as a specific molecular structure. Think of it as an artistic impression of a surface: smooth metallic gradients, luminous planes, fractal crystal patterns, or wave-like energy fields.`;
+
+  const coreScientificStructure = `Core entity: ${science.central_object}. ${substrateDescription} Active site: ${science.active_site || 'none specified'}. Environment: ${science.environment}.`;
 
   // ── Slot 4: Specific Event / Mechanism
   const specificEvent = `Key mechanism: ${science.key_mechanism}. Visual keywords that must appear: ${science.visual_keywords.join(', ')}.`;
 
   // ── Slot 5: Spatial Depth Layers
-  const spatialDepthLayers = `Foreground: close-up of ${science.central_object} with maximum structural detail. Mid-ground: ${science.environment} context and supporting elements. Background: abstract/blurred environmental context suggesting scale and domain.`;
+  const backgroundLayer = hasExplicitSubstrate
+    ? `Background: ${science.support_or_substrate} structure with abstract environmental context.`
+    : `Background: abstract artistic environment — use gradient color fields, soft volumetric glow, crystalline surfaces, or flowing energy patterns. DO NOT render explicit ball-and-stick molecular structures for the background/substrate unless specifically described above. Use artistic abstraction: smooth surfaces, luminous gradients, fractal patterns, wave-like textures.`;
+
+  const spatialDepthLayers = `Foreground: close-up of ${science.central_object} with maximum structural detail. Mid-ground: ${science.environment} context and supporting elements. ${backgroundLayer}`;
 
   const strictMode = switches.strictChemicalStructure || switches.prioritizeAccuracy;
 
@@ -484,7 +500,7 @@ export const mockParseScience = (text: string): ParsedScience => {
     subdomain: domain === 'Chemistry' ? 'Heterogeneous Catalysis' : domain,
     core_theme: text.slice(0, 80) + (text.length > 80 ? '...' : ''),
     central_object: 'catalytic active site',
-    support_or_substrate: 'metal oxide support',
+    support_or_substrate: '',
     active_site: 'single-atom site',
     reactants: [
       {

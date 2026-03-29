@@ -214,14 +214,14 @@ const PromptReviewPanel: React.FC<{
 
 // ─── Phase 5: Image Generation & Export Panel ────────────────────────────────
 
-const JOURNAL_STYLES: Record<string, { fontFamily: string; fontSize: string; lineHeight: string; position: string }> = {
-  'Nature': { fontFamily: "'Georgia', serif", fontSize: '8%', lineHeight: '1', position: 'top-left' },
-  'Nature Catalysis': { fontFamily: "'Georgia', serif", fontSize: '6%', lineHeight: '1', position: 'top-left' },
-  'Nature Materials': { fontFamily: "'Georgia', serif", fontSize: '6%', lineHeight: '1', position: 'top-left' },
-  'JACS': { fontFamily: "'Arial', sans-serif", fontSize: '5%', lineHeight: '1.2', position: 'top-center' },
-  'Angewandte Chemie': { fontFamily: "'Times New Roman', serif", fontSize: '5%', lineHeight: '1.2', position: 'top-left' },
-  'ACS Catalysis': { fontFamily: "'Arial', sans-serif", fontSize: '5%', lineHeight: '1.2', position: 'top-left' },
-  'Advanced Materials': { fontFamily: "'Helvetica', sans-serif", fontSize: '5%', lineHeight: '1.2', position: 'top-left' },
+const JOURNAL_STYLES: Record<string, { fontFamily: string; fontSize: string; subFontSize: string; lineHeight: string; position: string; letterSpacing: string }> = {
+  'Nature': { fontFamily: "'Georgia', serif", fontSize: '18%', subFontSize: '18%', lineHeight: '0.85', position: 'top-left', letterSpacing: '-0.03em' },
+  'Nature Catalysis': { fontFamily: "'Georgia', serif", fontSize: '10%', subFontSize: '13%', lineHeight: '0.9', position: 'top-left', letterSpacing: '-0.02em' },
+  'Nature Materials': { fontFamily: "'Georgia', serif", fontSize: '10%', subFontSize: '13%', lineHeight: '0.9', position: 'top-left', letterSpacing: '-0.02em' },
+  'JACS': { fontFamily: "'Arial', sans-serif", fontSize: '10%', subFontSize: '10%', lineHeight: '1', position: 'top-center', letterSpacing: '0.05em' },
+  'Angewandte Chemie': { fontFamily: "'Times New Roman', serif", fontSize: '9%', subFontSize: '9%', lineHeight: '1', position: 'top-left', letterSpacing: '0' },
+  'ACS Catalysis': { fontFamily: "'Arial', sans-serif", fontSize: '10%', subFontSize: '10%', lineHeight: '1', position: 'top-left', letterSpacing: '0.02em' },
+  'Advanced Materials': { fontFamily: "'Helvetica Neue', 'Helvetica', sans-serif", fontSize: '9%', subFontSize: '9%', lineHeight: '1', position: 'top-left', letterSpacing: '0.03em' },
 };
 
 const JournalNameOverlay: React.FC<{ journal: string }> = ({ journal }) => {
@@ -230,14 +230,14 @@ const JournalNameOverlay: React.FC<{ journal: string }> = ({ journal }) => {
   const isNatureFamily = journal.startsWith('Nature');
 
   return (
-    <div className="absolute inset-0 pointer-events-none" style={{ padding: '6%' }}>
+    <div className="absolute inset-0 pointer-events-none" style={{ padding: '5% 6%' }}>
       {isNatureFamily ? (
-        <div style={{ fontFamily: style.fontFamily, color: 'white', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}>
-          <div style={{ fontSize: style.fontSize, fontWeight: 400, fontStyle: 'italic', lineHeight: style.lineHeight, letterSpacing: '-0.02em' }}>
+        <div style={{ fontFamily: style.fontFamily, color: 'white', textShadow: '0 3px 20px rgba(0,0,0,0.6), 0 1px 4px rgba(0,0,0,0.3)' }}>
+          <div style={{ fontSize: style.fontSize, fontWeight: 400, fontStyle: 'italic', lineHeight: style.lineHeight, letterSpacing: style.letterSpacing }}>
             {parts[0]?.toLowerCase()}
           </div>
           {parts.length > 1 && (
-            <div style={{ fontSize: `calc(${style.fontSize} * 1.3)`, fontWeight: 700, lineHeight: style.lineHeight, letterSpacing: '-0.02em' }}>
+            <div style={{ fontSize: style.subFontSize, fontWeight: 700, lineHeight: style.lineHeight, letterSpacing: style.letterSpacing }}>
               {parts.slice(1).join(' ').toLowerCase()}
             </div>
           )}
@@ -248,8 +248,10 @@ const JournalNameOverlay: React.FC<{ journal: string }> = ({ journal }) => {
           fontSize: style.fontSize,
           fontWeight: 700,
           color: 'white',
-          textShadow: '0 2px 12px rgba(0,0,0,0.5)',
+          textShadow: '0 3px 20px rgba(0,0,0,0.6), 0 1px 4px rgba(0,0,0,0.3)',
           lineHeight: style.lineHeight,
+          letterSpacing: style.letterSpacing,
+          textTransform: 'uppercase' as const,
         }}>
           {journal}
         </div>
