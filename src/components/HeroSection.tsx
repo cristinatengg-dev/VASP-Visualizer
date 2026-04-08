@@ -22,7 +22,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Sparkles,
   ArrowRight,
@@ -34,6 +34,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { useStore } from "../store/useStore";
+import { LEGAL_LINKS } from "../constants/legal";
 
 // ─── 动画配置 ─────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,7 @@ interface AgentCard {
   title: string;
   description: string;
   tag: string;
+  preview?: boolean;
 }
 
 const AGENTS: AgentCard[] = [
@@ -94,7 +96,8 @@ const AGENTS: AgentCard[] = [
     title: "Green AI Compute Engine",
     description:
       "Green AI pre-screening on exclusive HPC clusters filters redundant runs to save time and energy.",
-    tag: "Beta",
+    tag: "Preview",
+    preview: true,
   },
   {
     id: "rendering",
@@ -114,7 +117,7 @@ const AGENTS: AgentCard[] = [
     title: "Scientific AI Cover",
     description:
       "Transform research results into journal-ready scientific illustrations and publication covers.",
-    tag: "Beta",
+    tag: "Live",
   },
 ];
 
@@ -382,33 +385,33 @@ const AgentCardItem: React.FC<{ card: AgentCard; onClick: () => void }> = ({
 }) => (
   <button
     onClick={onClick}
-    className="
+    className={`
       group relative text-left
       flex flex-col gap-3
       p-4
-      bg-white/75 backdrop-blur-md
-      border border-white/60
+      backdrop-blur-md
+      border
       rounded-[24px]
-      shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_4px_24px_rgba(0,0,0,0.06)]
-      hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_32px_rgba(26,42,78,0.11)]
-      hover:-translate-y-1
-      hover:bg-white/85
-      active:translate-y-0
       transition-all duration-200
-      cursor-pointer
-    "
-    aria-label={`Open ${card.label}`}
+      ${card.preview
+        ? "bg-white/50 border-gray-200/40 cursor-default opacity-75 hover:opacity-85"
+        : "bg-white/75 border-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_4px_24px_rgba(0,0,0,0.06)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_32px_rgba(26,42,78,0.11)] hover:-translate-y-1 hover:bg-white/85 active:translate-y-0 cursor-pointer"
+      }
+    `}
+    aria-label={card.preview ? `${card.label} — Preview` : `Open ${card.label}`}
   >
     {/* 图标框 */}
     <div className="flex items-center justify-between">
       <div
-        className="
+        className={`
           flex-shrink-0 w-9 h-9
           rounded-[12px]
-          bg-[#0A1128]/90
           flex items-center justify-center
-          shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_2px_8px_rgba(10,17,40,0.2)]
-        "
+          ${card.preview
+            ? "bg-gray-400/60 shadow-none"
+            : "bg-[#0A1128]/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_2px_8px_rgba(10,17,40,0.2)]"
+          }
+        `}
       >
         {card.icon}
       </div>
@@ -419,6 +422,8 @@ const AgentCardItem: React.FC<{ card: AgentCard; onClick: () => void }> = ({
           ${
             card.tag === "Live"
               ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+              : card.tag === "Preview"
+              ? "bg-amber-50/80 text-amber-500 border border-amber-100"
               : "bg-gray-50/80 text-gray-400 border border-gray-100"
           }
         `}
@@ -432,7 +437,7 @@ const AgentCardItem: React.FC<{ card: AgentCard; onClick: () => void }> = ({
       <p className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-[0.15em] mb-1">
         {card.label}
       </p>
-      <h3 className="text-[0.8rem] font-bold text-[#0A1128] leading-snug tracking-tight">
+      <h3 className={`text-[0.8rem] font-bold leading-snug tracking-tight ${card.preview ? "text-gray-500" : "text-[#0A1128]"}`}>
         {card.title}
       </h3>
       <p className="text-[10px] text-gray-500 leading-relaxed mt-1 line-clamp-2">
@@ -440,11 +445,17 @@ const AgentCardItem: React.FC<{ card: AgentCard; onClick: () => void }> = ({
       </p>
     </div>
 
-    {/* hover 箭头 */}
-    <div className="flex items-center gap-1 text-[#2E4A8E] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-      <span className="text-[10px] font-mono font-semibold">Open</span>
-      <ChevronRight size={11} strokeWidth={2.5} />
-    </div>
+    {/* hover 箭头 / Preview 提示 */}
+    {card.preview ? (
+      <div className="flex items-center gap-1 text-amber-500/70">
+        <span className="text-[10px] font-mono font-semibold">Coming Soon</span>
+      </div>
+    ) : (
+      <div className="flex items-center gap-1 text-[#2E4A8E] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <span className="text-[10px] font-mono font-semibold">Open</span>
+        <ChevronRight size={11} strokeWidth={2.5} />
+      </div>
+    )}
   </button>
 );
 
@@ -457,13 +468,14 @@ const CopyrightStrip: React.FC = () => (
       © {new Date().getFullYear()} SCI Visualizer. All rights reserved.
     </p>
     <div className="flex items-center gap-4">
-      {["Terms of Service", "Privacy Policy", "Cookie Policy"].map((item) => (
-        <button
-          key={item}
+      {LEGAL_LINKS.map((item) => (
+        <Link
+          key={item.path}
+          to={item.path}
           className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors duration-150 underline-offset-2 hover:underline"
         >
-          {item}
-        </button>
+          {item.label}
+        </Link>
       ))}
     </div>
   </div>
@@ -474,8 +486,15 @@ const CopyrightStrip: React.FC = () => (
 const HeroSection: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useStore();
-  const handleAgentOpen = (route: string) => {
-    navigate(user ? route : "/login");
+  const [previewToast, setPreviewToast] = React.useState(false);
+
+  const handleAgentOpen = (card: AgentCard) => {
+    if (card.preview) {
+      setPreviewToast(true);
+      setTimeout(() => setPreviewToast(false), 2500);
+      return;
+    }
+    navigate(user ? card.route : "/login");
   };
 
   return (
@@ -581,7 +600,7 @@ const HeroSection: React.FC = () => {
               <AgentCardItem
                 key={card.id}
                 card={card}
-                onClick={() => handleAgentOpen(card.route)}
+                onClick={() => handleAgentOpen(card)}
               />
             ))}
           </motion.div>
@@ -602,6 +621,12 @@ const HeroSection: React.FC = () => {
         }}
         aria-hidden="true"
       />
+      {/* Preview Toast */}
+      {previewToast && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-[#0A1128] text-white text-sm font-medium rounded-[32px] shadow-[0_8px_30px_rgba(10,17,40,0.3)] animate-[fadeInUp_0.3s_ease-out]">
+          This agent is in Preview — launching soon.
+        </div>
+      )}
     </section>
   );
 };

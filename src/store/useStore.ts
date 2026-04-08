@@ -138,6 +138,8 @@ interface AppState {
   subscribe: (tier: string) => Promise<void>;
   redeemCode: (code: string) => Promise<boolean>;
   refreshUser: () => Promise<void>;
+  createPayment: (type: string, tier?: string, count?: number) => Promise<{ success: boolean, orderId?: string, qrCode?: string, amount?: number, free?: boolean, mock?: boolean } | null>;
+  pollPayment: (orderId: string) => Promise<boolean>;
   
   // File & Data
   uploadedFile: File | null;
@@ -412,9 +414,12 @@ export const useStore = create<AppState>((set, get) => ({
   
   refreshUser: async () => {
     const userId = localStorage.getItem('vasp_user_id');
-    if (!userId) return;
+    const token = localStorage.getItem('vasp_token');
+    if (!userId || !token) return;
     try {
-        const res = await fetch(`${API_BASE_URL}/user/${userId}`);
+        const res = await fetch(`${API_BASE_URL}/user/${userId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         const data = await res.json();
         // 修改后：这里必须加上 enforceSvip
         if (data.success) set({ user: enforceSvip(data.user) });
@@ -554,6 +559,42 @@ export const useStore = create<AppState>((set, get) => ({
           const data = await res.json();
           if (data.success) set({ user: enforceSvip(data.user) });
       } catch (e) { console.error(e); }
+  },
+
+  createPayment: async (type, tier?, count?) => {
+      const { user } = get();
+      if (!user) return null;
+      try {
+          const res = await fetch(`${API_BASE_URL}/payment/create`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('vasp_token')}` },
+              body: JSON.stringify({ userId: user.email, type, tier, count })
+          });
+          return await res.json();
+      } catch (e) {
+          console.error('[Payment] createPayment error:', e);
+          return null;
+      }
+  },
+
+  pollPayment: async (orderId) => {
+      const { user } = get();
+      if (!user) return false;
+      try {
+          const res = await fetch(`${API_BASE_URL}/payment/check`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('vasp_token')}` },
+              body: JSON.stringify({ orderId })
+          });
+          const data = await res.json();
+          if (data.paid && data.user) {
+              set({ user: enforceSvip(data.user) });
+          }
+          return !!data.paid;
+      } catch (e) {
+          console.error('[Payment] pollPayment error:', e);
+          return false;
+      }
   },
 
   uploadedFile: null,

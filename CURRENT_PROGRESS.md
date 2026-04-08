@@ -82,9 +82,3 @@ npx vite --host          # → http://localhost:5173
 # 后端（已在 3000 端口运行中）
 node server/index.js     # → http://localhost:3000
 ```
-
-## 代理配置
-
-- 系统代理：`http://127.0.0.1:7897`（Clash）
-- `~/.zshrc` 已写入 `http_proxy` / `https_proxy`
-- API 中转：`https://api.aipaibox.com`（ANTHROPIC_BASE_URL）

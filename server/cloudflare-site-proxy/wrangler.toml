@@ -1,0 +1,9 @@
+name = "scivisualizer-site-proxy"
+main = "worker.js"
+compatibility_date = "2024-12-01"
+
+[vars]
+ORIGIN_BASE_URL = "http://43.154.165.254"
+
+# Optional: override the Host header sent to origin.
+# UPSTREAM_HOST_HEADER = "scivisualizer.com"

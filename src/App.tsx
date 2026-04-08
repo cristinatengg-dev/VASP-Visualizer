@@ -6,6 +6,9 @@ import HeroSection from './components/HeroSection';
 import SplashScreen from './components/SplashScreen';
 import Explore from './pages/Explore';
 import Manual from './pages/Manual';
+import TermsOfService from './pages/TermsOfService';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import CookiePolicy from './pages/CookiePolicy';
 import RenderingAgent from './agents/rendering';
 import ModelingAgent from './agents/modeling';
 import ComputeAgent from './agents/compute';
@@ -78,7 +81,9 @@ function App() {
             }
 
             try {
-                const res = await fetch(`${API_BASE_URL}/user/${userId}`);
+                const res = await fetch(`${API_BASE_URL}/user/${userId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const data = await res.json();
                 if (data?.success && data?.user) {
                     setUser(data.user);
@@ -118,6 +123,9 @@ function App() {
       {/* 其他页面 */}
       <Route path="/explore" element={<Explore />} />
       <Route path="/manual" element={<Manual />} />
+      <Route path="/terms-of-service" element={<TermsOfService />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      <Route path="/cookie-policy" element={<CookiePolicy />} />
       <Route path="/admin/video-generator" element={<VideoGenerator />} />
       {/* Agent 工作台 */}
       <Route path="/agent/rendering" element={<AgentRoute><RenderingAgent /></AgentRoute>} />

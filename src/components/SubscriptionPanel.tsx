@@ -5,40 +5,40 @@ import { Check, X, Shield, Zap, Crown, LayoutDashboard, ChevronDown, ChevronUp }
 import { clsx } from 'clsx';
 
 const PRICING_TABLE = [
-    { 
-        tier: 'normal', 
+    {
+        tier: 'normal',
         name: 'Standard',
-        price: 'Free', 
+        price: 'Free',
         features: ['Basic Support', 'Standard Speed'],
-        quota: '0 / 0', 
-        extra: '¥10 / ¥50',
+        quotaLabel: 'Pay-as-you-go',
+        extraLabel: '¥10/image, ¥50/video',
         color: 'bg-white/5',
         textColor: 'text-gray-400',
         icon: LayoutDashboard,
         buttonStyle: 'outline'
     },
-    { 
-        tier: 'vip', 
+    {
+        tier: 'vip',
         name: 'Professional',
-        price: '¥3000', 
+        price: '¥3000',
         period: '/mo',
         features: ['Priority Queue', '2K Export', 'Email Support'],
-        quota: '368 / 30', 
-        extra: '¥8 / ¥40',
+        quotaLabel: '368 images / 30 videos per month',
+        extraLabel: '¥8/image, ¥40/video beyond quota',
         recommended: true,
         color: 'bg-white/10',
         textColor: 'text-white',
         icon: Zap,
         buttonStyle: 'primary'
     },
-    { 
-        tier: 'svip', 
+    {
+        tier: 'svip',
         name: 'Enterprise',
-        price: '¥5000', 
+        price: '¥5000',
         period: '/mo',
         features: ['Dedicated Server', '4K Export', '24/7 Support'],
-        quota: '750 / 200', 
-        extra: '¥6 / ¥30',
+        quotaLabel: '750 images / 200 videos per month',
+        extraLabel: '¥6/image, ¥30/video beyond quota',
         color: 'bg-white/5',
         textColor: 'text-amber-500',
         icon: Crown,
@@ -49,7 +49,7 @@ const PRICING_TABLE = [
 import { PaymentModal } from './PaymentModal';
 
 export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const { user, subscribe } = useStore();
+    const { user, refreshUser } = useStore();
     const [processingTier, setProcessingTier] = useState<string | null>(null);
     const [expandedTier, setExpandedTier] = useState<string | null>(null);
     const [paymentModal, setPaymentModal] = useState<{ tier: string, cost: number, name: string } | null>(null);
@@ -57,19 +57,19 @@ export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }
     const handleSubscribe = (tier: string) => {
         const plan = PRICING_TABLE.find(p => p.tier === tier);
         if (!plan) return;
-        
+
         // Parse price: "¥3000" -> 3000
         const priceStr = plan.price.replace(/[^0-9]/g, '');
         const cost = parseInt(priceStr) || 0;
-        
+
         setPaymentModal({ tier, cost, name: plan.name });
     };
 
     const handlePaymentSuccess = async () => {
         if (!paymentModal) return;
-        
+
         setProcessingTier(paymentModal.tier);
-        await subscribe(paymentModal.tier);
+        await refreshUser();
         setProcessingTier(null);
         setPaymentModal(null);
     };
@@ -171,11 +171,11 @@ export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }
                                                 <div className="space-y-3 text-xs bg-black/20 p-3 rounded-lg border border-white/5">
                                                     <div className="flex justify-between">
                                                         <span className="text-slate-400">Monthly Quota</span>
-                                                        <span className="text-slate-200 font-mono">{plan.quota}</span>
+                                                        <span className="text-slate-200 font-mono">{plan.quotaLabel}</span>
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="text-slate-400">Extra Cost</span>
-                                                        <span className="text-slate-200 font-mono">{plan.extra}</span>
+                                                        <span className="text-slate-200 font-mono">{plan.extraLabel}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -223,6 +223,7 @@ export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }
                     cost={paymentModal.cost}
                     type="subscription"
                     planName={paymentModal.name}
+                    tier={paymentModal.tier}
                     onConfirm={handlePaymentSuccess}
                     onClose={() => setPaymentModal(null)}
                 />

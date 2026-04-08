@@ -51,6 +51,7 @@ except Exception as e:
 # -----------------------------------------------------------------------------
 
 MP_BASE_URL = os.environ.get('MP_BASE_URL', 'https://api.materialsproject.org')
+MP_PROXY_URL = os.environ.get('MP_PROXY_URL', '')  # Cloudflare Worker proxy URL as fallback
 
 DEFAULT_PROVIDER_ORDER = [
     'materials_project',
@@ -93,19 +94,19 @@ def first_env(*keys: str) -> Optional[str]:
             return val
     return None
 
-def mp_get_json(path: str, params: dict) -> dict:
+def _mp_fetch(base_url: str, path: str, params: dict) -> dict:
     api_key = os.environ.get('MP_API_KEY')
     if not api_key:
         raise RuntimeError('MP_API_KEY not found in environment')
 
-    url = MP_BASE_URL.rstrip('/') + path
+    url = base_url.rstrip('/') + path
     if params:
         url = url + '?' + urllib.parse.urlencode(params, doseq=True)
 
     req = urllib.request.Request(
         url,
         headers={
-            'X-API-KEY': api_key, 
+            'X-API-KEY': api_key,
             'Accept': 'application/json',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         },
@@ -114,6 +115,15 @@ def mp_get_json(path: str, params: dict) -> dict:
 
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode('utf-8'))
+
+def mp_get_json(path: str, params: dict) -> dict:
+    try:
+        return _mp_fetch(MP_BASE_URL, path, params)
+    except urllib.error.HTTPError as e:
+        if e.code == 403 and MP_PROXY_URL:
+            sys.stderr.write(f"MP: Direct API returned 403, retrying via proxy...\\n")
+            return _mp_fetch(MP_PROXY_URL, path, params)
+        raise
 
 def normalize_formula(formula: str) -> str:
     """Normalize formula for MP API, e.g., TiO2 -> Ti1O2"""

@@ -1009,8 +1009,28 @@ export const Scene3D: React.FC = () => {
         </Suspense>
       </Canvas>
       {!molecularData && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-lg">
-          No file loaded. Use the panel to upload.
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-5 max-w-sm text-center">
+            <div className="w-16 h-16 rounded-[20px] bg-gray-100 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-base font-semibold text-gray-700 mb-1">Upload a structure file to get started</p>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Supports POSCAR, CONTCAR, CIF, XYZ, and XDATCAR formats.
+                <br />
+                Drag & drop onto the panel, or click Browse in the sidebar.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-gray-400 font-mono uppercase tracking-widest">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#2E4A8E]" />
+              Or try the Modeling Agent to generate structures from text
+            </div>
+          </div>
         </div>
       )}
     </div>

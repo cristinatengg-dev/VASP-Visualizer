@@ -95,14 +95,6 @@ Successful deploy indicators:
 - `runtime-demo/health` includes `runtimeDemo: true`
 - `runtime-demo/skills?domain=modeling` returns JSON instead of `404`
 
-## Network environment notes
-
-The local development machine (`/Users/a1234`) has a complex network stack:
-
-- **aTrust (深信服零信任 VPN)** runs at system level via `utun1024` interface. It intercepts ALL DNS queries and returns fake IPs in the `198.18.0.0/15` range. It **cannot** be bypassed from application level. Do NOT confuse `198.18.x.x` with Cloudflare WARP — it is aTrust.
-- **Clash** runs on `127.0.0.1:7897` as an HTTP/SOCKS proxy. All outbound HTTPS requests from Node.js require the proxy (built-in `fetch` does NOT respect env proxy vars). The project uses a custom `server/src/proxy-agent.js` module (CONNECT tunnel via `http.Agent`) to route `https.request` calls through Clash.
-- **SSH to GitHub**: Use key `/Users/a1234/.ssh/github_cristina` (ED25519, **has passphrase**: must `ssh-add` before pushing). SSH config routes `github.com` to `ssh.github.com:443`. If Clash is running with TUN/fake-ip mode, SSH may fail — temporarily quit Clash app (not just disable proxy toggle) if `git push` hangs.
-
 ### Pushing to GitHub (verified 2026-03-27)
 
 ```bash
@@ -113,7 +105,7 @@ ssh-add /Users/a1234/.ssh/github_cristina
 git push origin main
 ```
 
-If push fails with `Connection closed by 198.18.0.x`: quit Clash entirely, flush DNS (`sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`), retry.
+If `git push` fails, verify the SSH key is loaded and retry from a network that can reach GitHub normally.
 
 ### Server access
 
@@ -121,7 +113,7 @@ If push fails with `Connection closed by 198.18.0.x`: quit Clash entirely, flush
 - **SSH port**: `2222` (NOT default 22)
 - **User**: `root`
 - **Auth**: password (`keyboard-interactive`), NOT publickey
-- **Direct SSH from local does NOT work** — aTrust VPN intercepts the connection. Use **Tencent Cloud VNC console** to access the server instead.
+- If direct SSH is unavailable from the current network, use **Tencent Cloud VNC console** to access the server instead.
 - **Deploy from server console**: after pushing to GitHub, log into the server via VNC console and run the routine deploy command.
 
 ### Recommended deploy workflow

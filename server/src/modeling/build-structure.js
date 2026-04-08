@@ -80,6 +80,7 @@ async function buildModelingStructure({ intent } = {}) {
       env: {
         ...process.env,
         MP_API_KEY: process.env.MP_API_KEY,
+        MP_PROXY_URL: process.env.MP_PROXY_URL,
       },
     });
 

@@ -110,13 +110,8 @@ const VideoPlayer: React.FC = () => {
         </div>
         <div className="text-center">
           <p className="text-sm font-semibold text-[#0A1128]">Platform Demo Video</p>
-          <p className="text-xs text-gray-400 mt-1">Coming soon — video will appear here</p>
+          <p className="text-xs text-gray-400 mt-1">Full walkthrough video is being produced</p>
         </div>
-      </div>
-
-      {/* 时长占位 */}
-      <div className="absolute bottom-4 right-4 px-2 py-0.5 bg-[#0A1128]/80 text-white text-[10px] font-mono rounded-[8px]">
-        --:--
       </div>
     </div>
   );
@@ -205,39 +200,6 @@ const RuntimeInspectorCard: React.FC<{ onOpen: () => void }> = ({ onOpen }) => (
   </button>
 );
 
-// ─── 快速链接卡片 ─────────────────────────────────────────────────────────────
-
-const QUICK_LINKS = [
-  { label: "Getting Started", desc: "Setup your first project in 5 minutes" },
-  { label: "Modeling Guide", desc: "Build molecular and crystal structures" },
-  { label: "Compute Workflows", desc: "Submit DFT, MD, and more" },
-  { label: "Rendering & Export", desc: "3D visualization and AI cover generation" },
-];
-
-const QuickLinks: React.FC = () => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-    {QUICK_LINKS.map((link) => (
-      <div
-        key={link.label}
-        className="
-          flex items-start gap-3 p-4
-          bg-gray-50 border border-gray-100
-          rounded-[16px]
-          hover:bg-white hover:border-gray-200 hover:shadow-[0_4px_20px_rgba(0,0,0,0.05)]
-          cursor-pointer
-          transition-all duration-200
-        "
-      >
-        <div className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-[#2E4A8E] mt-1.5" />
-        <div>
-          <p className="text-xs font-semibold text-[#0A1128]">{link.label}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">{link.desc}</p>
-        </div>
-      </div>
-    ))}
-  </div>
-);
-
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 
 const Explore: React.FC = () => {
@@ -257,7 +219,7 @@ const Explore: React.FC = () => {
           {/* 顶部导航 */}
           <motion.div variants={itemVariants} className="flex items-center gap-3">
             <button
-              onClick={() => navigate("/hero")}
+              onClick={() => navigate("/")}
               className="
                 inline-flex items-center gap-1.5
                 px-3 py-2
@@ -304,14 +266,6 @@ const Explore: React.FC = () => {
             <ManualCard onOpen={() => navigate("/manual")} />
           </motion.div>
 
-          {/* 快速链接 */}
-          <motion.div variants={itemVariants}>
-            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
-              Quick Links
-            </h2>
-            <QuickLinks />
-          </motion.div>
-
           <motion.div variants={itemVariants}>
             <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
               Developer Tools
@@ -325,7 +279,7 @@ const Explore: React.FC = () => {
             className="flex flex-col sm:flex-row items-center gap-3 pt-2 border-t border-gray-100"
           >
             <button
-              onClick={() => navigate("/")}
+              onClick={() => navigate("/app")}
               className="
                 group inline-flex items-center gap-2
                 px-7 py-3.5

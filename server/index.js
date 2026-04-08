@@ -17,6 +17,7 @@ const os = require('os');
 const readline = require('readline');
 const { PRICING, IP_LIMIT } = require('./config');
 const { connectDB, getUser, createUser, updateUser, redeemCode, createVerificationCode, verifyCode, getLastCodeTime, InvitationCode, User } = require('./utils/db');
+const { Order } = require('./models');
 const { createRuntimeDemoRouter } = require('./src/runtime/http/create-runtime-demo-router');
 const { createRuntimeWorkerRunner } = require('./src/runtime/workers/create-runtime-worker-runner');
 const { parseModelingIntent } = require('./src/modeling/parse-intent');
@@ -64,7 +65,13 @@ const transporter = nodemailer.createTransport({
 
 // Enable CORS for frontend
 app.use(cors({
-    origin: ['https://scivisualizer.com', 'http://localhost', 'http://localhost:5173'],
+    origin: [
+      'https://scivisualizer.com',
+      'https://www.scivisualizer.com',
+      'https://portal.scivisualizer.com',
+      'http://localhost',
+      'http://localhost:5173'
+    ],
     credentials: true
 }));
 app.use(express.json({ limit: '25mb' }));
@@ -784,6 +791,11 @@ app.post('/api/auth/redeem', async (req, res) => {
 
 app.get('/api/user/:id', async (req, res) => {
     try {
+        const token = String(req.headers.authorization || '');
+        const userId = req.params.id;
+        if (!verifyToken(userId, token)) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
         let user = await getUserFlexible(req.params.id);
         if (!user) return res.status(404).json({ error: 'User not found' });
         user = await enforceAdminPrivileges(user);
@@ -1017,102 +1029,201 @@ app.post('/api/admin/users', async (req, res) => {
 });
 
 // =============================================
-// 💰 支付宝回调接口（预留框架）
-// TODO: 申请好支付宝商户号后，填入 APPID/私钥/公钥
+// 💰 支付宝当面付 (Real Payment)
 // =============================================
-// const AlipaySdk = require('alipay-sdk').default; // npm install alipay-sdk
-// const alipayConfig = {
-//     appId: process.env.ALIPAY_APP_ID || 'YOUR_APP_ID',
-//     privateKey: process.env.ALIPAY_PRIVATE_KEY || '',
-//     alipayPublicKey: process.env.ALIPAY_PUBLIC_KEY || '',
-//     gateway: 'https://openapi.alipay.com/gateway.do',
-// };
-// const alipaySdk = new AlipaySdk(alipayConfig);
+let alipaySdk = null;
+try {
+    const AlipaySdk = require('alipay-sdk').default;
+    if (process.env.ALIPAY_APP_ID && process.env.ALIPAY_PRIVATE_KEY) {
+        alipaySdk = new AlipaySdk({
+            appId: process.env.ALIPAY_APP_ID,
+            privateKey: process.env.ALIPAY_PRIVATE_KEY,
+            alipayPublicKey: process.env.ALIPAY_PUBLIC_KEY,
+            gateway: 'https://openapi.alipay.com/gateway.do',
+        });
+        console.log('[Payment] Alipay SDK initialized');
+    } else {
+        console.log('[Payment] Alipay not configured — payment/create will return mock QR');
+    }
+} catch (e) {
+    console.log('[Payment] alipay-sdk not installed — payment/create will return mock QR');
+}
 
-// // 1. 创建支付订单（前端调用，获取支付链接/二维码）
-// app.post('/api/payment/create', authMiddleware, async (req, res) => {
-//     const { userId, type, count } = req.body; // type: 'subscription'|'batch', count: number of images
-//     const user = await getUser(userId);
-//     if (!user) return res.status(404).json({ error: 'User not found' });
-//     
-//     // Calculate amount based on type
-//     let amount = 0;
-//     let subject = '';
-//     if (type === 'subscription') {
-//         const tierConfig = PRICING[req.body.tier?.toUpperCase()];
-//         if (!tierConfig) return res.status(400).json({ error: 'Invalid tier' });
-//         amount = tierConfig.price / 100; // Convert fen to yuan
-//         subject = `SCI Visualizer ${tierConfig.label} Subscription`;
-//     } else if (type === 'batch') {
-//         amount = count * 10 / 100; // Example: 10 fen per image
-//         subject = `SCI Visualizer ${count} Image Credits`;
-//     }
-//     
-//     const orderId = `SCI-${Date.now()}-${randomUUID().slice(0,8)}`;
-//     
-//     // Store pending order (in DB)
-//     // await createOrder({ orderId, userId, type, amount, tier: req.body.tier, count, status: 'pending' });
-//     
-//     // Create Alipay order
-//     // const result = await alipaySdk.exec('alipay.trade.precreate', {
-//     //     bizContent: {
-//     //         out_trade_no: orderId,
-//     //         total_amount: amount.toFixed(2),
-//     //         subject: subject,
-//     //     },
-//     // });
-//     
-//     // res.json({ success: true, orderId, qrCode: result.qrCode });
-// });
+// 1. 创建支付订单（前端调用，获取支付链接/二维码）
+app.post('/api/payment/create', authMiddleware, async (req, res) => {
+    try {
+        const { userId, type, tier, count } = req.body;
+        const user = await getUserFlexible(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
 
-// // 2. 支付宝异步回调（支付成功后支付宝主动通知）
-// app.post('/api/payment/alipay-notify', express.urlencoded({ extended: true }), async (req, res) => {
-//     try {
-//         // Verify signature
-//         // const isValid = alipaySdk.checkNotifySign(req.body);
-//         // if (!isValid) return res.send('fail');
-//         
-//         const { out_trade_no, trade_status } = req.body;
-//         
-//         if (trade_status === 'TRADE_SUCCESS' || trade_status === 'TRADE_FINISHED') {
-//             // Find order and fulfill
-//             // const order = await getOrder(out_trade_no);
-//             // if (!order || order.status === 'paid') return res.send('success');
-//             
-//             // Update user account
-//             // if (order.type === 'subscription') {
-//             //     await updateUser(order.userId, { tier: order.tier });
-//             // } else if (order.type === 'batch') {
-//             //     const user = await getUser(order.userId);
-//             //     await updateUser(order.userId, { prepaid_img: (user.prepaid_img || 0) + order.count });
-//             // }
-//             
-//             // Mark order as paid
-//             // await updateOrder(out_trade_no, { status: 'paid' });
-//             
-//             console.log(`[Payment] Order ${out_trade_no} paid successfully`);
-//         }
-//         
-//         res.send('success'); // Must reply 'success' to Alipay
-//     } catch (e) {
-//         console.error('[Payment] Notify error:', e);
-//         res.send('fail');
-//     }
-// });
+        let amount = 0;
+        let subject = '';
 
-// // 3. 前端轮询支付状态
-// app.post('/api/payment/check', authMiddleware, async (req, res) => {
-//     const { orderId } = req.body;
-//     // const order = await getOrder(orderId);
-//     // if (!order) return res.status(404).json({ error: 'Order not found' });
-//     // 
-//     // if (order.status === 'paid') {
-//     //     const user = await getUser(order.userId);
-//     //     return res.json({ success: true, paid: true, user });
-//     // }
-//     // 
-//     // res.json({ success: true, paid: false });
-// });
+        if (type === 'subscription') {
+            const tierConfig = PRICING[tier?.toUpperCase()];
+            if (!tierConfig) return res.status(400).json({ error: 'Invalid tier' });
+            amount = tierConfig.price;
+            subject = `SCI Visualizer ${tierConfig.label} 订阅`;
+        } else if (type === 'batch') {
+            const unitPrice = (PRICING[user.tier?.toUpperCase()] || PRICING.NORMAL).unitPrice.img;
+            amount = (count || 1) * unitPrice;
+            subject = `SCI Visualizer ${count} 张图片额度`;
+        } else if (type === 'img' || type === 'vid') {
+            const costResult = calculateCost(user, type);
+            if (costResult.cost === 0) {
+                return res.json({ success: true, free: true });
+            }
+            amount = costResult.cost;
+            subject = `SCI Visualizer ${type === 'img' ? '高清图片' : '视频'}导出`;
+        } else {
+            return res.status(400).json({ error: 'Invalid payment type' });
+        }
+
+        if (amount <= 0) {
+            return res.json({ success: true, free: true });
+        }
+
+        const orderId = `SCI-${Date.now()}-${randomUUID().slice(0, 8)}`;
+
+        await Order.create({
+            orderId,
+            userId,
+            type,
+            tier: tier || null,
+            count: count || null,
+            amount,
+            status: 'pending',
+            createdAt: new Date()
+        });
+
+        // 调用支付宝预下单
+        if (alipaySdk) {
+            const result = await alipaySdk.exec('alipay.trade.precreate', {
+                notify_url: process.env.ALIPAY_NOTIFY_URL,
+                bizContent: {
+                    out_trade_no: orderId,
+                    total_amount: amount.toFixed(2),
+                    subject,
+                },
+            });
+
+            if (result.code === '10000' && result.qrCode) {
+                res.json({ success: true, orderId, qrCode: result.qrCode, amount });
+            } else {
+                console.error('[Payment] Alipay precreate failed:', result);
+                res.status(500).json({ error: 'Alipay order creation failed', detail: result.subMsg || result.msg });
+            }
+        } else {
+            // 支付宝未配置时返回 mock 数据（开发用）
+            console.log(`[Payment] Mock order created: ${orderId}, amount=¥${amount}`);
+            res.json({ success: true, orderId, qrCode: null, amount, mock: true });
+        }
+    } catch (error) {
+        console.error('[Payment] Create order error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// 2. 支付宝异步回调（支付成功后支付宝主动 POST 通知）
+app.post('/api/payment/alipay-notify', express.urlencoded({ extended: true }), async (req, res) => {
+    try {
+        if (alipaySdk) {
+            const isValid = alipaySdk.checkNotifySign(req.body);
+            if (!isValid) {
+                console.error('[Payment] Invalid notify signature');
+                return res.send('fail');
+            }
+        }
+
+        const { out_trade_no, trade_status } = req.body;
+        console.log(`[Payment] Notify: order=${out_trade_no}, status=${trade_status}`);
+
+        if (trade_status === 'TRADE_SUCCESS' || trade_status === 'TRADE_FINISHED') {
+            const order = await Order.findOne({ orderId: out_trade_no });
+            if (!order || order.status === 'paid') {
+                return res.send('success');
+            }
+
+            // 根据订单类型发放权益
+            if (order.type === 'subscription') {
+                await updateUserFlexible(order.userId, { tier: order.tier });
+            } else if (order.type === 'batch') {
+                const user = await getUserFlexible(order.userId);
+                await updateUserFlexible(order.userId, {
+                    prepaid_img: (user.prepaid_img || 0) + (order.count || 0)
+                });
+            }
+            // img/vid 单次导出：标记 paid 即可，前端轮询后触发 deduct-export
+
+            await Order.findOneAndUpdate(
+                { orderId: out_trade_no },
+                { $set: { status: 'paid', paidAt: new Date() } }
+            );
+            console.log(`[Payment] Order ${out_trade_no} fulfilled`);
+        }
+
+        res.send('success');
+    } catch (e) {
+        console.error('[Payment] Notify error:', e);
+        res.send('fail');
+    }
+});
+
+// 3. 前端轮询支付状态
+app.post('/api/payment/check', authMiddleware, async (req, res) => {
+    try {
+        const { orderId } = req.body;
+        const order = await Order.findOne({ orderId });
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+
+        if (order.status === 'paid') {
+            let user = await getUserFlexible(order.userId);
+            user = await enforceAdminPrivileges(user);
+            return res.json({ success: true, paid: true, user });
+        }
+
+        res.json({ success: true, paid: false });
+    } catch (error) {
+        console.error('[Payment] Check error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// 4. 管理员手动确认订单（开发调试 / 无支付宝时使用）
+app.post('/api/payment/manual-confirm', async (req, res) => {
+    try {
+        const { secret, orderId } = req.body;
+        if (!secret || secret !== ADMIN_SECRET) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const order = await Order.findOne({ orderId });
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        if (order.status === 'paid') return res.json({ success: true, message: 'Already paid' });
+
+        // 发放权益
+        if (order.type === 'subscription') {
+            await updateUserFlexible(order.userId, { tier: order.tier });
+        } else if (order.type === 'batch') {
+            const user = await getUserFlexible(order.userId);
+            await updateUserFlexible(order.userId, {
+                prepaid_img: (user.prepaid_img || 0) + (order.count || 0)
+            });
+        }
+
+        await Order.findOneAndUpdate(
+            { orderId },
+            { $set: { status: 'paid', paidAt: new Date(), manualConfirm: true } }
+        );
+
+        let user = await getUserFlexible(order.userId);
+        user = await enforceAdminPrivileges(user);
+        res.json({ success: true, user });
+    } catch (error) {
+        console.error('[Payment] Manual confirm error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
 app.post('/api/clear-cache', (req, res) => {
     try {
