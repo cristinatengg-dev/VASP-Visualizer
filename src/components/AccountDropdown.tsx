@@ -10,19 +10,16 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     if (!user) return null;
 
     // Calculate Remaining Quotas based on Tier
-    // VIP: 368 images, 30 videos
-    // SVIP: 750 images, 200 videos
-    // Normal: 0 (Pay as you go)
-    
+    // Academic: unlimited (platform subscription)
+    // Enterprise: unlimited (custom)
+    // Personal: 0 (Pay per Agent)
+
     let imgQuotaTotal = 0;
     let vidQuotaTotal = 0;
-    
-    if (user.tier === 'vip') {
-        imgQuotaTotal = 368;
-        vidQuotaTotal = 30;
-    } else if (user.tier === 'svip') {
-        imgQuotaTotal = 750;
-        vidQuotaTotal = 200;
+
+    if (user.tier === 'academic' || user.tier === 'enterprise') {
+        imgQuotaTotal = 9999;
+        vidQuotaTotal = 9999;
     }
     
     // Remaining = Total - Used
@@ -51,7 +48,7 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             await redeemCode(inviteCode);
             setRedeemStatus('success');
             setInviteCode('');
-            setRedeemMsg('Success! You are now SVIP.');
+            setRedeemMsg('成功！您已升级。');
             setTimeout(() => setRedeemStatus('idle'), 3000);
         } catch (e: any) {
             setRedeemStatus('error');
@@ -73,10 +70,10 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <h3 className="text-2xl font-bold text-gray-800 tracking-tight">Personal Center</h3>
                     <div className={clsx(
                         "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide shadow-sm",
-                        user.tier === 'normal' ? "bg-gray-100 text-gray-600" : 
-                        user.tier === 'vip' ? "bg-slate-100 text-slate-700 ring-1 ring-slate-200" : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+                        user.tier === 'personal' ? "bg-gray-100 text-gray-600" :
+                        user.tier === 'academic' ? "bg-slate-100 text-slate-700 ring-1 ring-slate-200" : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
                     )}>
-                        {user.tier === 'svip' ? 'SVIP' : user.tier === 'vip' ? 'VIP' : 'Free'}
+                        {user.tier === 'enterprise' ? '企业端' : user.tier === 'academic' ? '高校端' : '个人端'}
                     </div>
                 </div>
                 
@@ -146,7 +143,7 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <div className="bg-white p-5 rounded-[24px] border border-gray-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
                         <div className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-4">Quota & Usage</div>
                         
-                        {user.tier === 'normal' ? (
+                        {user.tier === 'personal' ? (
                              <div className="space-y-4">
                                 <div className="flex justify-between text-sm items-center">
                                     <span className="text-gray-600 font-medium">Prepaid Images Left</span>
@@ -164,7 +161,7 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                     <span className="text-gray-600 font-medium">Videos Exported</span>
                                     <span className="font-mono font-bold text-gray-900 bg-gray-50 px-2 py-0.5 rounded-lg">{user.used_vid}</span>
                                 </div>
-                                <div className="text-[10px] text-gray-400 mt-2 italic text-right">Pay as you go plan</div>
+                                <div className="text-[10px] text-gray-400 mt-2 italic text-right">个人端 · 按 Agent 订阅</div>
                              </div>
                         ) : (
                              <div className="space-y-5">
@@ -265,12 +262,12 @@ export const AccountDropdown: React.FC = () => {
             >
                 <div className={clsx(
                     "w-9 h-9 rounded-full flex items-center justify-center text-white shadow-sm ring-2 ring-offset-1 transition-all",
-                    user.tier === 'normal' ? "bg-gray-400 ring-gray-200" : 
-                    user.tier === 'vip' ? "bg-gradient-to-br from-slate-700 to-slate-900 ring-slate-300" : // VIP: Silver-ish Dark
-                    "bg-gradient-to-br from-amber-400 to-yellow-600 ring-yellow-200" // SVIP: Gold
+                    user.tier === 'personal' ? "bg-gray-400 ring-gray-200" :
+                    user.tier === 'academic' ? "bg-gradient-to-br from-slate-700 to-slate-900 ring-slate-300" :
+                    "bg-gradient-to-br from-amber-400 to-yellow-600 ring-yellow-200"
                 )}>
-                    {user.tier === 'svip' ? <Crown className="w-4 h-4 text-white drop-shadow-sm" /> : 
-                     user.tier === 'vip' ? <Zap className="w-4 h-4 text-white drop-shadow-sm" /> :
+                    {user.tier === 'enterprise' ? <Crown className="w-4 h-4 text-white drop-shadow-sm" /> :
+                     user.tier === 'academic' ? <Zap className="w-4 h-4 text-white drop-shadow-sm" /> :
                      <User className="w-4 h-4" />}
                 </div>
                 
@@ -278,11 +275,11 @@ export const AccountDropdown: React.FC = () => {
                     <span className="text-sm font-bold text-[#0A1128] leading-none">{maskedPhone}</span>
                     <span className={clsx(
                         "text-[10px] uppercase font-bold tracking-wider leading-none mt-1 px-1.5 py-0.5 rounded-full",
-                        user.tier === 'normal' ? "text-gray-400 bg-gray-100" : 
-                        user.tier === 'vip' ? "text-slate-100 bg-slate-800 shadow-[0_2px_4px_rgba(0,0,0,0.2)]" : // VIP Badge
-                        "text-yellow-900 bg-yellow-300 shadow-[0_2px_4px_rgba(234,179,8,0.3)]" // SVIP Badge
+                        user.tier === 'personal' ? "text-gray-400 bg-gray-100" :
+                        user.tier === 'academic' ? "text-slate-100 bg-slate-800 shadow-[0_2px_4px_rgba(0,0,0,0.2)]" :
+                        "text-yellow-900 bg-yellow-300 shadow-[0_2px_4px_rgba(234,179,8,0.3)]"
                     )}>
-                        {user.tier === 'svip' ? 'SVIP' : user.tier === 'vip' ? 'VIP' : 'Free'}
+                        {user.tier === 'enterprise' ? '企业端' : user.tier === 'academic' ? '高校端' : '个人端'}
                     </span>
                 </div>
                 

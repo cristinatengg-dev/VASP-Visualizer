@@ -10,7 +10,7 @@ export const AccountWidget: React.FC = () => {
     return null;
   }
 
-  const isVIP = user.tier === 'vip' || user.tier === 'svip';
+  const isVIP = user.tier === 'academic' || user.tier === 'enterprise';
 
   return (
     <div className="bg-white rounded-3xl p-6 shadow-soft flex flex-col gap-4">
@@ -31,11 +31,11 @@ export const AccountWidget: React.FC = () => {
           <div className="flex items-center gap-1 mt-1">
              <span className={clsx(
                "text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wide",
-               user.tier === 'svip' ? "bg-black text-white" : 
-               user.tier === 'vip' ? "bg-yellow-100 text-yellow-700" : 
+               user.tier === 'enterprise' ? "bg-black text-white" :
+               user.tier === 'academic' ? "bg-yellow-100 text-yellow-700" :
                "bg-gray-100 text-gray-600"
              )}>
-               {user.tier}
+               {user.tier === 'enterprise' ? '企业端' : user.tier === 'academic' ? '高校端' : '个人端'}
              </span>
           </div>
         </div>

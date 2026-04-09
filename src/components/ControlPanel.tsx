@@ -320,7 +320,7 @@ C/H/1.2`
     applyStyleConfig(atomColors, atomRadii, bondDistances, usePBCLocal);
   };
 
-  const [batchConfirmState, setBatchConfirmState] = useState<{ show: boolean, total: number, type: 'trial' | 'vip' | 'pay', cost: number } | null>(null);
+  const [batchConfirmState, setBatchConfirmState] = useState<{ show: boolean, total: number, type: 'trial' | 'subscribed' | 'pay', cost: number } | null>(null);
 
   const payBatch = useStore(state => state.payBatch);
 
@@ -329,12 +329,12 @@ C/H/1.2`
     if (!user) return;
 
     const total = uploadedFiles.length;
-    let type: 'trial' | 'vip' | 'pay' = 'pay';
+    let type: 'trial' | 'subscribed' | 'pay' = 'pay';
     let cost = 0;
 
     // Logic for Pre-check
-    if (user.tier === 'vip' || user.tier === 'svip') {
-        type = 'vip';
+    if (user.tier === 'academic' || user.tier === 'enterprise') {
+        type = 'subscribed';
     } else if (user.trial_img_left >= total) {
         type = 'trial';
     } else {
@@ -366,7 +366,7 @@ C/H/1.2`
       let cost = type === 'img' ? 10 : 50;
       let isFree = false;
 
-      if (user.tier === 'vip' || user.tier === 'svip') isFree = true;
+      if (user.tier === 'academic' || user.tier === 'enterprise') isFree = true;
       else if (type === 'img' && user.trial_img_left > 0) isFree = true;
       else if (type === 'vid' && user.trial_vid_left > 0) isFree = true;
 
@@ -1769,7 +1769,7 @@ C/H/1.2`
                             </div>
                         )}
                         
-                        {batchConfirmState.type === 'vip' && (
+                        {batchConfirmState.type === 'subscribed' && (
                             <div className="flex items-center gap-3 text-[#0A1128] font-medium">
                                 <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
                                     <Crown className="w-4 h-4" />

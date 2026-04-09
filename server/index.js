@@ -326,16 +326,16 @@ const getClientIp = (req) => {
     return req.ip;
 };
 
-// --- 🔥 核心修复：后端强制 SVIP 逻辑 ---
+// --- 🔥 核心修复：后端强制企业端逻辑 ---
 const ADMIN_EMAILS = ['2218114919@qq.com', '205954619@qq.com', 'yiteng1881273@163.com'];
 
 const enforceAdminPrivileges = async (user) => {
     if (!user) return user;
     if (ADMIN_EMAILS.includes(user.email)) {
-        // Auto-upgrade admin accounts to SVIP
-        if (user.tier !== 'svip') {
-            await updateUser(user.email, { tier: 'svip' });
-            user.tier = 'svip';
+        // Auto-upgrade admin accounts to enterprise
+        if (user.tier !== 'enterprise') {
+            await updateUser(user.email, { tier: 'enterprise' });
+            user.tier = 'enterprise';
         }
     }
     return user;
@@ -943,12 +943,12 @@ app.post('/api/video/stitch', upload.single('framesZip'), async (req, res) => {
 });
 
 function calculateCost(user, type) {
-    if (user.tier === 'svip') return { cost: 0, status: 'quota' };
-    if (user.tier === 'vip') return { cost: 0, status: 'quota' };
+    if (user.tier === 'enterprise') return { cost: 0, status: 'quota' };
+    if (user.tier === 'academic') return { cost: 0, status: 'quota' };
     if (type === 'img' && user.prepaid_img > 0) return { cost: 0, status: 'prepaid' };
     if (type === 'img' && user.trial_img_left > 0) return { cost: 0, status: 'trial' };
     if (type === 'vid' && user.trial_vid_left > 0) return { cost: 0, status: 'trial' };
-    const tierConfig = PRICING[user.tier.toUpperCase()] || PRICING.NORMAL;
+    const tierConfig = PRICING[user.tier.toUpperCase()] || PRICING.PERSONAL;
     return { cost: tierConfig.unitPrice[type], status: 'pay' };
 }
 
@@ -1060,12 +1060,15 @@ app.post('/api/payment/create', authMiddleware, async (req, res) => {
         let subject = '';
 
         if (type === 'subscription') {
+            if (tier === 'enterprise' || tier === 'academic') {
+                return res.status(400).json({ error: '该方案请联系销售: 18396102509' });
+            }
             const tierConfig = PRICING[tier?.toUpperCase()];
             if (!tierConfig) return res.status(400).json({ error: 'Invalid tier' });
             amount = tierConfig.price;
-            subject = `SCI Visualizer ${tierConfig.label} 订阅`;
+            subject = `SCI Visualizer ${tierConfig.label}订阅`;
         } else if (type === 'batch') {
-            const unitPrice = (PRICING[user.tier?.toUpperCase()] || PRICING.NORMAL).unitPrice.img;
+            const unitPrice = (PRICING[user.tier?.toUpperCase()] || PRICING.PERSONAL).unitPrice.img;
             amount = (count || 1) * unitPrice;
             subject = `SCI Visualizer ${count} 张图片额度`;
         } else if (type === 'img' || type === 'vid') {

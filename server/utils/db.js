@@ -12,7 +12,7 @@ const getUser = async (email) => {
 const createUser = async (email, ip) => {
     return await User.create({
         email,
-        tier: 'normal',
+        tier: 'personal',
         trial_img_left: 2, // 2 Free High-Res Images
         trial_vid_left: 1, // 1 Free Video
         prepaid_img: 0,
@@ -37,7 +37,7 @@ const redeemCode = async (codeStr, userId) => {
     await InvitationCode.findOneAndUpdate({ code: codeStr }, { $set: { isUsed: true, usedBy: userId, usedAt: new Date() } });
 
     // Update User
-    const plan = code.planType || 'vip';
+    const plan = code.planType || 'academic';
     await User.findOneAndUpdate({ _id: userId }, { $set: { tier: plan } });
     
     return true;

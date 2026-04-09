@@ -236,7 +236,7 @@ const ExportHandler = () => {
                     const dataUrl = await captureHighResSquare();
                     if (dataUrl) {
                         const success = await deductExport('img');
-                        const isSVIP = user?.tier === 'svip';
+                        const isSVIP = user?.tier === 'enterprise' || user?.tier === 'academic';
                         
                         if (!success && !isSVIP) {
                             alert(`Batch export interrupted: Insufficient quota at image ${i + 1}.`);

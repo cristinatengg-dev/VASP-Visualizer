@@ -1,5 +1,6 @@
 
 // Pricing and Quota Configuration
+// 商业模式：个人端 / 高校端 / 企业端
 const PRICING = {
     TRIAL: {
         id: 'trial',
@@ -8,26 +9,30 @@ const PRICING = {
         unitPrice: { img: null, vid: null },
         label: 'Trial'
     },
-    NORMAL: {
-        id: 'normal',
-        price: 0,
+    PERSONAL: {
+        id: 'personal',
+        price: 99,           // ¥99/月/Agent
+        period: 'monthly',
         quota: { img: 0, vid: 0 },
         unitPrice: { img: 10, vid: 50 },
-        label: 'Normal'
+        label: '个人端'
     },
-    VIP: {
-        id: 'vip',
-        price: 3000,
-        quota: { img: 368, vid: 30 },
-        unitPrice: { img: 8, vid: 40 },
-        label: 'VIP'
+    ACADEMIC: {
+        id: 'academic',
+        price: 150000,       // ¥15万/年
+        period: 'yearly',
+        quota: { img: 9999, vid: 9999 },
+        unitPrice: { img: 0, vid: 0 },
+        label: '高校端'
     },
-    SVIP: {
-        id: 'svip',
-        price: 5000,
-        quota: { img: 750, vid: 200 },
-        unitPrice: { img: 6, vid: 30 },
-        label: 'SVIP'
+    ENTERPRISE: {
+        id: 'enterprise',
+        price: 0,            // ¥100万+ 定制化，不走线上支付
+        period: 'custom',
+        quota: { img: 9999, vid: 9999 },
+        unitPrice: { img: 0, vid: 0 },
+        label: '企业端',
+        contactOnly: true
     }
 };
 

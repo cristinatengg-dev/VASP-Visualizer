@@ -99,31 +99,31 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ cost, type, count, p
                 {step === 'confirm' && (
                     <>
                         <h3 className="text-xl font-bold text-gray-900 mb-2">
-                            {type === 'batch' ? 'Confirm Batch Payment' :
-                             type === 'subscription' ? 'Confirm Subscription' : 'Confirm Export'}
+                            {type === 'batch' ? '确认批量支付' :
+                             type === 'subscription' ? '确认订阅' : '确认导出'}
                         </h3>
                         <p className="text-sm text-gray-500 mb-8">
                             {type === 'batch'
-                                ? `You are about to export ${count} images.`
+                                ? `您将导出 ${count} 张图片。`
                                 : type === 'subscription'
-                                    ? `Upgrade to ${planName} Plan.`
-                                    : `You are about to export a ${type === 'img' ? 'High-Res Image' : 'Trajectory Video'}.`
+                                    ? `升级到${planName}方案。`
+                                    : `您将导出一${type === 'img' ? '张高清图片' : '段轨迹视频'}。`
                             }
                         </p>
 
                         <div className="bg-[#F9FAFB] p-6 rounded-[20px] mb-8 border border-gray-100">
-                            <div className="text-xs text-gray-400 uppercase font-bold tracking-widest mb-2">Total Amount</div>
+                            <div className="text-xs text-gray-400 uppercase font-bold tracking-widest mb-2">支付金额</div>
                             <div className="text-4xl font-extrabold text-blue-600">
                                 {cost === 0 ? 'Free' : `¥${cost}`}
                             </div>
-                            {cost === 0 && <div className="text-xs text-blue-400 mt-1 font-medium">Included in your plan</div>}
+                            {cost === 0 && <div className="text-xs text-blue-400 mt-1 font-medium">已包含在您的方案中</div>}
                         </div>
 
                         <button
                             onClick={handlePay}
                             className="w-full py-4 bg-[#0A1128] text-white rounded-[32px] font-bold hover:bg-[#162044] transition-all shadow-[0_8px_20px_rgba(10,17,40,0.2)] active:scale-95 text-sm"
                         >
-                            {cost === 0 ? 'Confirm Deduction' : 'Proceed to Payment'}
+                            {cost === 0 ? '确认扣费' : '前往支付'}
                         </button>
                     </>
                 )}
@@ -131,14 +131,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ cost, type, count, p
                 {step === 'creating' && (
                     <div className="py-10">
                         <Loader2 className="w-12 h-12 text-blue-500 mx-auto mb-4 animate-spin" />
-                        <h3 className="text-lg font-bold text-gray-900">Creating Order...</h3>
-                        <p className="text-sm text-gray-400 mt-1">Please wait</p>
+                        <h3 className="text-lg font-bold text-gray-900">创建订单中...</h3>
+                        <p className="text-sm text-gray-400 mt-1">请稍候</p>
                     </div>
                 )}
 
                 {step === 'paying' && (
                     <>
-                        <h3 className="text-xl font-bold text-gray-900 mb-4">Scan to Pay</h3>
+                        <h3 className="text-xl font-bold text-gray-900 mb-4">扫码支付</h3>
                         <div className="flex flex-col items-center justify-center py-6 border-2 border-dashed border-gray-200 rounded-[20px] bg-[#F9FAFB] mb-6">
                             <div className="w-44 h-44 bg-white shadow-sm border border-gray-100 mb-4 flex items-center justify-center text-gray-300 text-xs rounded-xl overflow-hidden relative">
                                 {qrCode ? (
@@ -156,16 +156,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ cost, type, count, p
                                 )}
                             </div>
                             <p className="text-sm text-gray-500 font-medium">
-                                Please pay <span className="text-blue-600 font-bold">¥{cost}</span>
+                                请支付 <span className="text-blue-600 font-bold">¥{cost}</span>
                             </p>
                             <p className="text-xs text-gray-400 mt-1">
-                                Use Alipay to scan the QR code
+                                使用支付宝扫描二维码
                             </p>
                         </div>
 
                         <div className="flex items-center justify-center gap-2 mb-4 text-xs text-gray-400">
                             <Loader2 className="w-3 h-3 animate-spin" />
-                            <span>Auto-detecting payment...</span>
+                            <span>自动检测支付中...</span>
                         </div>
 
                         <button
@@ -178,7 +178,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ cost, type, count, p
                             ) : (
                                 <>
                                     <CheckCircle className="w-5 h-5" />
-                                    I Have Paid
+                                    我已支付
                                 </>
                             )}
                         </button>
@@ -188,10 +188,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ cost, type, count, p
                 {step === 'success' && (
                     <div className="py-10">
                         <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6 animate-bounce" />
-                        <h3 className="text-2xl font-bold text-gray-900">Payment Successful!</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">支付成功！</h3>
                         <p className="text-gray-500 mt-2 font-medium">
-                            {type === 'batch' ? 'Starting batch export...' :
-                             type === 'subscription' ? 'Upgrading your plan...' : 'Starting export...'}
+                            {type === 'batch' ? '开始批量导出...' :
+                             type === 'subscription' ? '正在升级方案...' : '开始导出...'}
                         </p>
                     </div>
                 )}
@@ -199,13 +199,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ cost, type, count, p
                 {step === 'error' && (
                     <div className="py-10">
                         <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">Order Failed</h3>
-                        <p className="text-sm text-gray-500 mb-6">{errorMsg || 'Please try again later.'}</p>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">订单创建失败</h3>
+                        <p className="text-sm text-gray-500 mb-6">{errorMsg || '请稍后重试。'}</p>
                         <button
                             onClick={() => setStep('confirm')}
                             className="w-full py-3 bg-gray-100 text-gray-700 rounded-[24px] font-semibold hover:bg-gray-200 transition-all text-sm"
                         >
-                            Try Again
+                            重试
                         </button>
                     </div>
                 )}

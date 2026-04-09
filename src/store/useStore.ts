@@ -80,7 +80,7 @@ export interface GlobalElementSettings {
 export interface User {
   id: string;
   email: string;
-  tier: 'normal' | 'vip' | 'svip';
+  tier: 'trial' | 'personal' | 'academic' | 'enterprise';
   trial_img_left: number;
   trial_vid_left: number;
   prepaid_img?: number;
