@@ -1,10 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   MODELING_PROVIDER_OPTIONS,
   ModelingIntent,
   ModelingProviderName,
 } from '../../types/modeling';
-import { useModeling } from '../../hooks/useModeling';interface ChatPanelProps {
+import { useModeling } from '../../hooks/useModeling';
+import { useStore } from '../../../../store/useStore';
+import { API_BASE_URL } from '../../../../config';
+import { renderDataToMolecularStructure, molecularStructureToRenderData } from '../../../../utils/catalystHelpers';interface ChatPanelProps {
   onIntentChange: (intent: ModelingIntent) => void;
   currentIntent: ModelingIntent | null;
   prefillPrompt?: string | null;
@@ -469,6 +472,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
               </div>
             </div>
 
+            {/* ── Catalyst Toolkit: Direct structure operations ── */}
+            <CatalystToolkitPanel />
+
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -643,6 +649,189 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
         <p className="mt-2 text-[10px] text-gray-400 text-center">
           Shift + Enter 换行 | Enter 发送
         </p>
+      </div>
+    </div>
+  );
+};
+
+// ── Catalyst Toolkit Panel ──────────────────────────────────────────────────
+// Directly operates on the current 3D structure via /api/catalyst/* endpoints.
+const CatalystToolkitPanel: React.FC = () => {
+  const molecularData = useStore(state => state.molecularData);
+  const setMolecularData = useStore(state => state.setMolecularData);
+  const [isLoading, setIsLoading] = useState(false);
+  const [toolError, setToolError] = useState<string | null>(null);
+  const [toolSuccess, setToolSuccess] = useState<string | null>(null);
+
+  // Slab params
+  const [slabMillerH, setSlabMillerH] = useState('1');
+  const [slabMillerK, setSlabMillerK] = useState('1');
+  const [slabMillerL, setSlabMillerL] = useState('1');
+  const [slabThickness, setSlabThickness] = useState('12');
+  const [slabVacuum, setSlabVacuum] = useState('15');
+
+  // Selective dynamics
+  const [freezeLayers, setFreezeLayers] = useState('2');
+
+  // Supercell
+  const [superA, setSuperA] = useState('2');
+  const [superB, setSuperB] = useState('2');
+  const [superC, setSuperC] = useState('1');
+
+  const callCatalystTool = useCallback(async (tool: string, params: Record<string, unknown>) => {
+    setIsLoading(true);
+    setToolError(null);
+    setToolSuccess(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/catalyst/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tool, params }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setToolError(data.error || 'Tool call failed');
+        return null;
+      }
+      return data.data;
+    } catch (err) {
+      setToolError(err instanceof Error ? err.message : 'Network error');
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const applyResult = useCallback((renderData: { atoms: any[]; latticeVectors: number[][] }, filename: string, message: string) => {
+    const mol = renderDataToMolecularStructure(renderData, filename);
+    setMolecularData(mol);
+    setToolSuccess(message);
+  }, [setMolecularData]);
+
+  if (!molecularData) return null;
+
+  const currentRenderData = molecularStructureToRenderData(molecularData);
+
+  return (
+    <div className="mt-4 rounded-[20px] border border-indigo-100 bg-indigo-50/40 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-700">Catalyst Toolkit</p>
+          <p className="mt-1 text-xs text-indigo-800">
+            Direct structure operations — changes apply instantly to the 3D view.
+          </p>
+        </div>
+        <span className="rounded-[16px] px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-indigo-100 text-indigo-700 border border-indigo-200">
+          LIVE
+        </span>
+      </div>
+
+      {toolError && (
+        <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
+          {toolError}
+        </div>
+      )}
+      {toolSuccess && (
+        <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-xl text-xs text-green-600">
+          {toolSuccess}
+        </div>
+      )}
+
+      {/* Build Slab */}
+      <div className="mt-3 p-3 bg-white rounded-[16px] border border-indigo-100">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Build Slab from Current Structure</p>
+        <div className="grid grid-cols-5 gap-2">
+          <input value={slabMillerH} onChange={e => setSlabMillerH(e.target.value)} placeholder="h" className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+          <input value={slabMillerK} onChange={e => setSlabMillerK(e.target.value)} placeholder="k" className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+          <input value={slabMillerL} onChange={e => setSlabMillerL(e.target.value)} placeholder="l" className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+          <input value={slabThickness} onChange={e => setSlabThickness(e.target.value)} placeholder="thick" className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" title="Slab thickness (A)" />
+          <input value={slabVacuum} onChange={e => setSlabVacuum(e.target.value)} placeholder="vac" className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" title="Vacuum thickness (A)" />
+        </div>
+        <button
+          onClick={async () => {
+            const result = await callCatalystTool('build_slab', {
+              structure: currentRenderData,
+              miller_index: [Number(slabMillerH) || 1, Number(slabMillerK) || 1, Number(slabMillerL) || 1],
+              slab_thickness: Number(slabThickness) || 12,
+              vacuum_thickness: Number(slabVacuum) || 15,
+            });
+            if (result?.default_render_data) {
+              const nTerm = result.n_terminations || 1;
+              applyResult(result.default_render_data, `slab_${slabMillerH}${slabMillerK}${slabMillerL}.vasp`, `Slab built: (${slabMillerH}${slabMillerK}${slabMillerL}), ${nTerm} termination(s), ${result.slabs?.[0]?.n_atoms || '?'} atoms`);
+            }
+          }}
+          disabled={isLoading}
+          className="mt-2 w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+        >
+          {isLoading ? 'Building...' : 'Build Slab'}
+        </button>
+      </div>
+
+      {/* Freeze Layers */}
+      <div className="mt-3 p-3 bg-white rounded-[16px] border border-indigo-100">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Freeze Bottom Layers</p>
+        <div className="flex gap-2">
+          <input value={freezeLayers} onChange={e => setFreezeLayers(e.target.value)} placeholder="N layers" className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-mono outline-none focus:border-indigo-300" />
+          <button
+            onClick={async () => {
+              const result = await callCatalystTool('fix_atoms_by_layers', {
+                structure: currentRenderData,
+                freeze_layers: Number(freezeLayers) || 2,
+              });
+              if (result?.render_data) {
+                applyResult(result.render_data, molecularData.filename, `Frozen ${result.frozen_atoms} atoms (${result.frozen_layers} layers), ${result.free_atoms} free`);
+              }
+            }}
+            disabled={isLoading}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+          >
+            Apply
+          </button>
+        </div>
+      </div>
+
+      {/* Supercell */}
+      <div className="mt-3 p-3 bg-white rounded-[16px] border border-indigo-100">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Supercell</p>
+        <div className="flex gap-2">
+          <input value={superA} onChange={e => setSuperA(e.target.value)} placeholder="a" className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+          <input value={superB} onChange={e => setSuperB(e.target.value)} placeholder="b" className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+          <input value={superC} onChange={e => setSuperC(e.target.value)} placeholder="c" className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+          <button
+            onClick={async () => {
+              const result = await callCatalystTool('make_supercell', {
+                structure: currentRenderData,
+                supercell: [Number(superA) || 2, Number(superB) || 2, Number(superC) || 1],
+              });
+              if (result?.render_data) {
+                applyResult(result.render_data, molecularData.filename, `Supercell ${superA}x${superB}x${superC}: ${result.n_atoms} atoms`);
+              }
+            }}
+            disabled={isLoading}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+          >
+            Apply
+          </button>
+        </div>
+      </div>
+
+      {/* Symmetry Unique Sites */}
+      <div className="mt-3 p-3 bg-white rounded-[16px] border border-indigo-100">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Symmetry Analysis</p>
+        <button
+          onClick={async () => {
+            const result = await callCatalystTool('enumerate_unique_sites', {
+              structure: currentRenderData,
+            });
+            if (result) {
+              setToolSuccess(`${result.spacegroup} (#${result.spacegroup_number}), ${result.n_groups} unique site group(s): ${result.groups?.map((g: any) => `${g.element}@${g.wyckoff}(x${g.multiplicity})`).join(', ')}`);
+            }
+          }}
+          disabled={isLoading}
+          className="w-full py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 transition-colors disabled:opacity-50"
+        >
+          Analyze Symmetry
+        </button>
       </div>
     </div>
   );

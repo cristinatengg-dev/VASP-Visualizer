@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ModelingIntent } from '../../types/modeling';
 import { Scene3D } from '../../../../components/Scene3D';
 import { useStore } from '../../../../store/useStore';
@@ -6,6 +7,7 @@ import { saveAs } from 'file-saver';
 import { exportToPOSCAR } from '../../../../utils/poscarExporter';
 
 const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) => {
+  const navigate = useNavigate();
   const molecularData = useStore(state => state.molecularData);
   const atomCount = molecularData?.atoms?.length ?? null;
 
@@ -55,6 +57,17 @@ const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) =>
         </div>
 
         <div className="flex gap-2 pointer-events-auto">
+          <button
+            className="px-4 py-3 bg-green-600 text-white rounded-[32px] hover:bg-green-700 transition-colors shadow-sm font-medium text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
+            onClick={() => navigate('/agent/compute')}
+            disabled={!molecularData}
+            title="Send structure to Compute Agent"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+            Send to Compute
+          </button>
           <button
             className="px-4 py-3 bg-[#2E4A8E] text-white rounded-[32px] hover:bg-[#3D5BA6] transition-colors shadow-sm font-medium text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
             onClick={handleExportPOSCAR}

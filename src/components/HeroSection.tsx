@@ -96,8 +96,8 @@ const AGENTS: AgentCard[] = [
     title: "Green AI Compute Engine",
     description:
       "Green AI pre-screening on exclusive HPC clusters filters redundant runs to save time and energy.",
-    tag: "Preview",
-    preview: true,
+    tag: "Beta",
+    preview: false,
   },
   {
     id: "rendering",

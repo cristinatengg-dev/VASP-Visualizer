@@ -29,6 +29,12 @@ const { parseScienceText } = require('./src/rendering/parse-science');
 const { validateRenderingImage } = require('./src/rendering/validate-image');
 const { generateRenderingImages } = require('./src/rendering/generate-image');
 const { runRetrievalAgentStream } = require('./src/retrieval/agent');
+const { createCatalystRouter } = require('./src/catalyst/router');
+const { compileComputeInputSet } = require('./src/compute/compile-input-set');
+const { listComputeProfiles, getComputeProfile } = require('./src/compute/profiles');
+const { submitComputeJob } = require('./src/compute/submit-job');
+const { querySlurmJobStatus, queryPbsJobStatus, queryLocalJobStatus } = require('./src/compute/query-job');
+const { buildResultMetrics, collectWarnings } = require('./src/compute/parse-results');
 
 // --- Fail-fast: required environment variables ---
 const REQUIRED_ENV = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'TOKEN_SECRET'];
@@ -49,8 +55,15 @@ const runtimeWorkerRunner = process.env.ENABLE_AGENT_RUNTIME_WORKERS === '1'
 
 app.set('trust proxy', 1);
 
-// Connect DB
+// Connect legacy JSON-file DB (users, etc.)
 connectDB();
+
+// Connect MongoDB for Order model (payment orders)
+const mongoose = require('mongoose');
+const MONGO_URI = process.env.RUNTIME_MONGODB_URI || process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://mongo:27017/sci_visualizer';
+mongoose.connect(MONGO_URI)
+    .then(() => console.log(`[MongoDB] Connected for Orders: ${MONGO_URI}`))
+    .catch(err => console.error('[MongoDB] Connection failed:', err.message));
 
 // Email Transporter
 const transporter = nodemailer.createTransport({
@@ -80,6 +93,9 @@ app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 if (process.env.ENABLE_AGENT_RUNTIME_DEMO === '1') {
     app.use('/api/runtime-demo', createRuntimeDemoRouter());
 }
+
+// Computational catalysis toolkit
+app.use('/api/catalyst', createCatalystRouter());
 
 const upload = multer({ 
     dest: 'uploads/',
@@ -305,6 +321,180 @@ Input: "${prompt}"`;
         res.json({ success: true, intent: parsed });
     } catch (err) {
         console.error('Compute Intent API error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── Compute Pipeline Routes ─────────────────────────────────────────────
+
+app.get('/api/compute/profiles', async (_req, res) => {
+    try {
+        const profiles = listComputeProfiles();
+        res.json({ success: true, profiles });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/compute/compile', async (req, res) => {
+    try {
+        const { structure, intent } = req.body;
+        if (!structure) {
+            return res.status(400).json({ success: false, error: 'structure is required' });
+        }
+        const result = await compileComputeInputSet({ structure, intent: intent || {} });
+        res.json({ success: true, ...result });
+    } catch (err) {
+        console.error('[compute/compile]', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// In-memory job registry for tracking submitted jobs across polling requests.
+const activeJobs = new Map();
+
+app.post('/api/compute/submit', async (req, res) => {
+    try {
+        const { profileId, structure, intent, compiledFiles } = req.body;
+        const profile = getComputeProfile(profileId);
+        if (!profile) {
+            return res.status(400).json({ success: false, error: `Unknown profile '${profileId}'` });
+        }
+        if (!profile.configured) {
+            return res.status(400).json({ success: false, error: `Profile '${profile.id}' is not configured on this server` });
+        }
+
+        // Build a workdir for the job
+        const idempotencyKey = `web-${Date.now().toString(36)}`;
+        const jobStorageRoot = path.join(__dirname, 'data', 'compute-jobs');
+        const workDir = path.join(jobStorageRoot, idempotencyKey);
+        const executionDir = path.join(workDir, 'execution');
+
+        fs.mkdirSync(executionDir, { recursive: true });
+
+        // Write compiled input files
+        const files = compiledFiles || {};
+        for (const [name, content] of Object.entries(files)) {
+            if (typeof content === 'string' && name !== 'POTCAR.spec.json') {
+                fs.writeFileSync(path.join(executionDir, name), content, 'utf8');
+            }
+        }
+        if (files['POTCAR.spec.json']) {
+            fs.writeFileSync(path.join(executionDir, 'POTCAR.spec.json'), files['POTCAR.spec.json'], 'utf8');
+        }
+
+        // Write job-spec for local runners
+        const jobSpec = {
+            profile,
+            command: profile.local?.command || profile.hpc?.executable || 'vasp_std',
+            shell: profile.local?.shell || '/bin/bash',
+            workDir: executionDir,
+        };
+        fs.writeFileSync(path.join(workDir, 'job-spec.json'), JSON.stringify(jobSpec, null, 2), 'utf8');
+
+        const submission = await submitComputeJob({
+            profile,
+            computeInputSetArtifact: { preview: { formula: structure?.meta?.formula || 'vasp_job' } },
+            computeInputPayload: { files, intent, meta: structure?.meta },
+            workDir,
+            executionDir,
+            idempotencyKey,
+        });
+
+        // Track the job
+        const jobRecord = {
+            ...submission,
+            profileId: profile.id,
+            profileSystem: profile.system,
+            workDir,
+            executionDir,
+            createdAt: new Date(),
+            idempotencyKey,
+        };
+        activeJobs.set(idempotencyKey, jobRecord);
+
+        res.json({ success: true, jobId: idempotencyKey, ...submission });
+    } catch (err) {
+        console.error('[compute/submit]', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/compute/job/:id/status', async (req, res) => {
+    try {
+        const jobId = req.params.id;
+        const job = activeJobs.get(jobId);
+        if (!job) {
+            return res.status(404).json({ success: false, error: `Job '${jobId}' not found` });
+        }
+
+        let statusResult;
+        if (job.profileSystem === 'slurm') {
+            statusResult = await querySlurmJobStatus(job.externalJobId);
+        } else if (job.profileSystem === 'pbs') {
+            statusResult = await queryPbsJobStatus(job.externalJobId);
+        } else {
+            // local — read from runtime-status.json
+            const snapshotRef = path.join(job.workDir, 'job-spec.json');
+            statusResult = await queryLocalJobStatus(snapshotRef);
+        }
+
+        res.json({ success: true, jobId, ...statusResult });
+    } catch (err) {
+        console.error('[compute/job/status]', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/compute/job/:id/results', async (req, res) => {
+    try {
+        const jobId = req.params.id;
+        const job = activeJobs.get(jobId);
+        if (!job) {
+            return res.status(404).json({ success: false, error: `Job '${jobId}' not found` });
+        }
+
+        const dir = job.executionDir || job.workDir;
+        const readTail = (filename, lines = 200) => {
+            const filePath = path.join(dir, filename);
+            try {
+                const content = fs.readFileSync(filePath, 'utf8');
+                const arr = content.split('\n');
+                return arr.slice(-lines).join('\n');
+            } catch { return ''; }
+        };
+
+        const runtimeStatusPath = path.join(job.workDir, 'runtime-status.json');
+        let runtimeStatus = {};
+        try { runtimeStatus = JSON.parse(fs.readFileSync(runtimeStatusPath, 'utf8')); } catch {}
+
+        const metrics = buildResultMetrics({
+            oszicarTail: readTail('OSZICAR'),
+            outcarTail: readTail('OUTCAR', 500),
+            vaspOutTail: readTail('vasp.out', 200),
+            runtimeStatus,
+            jobRun: { createdAt: job.createdAt, submittedAt: job.createdAt, endedAt: new Date() },
+        });
+
+        const warnings = collectWarnings({
+            jobStdoutTail: readTail('job.stdout.log', 100),
+            jobStderrTail: readTail('job.stderr.log', 100),
+            outcarTail: readTail('OUTCAR', 500),
+            vaspOutTail: readTail('vasp.out', 200),
+            runtimeStatus,
+        });
+
+        // Check for CONTCAR (relaxed structure)
+        const contcarPath = path.join(dir, 'CONTCAR');
+        const hasContcar = fs.existsSync(contcarPath);
+        let contcar = null;
+        if (hasContcar) {
+            try { contcar = fs.readFileSync(contcarPath, 'utf8'); } catch {}
+        }
+
+        res.json({ success: true, jobId, metrics, warnings, hasContcar, contcar });
+    } catch (err) {
+        console.error('[compute/job/results]', err.message);
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -805,29 +995,11 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
-app.post('/api/subscribe', authMiddleware, async (req, res) => {
-    try {
-        const { userId, tier } = req.body;
-        let user = await updateUserFlexible(userId, { tier });
-        user = await enforceAdminPrivileges(user);
-        res.json({ success: true, user });
-    } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
+// ⚠️ /api/subscribe removed — subscriptions MUST go through /api/payment/create
+// to ensure real payment before upgrading tier.
 
-app.post('/api/pay-batch', authMiddleware, async (req, res) => {
-    try {
-        const { userId, count, amount } = req.body;
-        let user = await getUserFlexible(userId);
-        if (!user) return res.status(404).json({ error: 'User not found' });
-        let updatedUser = await updateUserFlexible(userId, { prepaid_img: (user.prepaid_img||0) + count });
-        updatedUser = await enforceAdminPrivileges(updatedUser);
-        res.json({ success: true, orderId: `ORD-${Date.now()}`, user: updatedUser });
-    } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
+// ⚠️ /api/pay-batch removed — batch purchases MUST go through /api/payment/create
+// to ensure real payment before adding quota.
 
 app.post('/api/check-export', authMiddleware, async (req, res) => {
     try {
@@ -1034,22 +1206,41 @@ app.post('/api/admin/users', async (req, res) => {
 let alipaySdk = null;
 try {
     const AlipaySdk = require('alipay-sdk').default;
-    if (process.env.ALIPAY_APP_ID && process.env.ALIPAY_PRIVATE_KEY) {
+    if (process.env.ALIPAY_APP_ID && process.env.ALIPAY_PRIVATE_KEY && process.env.ALIPAY_PUBLIC_KEY) {
         alipaySdk = new AlipaySdk({
             appId: process.env.ALIPAY_APP_ID,
             privateKey: process.env.ALIPAY_PRIVATE_KEY,
             alipayPublicKey: process.env.ALIPAY_PUBLIC_KEY,
             gateway: 'https://openapi.alipay.com/gateway.do',
         });
-        console.log('[Payment] Alipay SDK initialized');
+        console.log('[Payment] ✅ Alipay SDK initialized (REAL payment mode)');
     } else {
-        console.log('[Payment] Alipay not configured — payment/create will return mock QR');
+        const missing = ['ALIPAY_APP_ID', 'ALIPAY_PRIVATE_KEY', 'ALIPAY_PUBLIC_KEY'].filter(k => !process.env[k]);
+        console.warn(`[Payment] ⚠️ Alipay not configured (missing: ${missing.join(', ')}) — payment disabled`);
     }
 } catch (e) {
-    console.log('[Payment] alipay-sdk not installed — payment/create will return mock QR');
+    console.warn('[Payment] ⚠️ alipay-sdk not installed — run: npm install alipay-sdk@3');
 }
 
-// 1. 创建支付订单（前端调用，获取支付链接/二维码）
+// Auto-close expired pending orders every 10 minutes
+setInterval(async () => {
+    try { await Order.closeExpiredOrders(); } catch (e) { /* ignore */ }
+}, 10 * 60 * 1000);
+
+// Helper: fulfill order (grant entitlements based on order type)
+async function fulfillOrder(order) {
+    if (order.type === 'subscription') {
+        await updateUserFlexible(order.userId, { tier: order.tier });
+    } else if (order.type === 'batch') {
+        const user = await getUserFlexible(order.userId);
+        await updateUserFlexible(order.userId, {
+            prepaid_img: (user.prepaid_img || 0) + (order.count || 0)
+        });
+    }
+    // img/vid: no fulfillment needed here — frontend polls then triggers deduct-export
+}
+
+// 1. 创建支付订单（前端调用，获取支付宝二维码）
 app.post('/api/payment/create', authMiddleware, async (req, res) => {
     try {
         const { userId, type, tier, count } = req.body;
@@ -1062,6 +1253,9 @@ app.post('/api/payment/create', authMiddleware, async (req, res) => {
         if (type === 'subscription') {
             if (tier === 'enterprise' || tier === 'academic') {
                 return res.status(400).json({ error: '该方案请联系销售: 18396102509' });
+            }
+            if (user.tier === tier) {
+                return res.status(400).json({ error: '您已经是该方案用户' });
             }
             const tierConfig = PRICING[tier?.toUpperCase()];
             if (!tierConfig) return res.status(400).json({ error: 'Invalid tier' });
@@ -1086,6 +1280,12 @@ app.post('/api/payment/create', authMiddleware, async (req, res) => {
             return res.json({ success: true, free: true });
         }
 
+        // 支付宝必须已配置才能创建付费订单
+        if (!alipaySdk) {
+            console.error('[Payment] Cannot create paid order: Alipay SDK not configured');
+            return res.status(503).json({ error: '支付服务暂未开通，请联系管理员' });
+        }
+
         const orderId = `SCI-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
         await Order.create({
@@ -1095,31 +1295,29 @@ app.post('/api/payment/create', authMiddleware, async (req, res) => {
             tier: tier || null,
             count: count || null,
             amount,
-            status: 'pending',
-            createdAt: new Date()
         });
 
-        // 调用支付宝预下单
-        if (alipaySdk) {
-            const result = await alipaySdk.exec('alipay.trade.precreate', {
-                notify_url: process.env.ALIPAY_NOTIFY_URL,
-                bizContent: {
-                    out_trade_no: orderId,
-                    total_amount: amount.toFixed(2),
-                    subject,
-                },
-            });
+        // 调用支付宝预下单（当面付）
+        const result = await alipaySdk.exec('alipay.trade.precreate', {
+            notify_url: process.env.ALIPAY_NOTIFY_URL,
+            bizContent: {
+                out_trade_no: orderId,
+                total_amount: amount.toFixed(2),
+                subject,
+            },
+        });
 
-            if (result.code === '10000' && result.qrCode) {
-                res.json({ success: true, orderId, qrCode: result.qrCode, amount });
-            } else {
-                console.error('[Payment] Alipay precreate failed:', result);
-                res.status(500).json({ error: 'Alipay order creation failed', detail: result.subMsg || result.msg });
-            }
+        if (result.code === '10000' && result.qrCode) {
+            console.log(`[Payment] Order created: ${orderId}, amount=¥${amount}`);
+            res.json({ success: true, orderId, qrCode: result.qrCode, amount });
         } else {
-            // 支付宝未配置时返回 mock 数据（开发用）
-            console.log(`[Payment] Mock order created: ${orderId}, amount=¥${amount}`);
-            res.json({ success: true, orderId, qrCode: null, amount, mock: true });
+            console.error('[Payment] Alipay precreate failed:', result);
+            // Mark order as closed since we couldn't get a QR code
+            await Order.findOneAndUpdate({ orderId }, { $set: { status: 'closed', closedAt: new Date() } });
+            res.status(500).json({
+                error: '支付宝订单创建失败',
+                detail: result.subMsg || result.msg || 'Unknown error'
+            });
         }
     } catch (error) {
         console.error('[Payment] Create order error:', error);
@@ -1128,41 +1326,52 @@ app.post('/api/payment/create', authMiddleware, async (req, res) => {
 });
 
 // 2. 支付宝异步回调（支付成功后支付宝主动 POST 通知）
+//    注意：此接口不能加 authMiddleware，因为是支付宝服务器调用的
 app.post('/api/payment/alipay-notify', express.urlencoded({ extended: true }), async (req, res) => {
     try {
+        // 验证签名（生产环境必须验签）
         if (alipaySdk) {
             const isValid = alipaySdk.checkNotifySign(req.body);
             if (!isValid) {
-                console.error('[Payment] Invalid notify signature');
+                console.error('[Payment] ❌ Invalid notify signature — possible forgery');
                 return res.send('fail');
             }
+        } else {
+            // 没有 SDK 则无法验签，拒绝所有通知
+            console.error('[Payment] ❌ Received notify but Alipay SDK not configured — rejecting');
+            return res.send('fail');
         }
 
-        const { out_trade_no, trade_status } = req.body;
-        console.log(`[Payment] Notify: order=${out_trade_no}, status=${trade_status}`);
+        const { out_trade_no, trade_no, trade_status, total_amount } = req.body;
+        console.log(`[Payment] Notify: order=${out_trade_no}, alipay_trade=${trade_no}, status=${trade_status}, amount=${total_amount}`);
 
         if (trade_status === 'TRADE_SUCCESS' || trade_status === 'TRADE_FINISHED') {
             const order = await Order.findOne({ orderId: out_trade_no });
-            if (!order || order.status === 'paid') {
-                return res.send('success');
+            if (!order) {
+                console.error(`[Payment] Notify for unknown order: ${out_trade_no}`);
+                return res.send('success'); // 返回 success 让支付宝停止重试
+            }
+            if (order.status === 'paid') {
+                return res.send('success'); // 幂等：已处理过
             }
 
-            // 根据订单类型发放权益
-            if (order.type === 'subscription') {
-                await updateUserFlexible(order.userId, { tier: order.tier });
-            } else if (order.type === 'batch') {
-                const user = await getUserFlexible(order.userId);
-                await updateUserFlexible(order.userId, {
-                    prepaid_img: (user.prepaid_img || 0) + (order.count || 0)
-                });
+            // 金额校验：防止篡改
+            const expectedAmount = parseFloat(order.amount.toFixed(2));
+            const actualAmount = parseFloat(total_amount);
+            if (Math.abs(expectedAmount - actualAmount) > 0.01) {
+                console.error(`[Payment] ❌ Amount mismatch! Expected ¥${expectedAmount}, got ¥${actualAmount}`);
+                return res.send('fail');
             }
-            // img/vid 单次导出：标记 paid 即可，前端轮询后触发 deduct-export
 
+            // 发放权益
+            await fulfillOrder(order);
+
+            // 更新订单状态
             await Order.findOneAndUpdate(
                 { orderId: out_trade_no },
-                { $set: { status: 'paid', paidAt: new Date() } }
+                { $set: { status: 'paid', paidAt: new Date(), alipayTradeNo: trade_no || null } }
             );
-            console.log(`[Payment] Order ${out_trade_no} fulfilled`);
+            console.log(`[Payment] ✅ Order ${out_trade_no} fulfilled (alipay_trade=${trade_no})`);
         }
 
         res.send('success');
@@ -1173,16 +1382,56 @@ app.post('/api/payment/alipay-notify', express.urlencoded({ extended: true }), a
 });
 
 // 3. 前端轮询支付状态
+//    如果本地未标记 paid，则主动查询支付宝交易状态
 app.post('/api/payment/check', authMiddleware, async (req, res) => {
     try {
         const { orderId } = req.body;
         const order = await Order.findOne({ orderId });
         if (!order) return res.status(404).json({ error: 'Order not found' });
 
+        // 已支付 - 直接返回
         if (order.status === 'paid') {
             let user = await getUserFlexible(order.userId);
             user = await enforceAdminPrivileges(user);
             return res.json({ success: true, paid: true, user });
+        }
+
+        // 已关闭 - 不再检查
+        if (order.status === 'closed') {
+            return res.json({ success: true, paid: false, closed: true });
+        }
+
+        // 主动查询支付宝交易状态（应对回调延迟或丢失的情况）
+        if (alipaySdk && order.status === 'pending') {
+            try {
+                const queryResult = await alipaySdk.exec('alipay.trade.query', {
+                    bizContent: { out_trade_no: orderId },
+                });
+                if (queryResult.code === '10000' && queryResult.tradeStatus === 'TRADE_SUCCESS') {
+                    // 金额校验
+                    const expectedAmount = parseFloat(order.amount.toFixed(2));
+                    const actualAmount = parseFloat(queryResult.totalAmount || queryResult.total_amount || '0');
+                    if (Math.abs(expectedAmount - actualAmount) > 0.01) {
+                        console.error(`[Payment] ❌ Query amount mismatch for ${orderId}`);
+                        return res.json({ success: true, paid: false });
+                    }
+
+                    // 发放权益
+                    await fulfillOrder(order);
+                    await Order.findOneAndUpdate(
+                        { orderId },
+                        { $set: { status: 'paid', paidAt: new Date(), alipayTradeNo: queryResult.tradeNo || null } }
+                    );
+                    console.log(`[Payment] ✅ Order ${orderId} fulfilled via active query`);
+
+                    let user = await getUserFlexible(order.userId);
+                    user = await enforceAdminPrivileges(user);
+                    return res.json({ success: true, paid: true, user });
+                }
+            } catch (queryErr) {
+                console.error(`[Payment] Query error for ${orderId}:`, queryErr.message);
+                // 查询失败不影响流程，返回未支付即可
+            }
         }
 
         res.json({ success: true, paid: false });
@@ -1192,7 +1441,7 @@ app.post('/api/payment/check', authMiddleware, async (req, res) => {
     }
 });
 
-// 4. 管理员手动确认订单（开发调试 / 无支付宝时使用）
+// 4. 管理员手动确认订单（仅限开发调试）
 app.post('/api/payment/manual-confirm', async (req, res) => {
     try {
         const { secret, orderId } = req.body;
@@ -1205,14 +1454,7 @@ app.post('/api/payment/manual-confirm', async (req, res) => {
         if (order.status === 'paid') return res.json({ success: true, message: 'Already paid' });
 
         // 发放权益
-        if (order.type === 'subscription') {
-            await updateUserFlexible(order.userId, { tier: order.tier });
-        } else if (order.type === 'batch') {
-            const user = await getUserFlexible(order.userId);
-            await updateUserFlexible(order.userId, {
-                prepaid_img: (user.prepaid_img || 0) + (order.count || 0)
-            });
-        }
+        await fulfillOrder(order);
 
         await Order.findOneAndUpdate(
             { orderId },
@@ -1221,6 +1463,7 @@ app.post('/api/payment/manual-confirm', async (req, res) => {
 
         let user = await getUserFlexible(order.userId);
         user = await enforceAdminPrivileges(user);
+        console.log(`[Payment] ✅ Order ${orderId} manually confirmed by admin`);
         res.json({ success: true, user });
     } catch (error) {
         console.error('[Payment] Manual confirm error:', error);
