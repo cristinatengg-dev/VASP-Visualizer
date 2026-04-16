@@ -533,32 +533,74 @@ const ComputeAgent: React.FC = () => {
                   {compiledInputs && (
                     <>
                       <div className="grid grid-cols-4 gap-3">
-                        {Object.keys(compiledInputs.files).filter(f => f !== 'POTCAR.spec.json').map(file => (
+                        {['INCAR', 'KPOINTS', 'POSCAR', 'POTCAR'].map(file => {
+                          const isPotcar = file === 'POTCAR';
+                          const fileKey = isPotcar ? 'POTCAR' : file;
+                          return (
                           <div
                             key={file}
-                            onClick={() => setSelectedPreviewFile(file)}
+                            onClick={() => setSelectedPreviewFile(fileKey)}
                             className={`p-4 border rounded-2xl flex flex-col items-center gap-2 cursor-pointer transition-all ${
-                              selectedPreviewFile === file
+                              selectedPreviewFile === fileKey
                                 ? 'border-blue-500 bg-blue-50/50 ring-1 ring-blue-500'
                                 : 'border-gray-100 hover:bg-gray-50'
                             }`}
                           >
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${selectedPreviewFile === file ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${selectedPreviewFile === fileKey ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
                               <Eye size={16} />
                             </div>
-                            <span className={`text-xs font-bold font-mono ${selectedPreviewFile === file ? 'text-blue-600' : 'text-[#0A1128]'}`}>{file}</span>
+                            <span className={`text-xs font-bold font-mono ${selectedPreviewFile === fileKey ? 'text-blue-600' : 'text-[#0A1128]'}`}>{file}</span>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       <div className="bg-[#0A1128] rounded-2xl p-6 text-white overflow-hidden relative">
                         <div className="relative z-10">
                           <h4 className="text-[10px] font-bold text-blue-300 uppercase tracking-widest mb-4">
-                            File Preview: {selectedPreviewFile}
+                            {selectedPreviewFile === 'POTCAR' ? 'POTCAR Specification' : `File Preview: ${selectedPreviewFile}`}
                           </h4>
+                          {selectedPreviewFile === 'POTCAR' ? (
+                            <div className="space-y-4">
+                              <p className="text-[11px] text-blue-200/80 leading-relaxed">
+                                POTCAR files contain licensed VASP pseudopotentials and cannot be generated.
+                                When submitting to your HPC cluster, the server will automatically assemble
+                                POTCAR from your cluster's pseudopotential library.
+                              </p>
+                              <div className="mt-3 space-y-2">
+                                <p className="text-[10px] font-bold text-blue-300 uppercase tracking-widest">Required Pseudopotentials</p>
+                                {(() => {
+                                  try {
+                                    const specRaw = compiledInputs.files['POTCAR.spec.json' as keyof typeof compiledInputs.files];
+                                    const spec = specRaw ? JSON.parse(specRaw) : null;
+                                    const symbols: string[] = spec?.symbols || [];
+                                    if (symbols.length === 0) return <p className="text-xs text-white/50">No spec available</p>;
+                                    return (
+                                      <div className="flex flex-wrap gap-2 mt-1">
+                                        {symbols.map((sym: string, i: number) => (
+                                          <span key={i} className="px-3 py-1.5 bg-white/10 rounded-lg text-xs font-mono font-bold text-white">
+                                            {sym} <span className="text-white/40 ml-1">PBE</span>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    );
+                                  } catch {
+                                    return <p className="text-xs text-white/50">Spec not available from compiler</p>;
+                                  }
+                                })()}
+                              </div>
+                              <div className="mt-3 p-3 bg-white/5 rounded-xl border border-white/10">
+                                <p className="text-[10px] text-white/50">
+                                  On job submission, the server runs <code className="text-blue-300">materializeRemotePotcar()</code> via
+                                  SSH to concatenate the correct POTCAR from <code className="text-blue-300">HPC_REMOTE_POTCAR_DIR</code> on your cluster.
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
                           <pre className="text-[11px] font-mono leading-relaxed opacity-90 min-h-[200px] max-h-[400px] overflow-y-auto whitespace-pre-wrap">
                             {(compiledInputs.files as Record<string, string>)[selectedPreviewFile] || '(empty)'}
                           </pre>
+                          )}
                         </div>
                         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 blur-[80px] rounded-full -mr-20 -mt-20" />
                       </div>
