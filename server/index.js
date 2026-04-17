@@ -35,6 +35,7 @@ const { listComputeProfiles, getComputeProfile } = require('./src/compute/profil
 const { submitComputeJob } = require('./src/compute/submit-job');
 const { querySlurmJobStatus, queryPbsJobStatus, queryLocalJobStatus } = require('./src/compute/query-job');
 const { buildResultMetrics, collectWarnings } = require('./src/compute/parse-results');
+const { requireAgentAccess, recordAgentUsage, handleAgentAccessCheck } = require('./src/auth/agent-access');
 
 // --- Fail-fast: required environment variables ---
 const REQUIRED_ENV = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'TOKEN_SECRET'];
@@ -96,6 +97,9 @@ if (process.env.ENABLE_AGENT_RUNTIME_DEMO === '1') {
 
 // Computational catalysis toolkit
 app.use('/api/catalyst', createCatalystRouter());
+
+// Agent access check endpoint
+app.get('/api/agent-access', handleAgentAccessCheck);
 
 const upload = multer({ 
     dest: 'uploads/',
@@ -258,13 +262,13 @@ app.get('/api/health', (req, res) => {
 // ==========================================
 // Modeling Agent Routes
 // ==========================================
-app.post('/api/modeling/parse-intent', async (req, res) => {
+app.post('/api/modeling/parse-intent', requireAgentAccess('modeling'), async (req, res) => {
     try {
         const { prompt } = req.body;
         if (!prompt) return res.status(400).json({ success: false, error: 'Prompt is required' });
         const providerPreferences = normalizeModelingProviderPreferences(req.body?.providerPreferences);
         const parsed = await parseModelingIntent({ prompt, providerPreferences });
-
+        await recordAgentUsage(req.body?.userId, 'modeling');
         res.json({ success: true, intent: parsed });
     } catch (err) {
         console.error('Modeling Intent API error:', err);
@@ -287,7 +291,7 @@ app.get('/api/modeling/providers', async (req, res) => {
     }
 });
 
-app.post('/api/compute/parse-intent', async (req, res) => {
+app.post('/api/compute/parse-intent', requireAgentAccess('compute'), async (req, res) => {
     try {
         const { prompt } = req.body;
         if (!prompt) return res.status(400).json({ success: false, error: 'Prompt is required' });
@@ -336,7 +340,7 @@ app.get('/api/compute/profiles', async (_req, res) => {
     }
 });
 
-app.post('/api/compute/compile', async (req, res) => {
+app.post('/api/compute/compile', requireAgentAccess('compute'), async (req, res) => {
     try {
         const { structure, intent } = req.body;
         if (!structure) {
@@ -1909,7 +1913,7 @@ app.post('/api/agent/parse-pdf', upload.single('file'), async (req, res) => {
 
 // ── Route 1: POST /api/agent/parse-science ────────────────────────────────────
 // Phase 1: Extract scientific entities from abstract/text using Gemini 2.0 Flash
-app.post('/api/agent/parse-science', async (req, res) => {
+app.post('/api/agent/parse-science', requireAgentAccess('rendering'), async (req, res) => {
     const { text } = req.body;
     if (!text || String(text).trim().length < 10) {
         return res.status(400).json({ success: false, error: 'Text too short (min 10 chars)' });
@@ -1926,9 +1930,10 @@ app.post('/api/agent/parse-science', async (req, res) => {
 
 // ── Route: POST /api/agent/retrieve ───────────────────────────────────────────
 // Phase 1: Literature and MP search with SSE stream
-app.post('/api/agent/retrieve', async (req, res) => {
+app.post('/api/agent/retrieve', requireAgentAccess('retrieval'), async (req, res) => {
     const { prompt } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+    await recordAgentUsage(req.body?.userId, 'retrieval');
 
     res.status(200);
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -1986,7 +1991,7 @@ app.post('/api/agent/retrieve', async (req, res) => {
 
 // ── Route 2: POST /api/agent/generate-image ───────────────────────────────────
 // Phase 5: Generate HD images
-app.post('/api/agent/generate-image', async (req, res) => {
+app.post('/api/agent/generate-image', requireAgentAccess('cover'), async (req, res) => {
     const { prompt, numberOfImages = 1, aspectRatio = '9:16', strictNoText = false, strictChemistry = false, requiredSpecies = [], maxAttemptsPerImage = 2 } = req.body;
     if (!prompt || String(prompt).trim().length < 10) {
         return res.status(400).json({ success: false, error: 'Prompt too short' });
@@ -2002,7 +2007,7 @@ app.post('/api/agent/generate-image', async (req, res) => {
             requiredSpecies,
             maxAttemptsPerImage,
         });
-
+        await recordAgentUsage(req.body?.userId, 'cover');
         return res.json({ success: true, images });
     } catch (err) {
         console.error('[agent/generate-image]', err.message);

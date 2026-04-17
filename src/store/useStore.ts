@@ -88,6 +88,10 @@ export interface User {
   used_img: number;
   used_vid: number;
   associated_ips: string[];
+  subscribed_agents?: string[];
+  subscription_expires_at?: string | null;
+  cover_used_this_month?: number;
+  cover_month_key?: string;
 }
 
 // Helper to enforce SVIP for specific user

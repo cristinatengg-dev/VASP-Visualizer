@@ -13,13 +13,18 @@ const createUser = async (email, ip) => {
     return await User.create({
         email,
         tier: 'personal',
-        trial_img_left: 2, // 2 Free High-Res Images
-        trial_vid_left: 1, // 1 Free Video
+        trial_img_left: 2,
+        trial_vid_left: 1,
         prepaid_img: 0,
         prepaid_vid: 0,
         used_img: 0,
         used_vid: 0,
         associated_ips: [ip],
+        subscribed_agents: [],
+        subscription_expires_at: null,
+        cover_used_this_month: 0,
+        cover_month_key: '',
+        agent_daily_usage: {},
         createdAt: new Date(),
         updatedAt: new Date()
     });

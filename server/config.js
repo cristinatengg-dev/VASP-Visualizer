@@ -1,6 +1,5 @@
 
 // Pricing and Quota Configuration
-// 商业模式：个人端 / 高校端 / 企业端
 const PRICING = {
     TRIAL: {
         id: 'trial',
@@ -19,7 +18,7 @@ const PRICING = {
     },
     ACADEMIC: {
         id: 'academic',
-        price: 150000,       // ¥15万/年
+        price: 30000,        // ¥3万/年
         period: 'yearly',
         quota: { img: 9999, vid: 9999 },
         unitPrice: { img: 0, vid: 0 },
@@ -27,7 +26,7 @@ const PRICING = {
     },
     ENTERPRISE: {
         id: 'enterprise',
-        price: 0,            // ¥100万+ 定制化，不走线上支付
+        price: 0,
         period: 'custom',
         quota: { img: 9999, vid: 9999 },
         unitPrice: { img: 0, vid: 0 },
@@ -36,6 +35,28 @@ const PRICING = {
     }
 };
 
-const IP_LIMIT = 5; // Allow for network changes on same devices
+// Agent access policy
+const AGENT_ACCESS = {
+    AGENTS: ['modeling', 'compute', 'rendering', 'cover', 'retrieval'],
 
-module.exports = { PRICING, IP_LIMIT };
+    // Daily free usage for non-subscribed personal/trial users
+    DAILY_FREE: {
+        modeling: 3,
+        compute: 0,     // locked — no free usage
+        rendering: 1,
+        cover: 0,       // locked — no free usage
+        retrieval: 1,
+    },
+
+    // Monthly quota for personal subscribers
+    MONTHLY_QUOTA: {
+        cover: 10,      // 10 covers per month for personal subscribers
+    },
+
+    // These tiers bypass all agent access checks
+    UNLIMITED_TIERS: ['academic', 'enterprise'],
+};
+
+const IP_LIMIT = 5;
+
+module.exports = { PRICING, IP_LIMIT, AGENT_ACCESS };

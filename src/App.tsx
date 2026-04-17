@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { API_BASE_URL } from './config';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { AgentGate } from './components/AgentGate';
 
 // Protected route: redirect to /login if not authenticated
 const AppRoute: React.FC = () => {
@@ -128,10 +129,10 @@ function App() {
       <Route path="/cookie-policy" element={<CookiePolicy />} />
       <Route path="/admin/video-generator" element={<VideoGenerator />} />
       {/* Agent 工作台 */}
-      <Route path="/agent/rendering" element={<AgentRoute><RenderingAgent /></AgentRoute>} />
-      <Route path="/agent/retrieval" element={<AgentRoute><RetrievalAgent /></AgentRoute>} />
-      <Route path="/agent/modeling" element={<AgentRoute><ModelingAgent /></AgentRoute>} />
-      <Route path="/agent/compute" element={<AgentRoute><ComputeAgent /></AgentRoute>} />
+      <Route path="/agent/rendering" element={<AgentRoute><AgentGate agent="rendering" label="Rendering Agent"><RenderingAgent /></AgentGate></AgentRoute>} />
+      <Route path="/agent/retrieval" element={<AgentRoute><AgentGate agent="retrieval" label="Idea Agent"><RetrievalAgent /></AgentGate></AgentRoute>} />
+      <Route path="/agent/modeling" element={<AgentRoute><AgentGate agent="modeling" label="Modeling Agent"><ModelingAgent /></AgentGate></AgentRoute>} />
+      <Route path="/agent/compute" element={<AgentRoute><AgentGate agent="compute" label="Compute Agent"><ComputeAgent /></AgentGate></AgentRoute>} />
       <Route path="/agent/runtime" element={<AgentRoute><RuntimeInspector /></AgentRoute>} />
       {/* 旧路由兼容 */}
       <Route path="/hero" element={<Navigate to="/" replace />} />
