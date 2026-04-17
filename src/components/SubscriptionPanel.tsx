@@ -25,7 +25,7 @@ const PRICING_TABLE = [
     {
         tier: 'academic',
         name: '高校端',
-        price: '¥15万',
+        price: '¥3万',
         period: '/年',
         features: [
             '全平台 Agent 访问',
@@ -53,7 +53,7 @@ const PRICING_TABLE = [
             '每年 15% 后期运维费用',
         ],
         quotaLabel: '定制化方案',
-        extraLabel: '联系销售获取报价',
+        extraLabel: '联系工程师获取报价',
         color: 'bg-white/5',
         textColor: 'text-amber-500',
         icon: Crown,
@@ -214,7 +214,7 @@ export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }
                                                 className="w-full py-3.5 rounded-[24px] font-semibold transition-all flex items-center justify-center gap-2 text-sm border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:border-amber-400/50"
                                             >
                                                 <Phone className="w-4 h-4" />
-                                                联系销售: {(plan as any).contactPhone}
+                                                联系工程师: {(plan as any).contactPhone}
                                             </a>
                                         ) : (
                                         <button

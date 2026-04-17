@@ -1252,7 +1252,7 @@ app.post('/api/payment/create', authMiddleware, async (req, res) => {
 
         if (type === 'subscription') {
             if (tier === 'enterprise' || tier === 'academic') {
-                return res.status(400).json({ error: '该方案请联系销售: 18396102509' });
+                return res.status(400).json({ error: '该方案请联系工程师: 18396102509' });
             }
             if (user.tier === tier) {
                 return res.status(400).json({ error: '您已经是该方案用户' });
