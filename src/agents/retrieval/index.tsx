@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, BookOpen, ChevronRight, Database,
   Lightbulb, Loader2, Search, Sparkles, ExternalLink, Clock,
+  CheckCircle2, Circle,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { API_BASE_URL } from '../../config';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -612,71 +614,156 @@ const IdeaAgent: React.FC = () => {
           {/* Progressive streaming results */}
           {isStreaming && !hasResult && (
             <div className="space-y-3">
-              {streamingPapers.length === 0 && streamingStructures.length === 0 && (
-                <div className="space-y-3">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-300 mb-2 flex items-center gap-1.5">
-                    <Search size={11} className="animate-pulse" /> Searching academic databases...
-                  </p>
-                  {/* Skeleton cards */}
+              {/* Live source status tracker */}
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { key: 'lit_crossref', label: 'CrossRef' },
+                  { key: 'lit_openalex', label: 'OpenAlex' },
+                  { key: 'lit_arxiv', label: 'arXiv' },
+                  { key: 'lit_core', label: 'CORE' },
+                ].map(src => {
+                  const stage = stages.find(s => s.stage === src.key);
+                  const isDone = stage?.status === 'done';
+                  const isActive = stage?.status === 'active';
+                  const count = stage?.papers?.length ?? 0;
+                  return (
+                    <div key={src.key} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all duration-300 ${
+                      isDone ? 'bg-emerald-50 text-emerald-700' : isActive ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-50 text-gray-400'
+                    }`}>
+                      {isDone ? <CheckCircle2 size={10} /> : isActive ? <Loader2 size={10} className="animate-spin" /> : <Circle size={10} />}
+                      <span>{src.label}</span>
+                      {isDone && <span className="ml-auto font-mono text-[9px]">{count}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* MP structure status */}
+              {(() => {
+                const mpStage = stages.find(s => s.stage === 'structure_lookup');
+                if (!mpStage) return null;
+                return (
+                  <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all duration-300 ${
+                    mpStage.status === 'done' ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-600'
+                  }`}>
+                    {mpStage.status === 'done' ? <CheckCircle2 size={10} /> : <Loader2 size={10} className="animate-spin" />}
+                    <span>Materials Project</span>
+                    {mpStage.status === 'done' && <span className="ml-auto font-mono text-[9px]">{streamingStructures.length} structs</span>}
+                  </div>
+                );
+              })()}
+
+              {/* Skeleton cards when no papers yet */}
+              {streamingPapers.length === 0 && (
+                <div className="space-y-2 mt-2">
                   {[1, 2, 3].map(i => (
                     <div key={i} className="rounded-[16px] border border-gray-100 bg-gray-50/50 p-3 space-y-2 animate-pulse">
                       <div className="h-3 bg-gray-200 rounded-full w-3/4" />
                       <div className="h-2.5 bg-gray-100 rounded-full w-1/2" />
                       <div className="h-2 bg-gray-100 rounded-full w-full" />
-                      <div className="h-2 bg-gray-100 rounded-full w-5/6" />
                     </div>
                   ))}
                 </div>
               )}
 
+              {/* Streaming papers — animate each card in */}
               {streamingPapers.length > 0 && (
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1.5">
                     <BookOpen size={11} /> Papers Found ({streamingPapers.length})
                   </p>
                   <div className="space-y-2">
-                    {streamingPapers.slice(0, 8).map((p, i) => <PaperCard key={`stream-${i}`} paper={p} />)}
+                    <AnimatePresence>
+                      {streamingPapers.slice(0, 8).map((p, i) => (
+                        <motion.div
+                          key={`stream-${p.doi || p.title.slice(0, 30)}-${i}`}
+                          initial={{ opacity: 0, y: 12 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: i * 0.05 }}
+                        >
+                          <PaperCard paper={p} />
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
                   </div>
                 </div>
               )}
 
+              {/* Streaming structures */}
               {streamingStructures.length > 0 && (
                 <div className="pt-2">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1.5">
                     <Database size={11} /> Structures ({streamingStructures.length})
                   </p>
                   <div className="space-y-1.5">
-                    {streamingStructures.slice(0, 6).map((s, i) => (
-                      <div key={`struct-${i}`} className="rounded-[12px] border border-gray-100 bg-gray-50/50 p-2.5 text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-[#0A1128]">{s.formula}</span>
-                          <span className="text-[10px] text-gray-400 font-mono">{s.material_id}</span>
-                        </div>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{s.crystal_system} · E_hull={s.energy_above_hull} eV/atom</p>
-                      </div>
-                    ))}
+                    <AnimatePresence>
+                      {streamingStructures.slice(0, 6).map((s, i) => (
+                        <motion.div
+                          key={`struct-${s.material_id}-${i}`}
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.25 }}
+                          className="rounded-[12px] border border-gray-100 bg-gray-50/50 p-2.5 text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-[#0A1128]">{s.formula}</span>
+                            <span className="text-[10px] text-gray-400 font-mono">{s.material_id}</span>
+                          </div>
+                          <p className="text-[10px] text-gray-400 mt-0.5">{s.crystal_system} · E_hull={s.energy_above_hull} eV/atom</p>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
                   </div>
                 </div>
               )}
 
-              {/* Tail indicator */}
-              {(streamingPapers.length > 0 || streamingStructures.length > 0) && (
+              {/* Idea generation indicator */}
+              {stages.find(s => s.stage === 'idea_generation') && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex flex-col items-center gap-3 py-6 border border-indigo-100 bg-indigo-50/30 rounded-[16px]"
+                >
+                  <div className="relative">
+                    <Sparkles size={24} className="text-indigo-500" />
+                    <span className="absolute inset-0 rounded-full bg-indigo-400/20 animate-ping" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-indigo-700">Synthesizing research ideas...</p>
+                    <p className="text-[10px] text-indigo-500 mt-0.5">Analyzing {streamingPapers.length} papers & {streamingStructures.length} structures</p>
+                  </div>
+                  <div className="flex gap-1">
+                    {[0, 1, 2].map(i => (
+                      <span key={i} className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Tail indicator when papers found but ideas not yet generating */}
+              {streamingPapers.length > 0 && !stages.find(s => s.stage === 'idea_generation') && (
                 <div className="flex items-center justify-center gap-2 py-3 text-indigo-400">
                   <Loader2 size={14} className="animate-spin" />
-                  <span className="text-[11px] font-medium">Synthesizing research ideas...</span>
+                  <span className="text-[11px] font-medium">Gathering more evidence...</span>
                 </div>
               )}
             </div>
           )}
 
-          {hasResult && result.idea_cards.map((card) => (
-            <IdeaCardItem
+          {hasResult && result.idea_cards.map((card, idx) => (
+            <motion.div
               key={card.id}
-              card={card}
-              selected={selectedIdeaId === card.id}
-              recommended={card.id === result.recommended_idea_id}
-              onClick={() => setSelectedIdeaId(card.id)}
-            />
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: idx * 0.12 }}
+            >
+              <IdeaCardItem
+                card={card}
+                selected={selectedIdeaId === card.id}
+                recommended={card.id === result.recommended_idea_id}
+                onClick={() => setSelectedIdeaId(card.id)}
+              />
+            </motion.div>
           ))}
 
           {hasResult && result.papers.length > 0 && (
