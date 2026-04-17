@@ -322,8 +322,6 @@ C/H/1.2`
 
   const [batchConfirmState, setBatchConfirmState] = useState<{ show: boolean, total: number, type: 'trial' | 'subscribed' | 'pay', cost: number } | null>(null);
 
-  const payBatch = useStore(state => state.payBatch);
-
   const handleBatchExport = async () => {
     if (uploadedFiles.length === 0) return;
     if (!user) return;

@@ -1930,20 +1930,57 @@ app.post('/api/agent/retrieve', async (req, res) => {
     const { prompt } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.status(200);
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    if (typeof res.flushHeaders === 'function') {
+        res.flushHeaders();
+    }
+
+    let clientClosed = false;
+    const cleanup = () => {
+        clientClosed = true;
+        if (heartbeat) clearInterval(heartbeat);
+    };
 
     const sendChunk = (data) => {
+        if (clientClosed || res.writableEnded) return;
         res.write(`data: ${data}\n\n`);
+        if (typeof res.flush === 'function') {
+            res.flush();
+        }
     };
+
+    const heartbeat = setInterval(() => {
+        if (clientClosed || res.writableEnded) return;
+        res.write(': keepalive\n\n');
+        if (typeof res.flush === 'function') {
+            res.flush();
+        }
+    }, 15000);
+
+    req.on('aborted', cleanup);
+    res.on('close', cleanup);
+    res.on('finish', cleanup);
+
+    // Send an initial comment immediately so proxies treat the response as a live stream.
+    res.write(': connected\n\n');
+    if (typeof res.flush === 'function') {
+        res.flush();
+    }
 
     try {
         await runRetrievalAgentStream(prompt, sendChunk);
     } catch (e) {
         sendChunk(JSON.stringify({ type: 'error', content: e.message }));
     } finally {
-        res.end();
+        cleanup();
+        if (!res.writableEnded) {
+            res.end();
+        }
     }
 });
 

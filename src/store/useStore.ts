@@ -134,8 +134,6 @@ interface AppState {
   logout: () => void;
   checkExport: (type: 'img' | 'vid') => Promise<{ cost: number, status: string }>;
   deductExport: (type: 'img' | 'vid') => Promise<boolean>;
-  payBatch: (count: number, amount: number) => Promise<boolean>;
-  subscribe: (tier: string) => Promise<void>;
   redeemCode: (code: string) => Promise<boolean>;
   refreshUser: () => Promise<void>;
   createPayment: (type: string, tier?: string, count?: number) => Promise<{ success: boolean, orderId?: string, qrCode?: string, amount?: number, free?: boolean, mock?: boolean } | null>;
@@ -529,37 +527,7 @@ export const useStore = create<AppState>((set, get) => ({
       } catch (e) { return false; }
   },
 
-  payBatch: async (count, amount) => {
-      const { user } = get();
-      if (!user) return false;
-      try {
-          const res = await fetch(`${API_BASE_URL}/pay-batch`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('vasp_token')}` },
-              body: JSON.stringify({ userId: user.email, count, amount })
-          });
-          const data = await res.json();
-          if (data.success) {
-              set({ user: enforceSvip(data.user) });
-              return true;
-          }
-          return false;
-      } catch (e) { return false; }
-  },
-  
-  subscribe: async (tier) => {
-      const { user } = get();
-      if (!user) return;
-      try {
-          const res = await fetch(`${API_BASE_URL}/subscribe`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('vasp_token')}` },
-              body: JSON.stringify({ userId: user.email, tier })
-          });
-          const data = await res.json();
-          if (data.success) set({ user: enforceSvip(data.user) });
-      } catch (e) { console.error(e); }
-  },
+  // payBatch and subscribe removed — all payments go through createPayment + pollPayment
 
   createPayment: async (type, tier?, count?) => {
       const { user } = get();

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node server/index.js)",
+      "Bash(curl -s -N -X POST http://localhost:3000/api/agent/retrieve -H 'Content-Type: application/json' -d '{\"\"\"\"prompt\"\"\"\":\"\"\"\"NaCoO2 理论计算\"\"\"\"}')",
+      "Bash(node -e \":*)",
+      "Bash(npm ls:*)",
+      "Bash(npm install:*)",
+      "Bash(git commit:*)",
+      "Bash(ssh -i /Users/a1234/.ssh/vasp_deploy -o ProxyCommand=\"nc -X connect -x 127.0.0.1:7897 %h %p\" -o KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1 -o HostKeyAlgorithms=+ssh-rsa -o ConnectTimeout=10 -p 2222 root@43.154.165.254 \"echo ''SSH OK''\")",
+      "Bash(brew list:*)",
+      "Bash(expect -c ':*)",
+      "Bash(chmod +x /tmp/ssh_deploy.exp)",
+      "Bash(expect /tmp/ssh_deploy.exp)",
+      "Bash(GIT_SSH_COMMAND=\"ssh -i /Users/a1234/.ssh/github_cristina -o IdentitiesOnly=yes -o HostName=github.com -p 22\" git push origin main)",
+      "Bash(sudo dscacheutil:*)",
+      "Bash(sudo killall:*)"
+    ]
+  }
+}
