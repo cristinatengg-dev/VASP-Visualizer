@@ -1,7 +1,7 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, BookOpen, ChevronRight, Database,
-  Lightbulb, Loader2, Search, Sparkles, ExternalLink,
+  Lightbulb, Loader2, Search, Sparkles, ExternalLink, Clock,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';
@@ -124,6 +124,13 @@ const StageRow: React.FC<{ ev: StageEvent }> = ({ ev }) => (
       <p className={`text-xs font-semibold ${ev.status === 'active' ? 'text-indigo-600' : 'text-gray-700'}`}>
         {ev.title}
       </p>
+      {ev.status === 'active' && (
+        <div className="mt-1 flex gap-1">
+          <span className="inline-block w-8 h-1.5 bg-indigo-200 rounded-full animate-pulse" />
+          <span className="inline-block w-12 h-1.5 bg-indigo-100 rounded-full animate-pulse delay-100" />
+          <span className="inline-block w-6 h-1.5 bg-indigo-100 rounded-full animate-pulse delay-200" />
+        </div>
+      )}
       {ev.content && ev.status === 'done' && (
         <div className="mt-0.5 space-y-0.5">
           {ev.content.split('\n').map((line, i) => (
@@ -132,6 +139,16 @@ const StageRow: React.FC<{ ev: StageEvent }> = ({ ev }) => (
             </p>
           ))}
         </div>
+      )}
+      {ev.status === 'done' && ev.papers && ev.papers.length > 0 && (
+        <p className="text-[10px] text-emerald-600 font-medium mt-0.5">
+          +{ev.papers.length} paper{ev.papers.length > 1 ? 's' : ''}
+        </p>
+      )}
+      {ev.status === 'done' && ev.structures && ev.structures.length > 0 && (
+        <p className="text-[10px] text-emerald-600 font-medium mt-0.5">
+          +{ev.structures.length} structure{ev.structures.length > 1 ? 's' : ''}
+        </p>
       )}
     </div>
   </div>
@@ -357,9 +374,24 @@ const IdeaAgent: React.FC = () => {
   const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
   const [streamingPapers, setStreamingPapers] = useState<Paper[]>([]);
   const [streamingStructures, setStreamingStructures] = useState<Structure[]>([]);
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const selectedCard = result?.idea_cards.find((c) => c.id === selectedIdeaId) ?? null;
+
+  // Elapsed timer during streaming
+  useEffect(() => {
+    if (isStreaming) {
+      setElapsed(0);
+      timerRef.current = setInterval(() => setElapsed(t => t + 1), 1000);
+    } else {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isStreaming]);
+
+  const formatElapsed = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   const updateStage = useCallback((ev: StageEvent) => {
     setStages((prev) => {
@@ -549,7 +581,13 @@ const IdeaAgent: React.FC = () => {
                 <span className="text-[10px] font-bold text-indigo-500">
                   {activeStage?.title || 'Initializing...'}
                 </span>
-                <span className="text-[10px] font-mono text-gray-400">{doneStages}/{totalStages}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-gray-400">{doneStages}/{totalStages}</span>
+                  <span className="flex items-center gap-1 text-[10px] font-mono text-gray-400">
+                    <Clock size={9} />
+                    {formatElapsed(elapsed)}
+                  </span>
+                </div>
               </div>
               <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
@@ -575,9 +613,19 @@ const IdeaAgent: React.FC = () => {
           {isStreaming && !hasResult && (
             <div className="space-y-3">
               {streamingPapers.length === 0 && streamingStructures.length === 0 && (
-                <div className="flex items-center justify-center py-12 gap-2 text-gray-400">
-                  <Search size={16} className="animate-pulse" />
-                  <span className="text-xs">Searching databases...</span>
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-300 mb-2 flex items-center gap-1.5">
+                    <Search size={11} className="animate-pulse" /> Searching academic databases...
+                  </p>
+                  {/* Skeleton cards */}
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="rounded-[16px] border border-gray-100 bg-gray-50/50 p-3 space-y-2 animate-pulse">
+                      <div className="h-3 bg-gray-200 rounded-full w-3/4" />
+                      <div className="h-2.5 bg-gray-100 rounded-full w-1/2" />
+                      <div className="h-2 bg-gray-100 rounded-full w-full" />
+                      <div className="h-2 bg-gray-100 rounded-full w-5/6" />
+                    </div>
+                  ))}
                 </div>
               )}
 
