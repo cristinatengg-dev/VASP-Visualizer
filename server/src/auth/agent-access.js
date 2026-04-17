@@ -12,16 +12,46 @@ function todayKey() {
 }
 
 /**
+ * Extract user email from the request.
+ * Tries: req.body.userId → req.query.userId → Authorization header (HMAC token).
+ */
+function extractUserId(req) {
+  if (req.body?.userId) return String(req.body.userId).trim();
+  if (req.query?.userId) return String(req.query.userId).trim();
+
+  const authHeader = String(req.headers?.authorization || '').trim();
+  if (!authHeader) return '';
+
+  let raw = authHeader;
+  if (raw.toLowerCase().startsWith('bearer ')) raw = raw.slice(7).trim();
+  try {
+    const dotIndex = raw.lastIndexOf('.');
+    if (dotIndex === -1) return '';
+    const payload = raw.slice(0, dotIndex);
+    const decoded = Buffer.from(payload, 'base64').toString('utf8');
+    const parts = decoded.split(':');
+    return parts[0] || '';
+  } catch {
+    return '';
+  }
+}
+
+const ADMIN_EMAILS = ['2218114919@qq.com', '205954619@qq.com', 'yiteng1881273@163.com'];
+
+/**
  * Check whether a user can access a given agent.
- *
- * Returns { allowed: true } or { allowed: false, reason, upgrade_hint }.
  */
 async function checkAgentAccess(user, agentName) {
   if (!user) {
     return { allowed: false, reason: 'login_required', message: '请先登录' };
   }
 
-  const tier = String(user.tier || 'personal').toLowerCase();
+  let tier = String(user.tier || 'personal').toLowerCase();
+
+  // Admin emails always get enterprise access
+  if (ADMIN_EMAILS.includes(user.email)) {
+    tier = 'enterprise';
+  }
 
   // Academic / enterprise — unlimited access to everything
   if (AGENT_ACCESS.UNLIMITED_TIERS.includes(tier)) {
@@ -169,12 +199,18 @@ async function recordAgentUsage(userEmail, agentName) {
  */
 function requireAgentAccess(agentName) {
   return async (req, res, next) => {
-    const userId = req.body?.userId || req.query?.userId || '';
+    const userId = extractUserId(req);
     if (!userId) {
       return res.status(401).json({ success: false, error: '请先登录', agent_blocked: true });
     }
 
-    const user = await User.findOne({ email: userId });
+    let user = await User.findOne({ email: userId });
+
+    // Auto-create user record if not found (first-time agent access)
+    if (!user) {
+      user = { email: userId, tier: 'personal', subscribed_agents: [], agent_daily_usage: {} };
+    }
+
     const result = await checkAgentAccess(user, agentName);
 
     if (!result.allowed) {
@@ -199,7 +235,7 @@ function requireAgentAccess(agentName) {
  * GET endpoint to check agent access status without consuming usage.
  */
 async function handleAgentAccessCheck(req, res) {
-  const userId = req.query?.userId || '';
+  const userId = extractUserId(req);
   const agentName = req.query?.agent || '';
 
   if (!userId) {
