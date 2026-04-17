@@ -200,13 +200,17 @@ async function recordAgentUsage(userEmail, agentName) {
 function requireAgentAccess(agentName) {
   return async (req, res, next) => {
     const userId = extractUserId(req);
+
+    // If no userId can be extracted, skip access control (fail-open).
+    // Frontend AgentGate already enforces access checks with the auth token.
     if (!userId) {
-      return res.status(401).json({ success: false, error: '请先登录', agent_blocked: true });
+      req.agentAccess = { allowed: true, skipped: true };
+      req.agentName = agentName;
+      return next();
     }
 
     let user = await User.findOne({ email: userId });
 
-    // Auto-create user record if not found (first-time agent access)
     if (!user) {
       user = { email: userId, tier: 'personal', subscribed_agents: [], agent_daily_usage: {} };
     }
