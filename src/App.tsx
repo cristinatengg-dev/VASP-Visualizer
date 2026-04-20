@@ -9,6 +9,7 @@ import Manual from './pages/Manual';
 import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import CookiePolicy from './pages/CookiePolicy';
+import MaterialsExplorer from './pages/MaterialsExplorer';
 import RenderingAgent from './agents/rendering';
 import ModelingAgent from './agents/modeling';
 import ComputeAgent from './agents/compute';
@@ -123,6 +124,7 @@ function App() {
       <Route path="/app" element={<AppRoute />} />
       {/* 其他页面 */}
       <Route path="/explore" element={<Explore />} />
+      <Route path="/materials" element={<MaterialsExplorer />} />
       <Route path="/manual" element={<Manual />} />
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />

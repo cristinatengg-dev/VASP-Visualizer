@@ -32,6 +32,7 @@ import {
   LogIn,
   Box,
   BookOpen,
+  Database,
 } from "lucide-react";
 import { useStore } from "../store/useStore";
 import { LEGAL_LINKS } from "../constants/legal";
@@ -603,6 +604,23 @@ const HeroSection: React.FC = () => {
                 onClick={() => handleAgentOpen(card)}
               />
             ))}
+          </motion.div>
+
+          {/* ⑤-b Materials Explorer entry */}
+          <motion.div variants={itemVariants} className="w-full mt-1">
+            <button
+              onClick={() => navigate("/materials")}
+              className="w-full flex items-center gap-4 p-4 bg-white/80 border border-gray-100 rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgba(26,42,78,0.08)] hover:border-gray-200 hover:-translate-y-0.5 active:translate-y-0 transition-all text-left group"
+            >
+              <div className="w-10 h-10 rounded-[14px] bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center shrink-0">
+                <Database size={18} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-[#0A1128]">Battery Materials Explorer</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">Search MP + OQMD + AFLOW simultaneously — structures, energies, band gaps</p>
+              </div>
+              <ChevronRight size={14} className="text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+            </button>
           </motion.div>
 
           {/* ⑥ 版权区 */}

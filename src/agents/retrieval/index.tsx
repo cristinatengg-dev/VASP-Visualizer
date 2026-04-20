@@ -34,6 +34,7 @@ interface Structure {
   material_id: string; formula: string; crystal_system: string;
   space_group: string | null; energy_above_hull: string;
   theoretical: boolean | null; selection_reason: string;
+  source?: string; formation_energy?: string | null; band_gap?: string | null;
 }
 
 interface Blueprint {
@@ -485,7 +486,7 @@ const IdeaAgent: React.FC = () => {
 
   const hasResult = result !== null;
   const doneStages = stages.filter((s) => s.status === 'done').length;
-  const totalStages = 8; // goal, translate, 4x lit, structure, ideas
+  const totalStages = 10; // goal, translate, 4x lit, structure(MP), oqmd, aflow, ideas
   const activeStage = stages.find((s) => s.status === 'active');
 
   return (
@@ -648,10 +649,30 @@ const IdeaAgent: React.FC = () => {
                   }`}>
                     {mpStage.status === 'done' ? <CheckCircle2 size={10} /> : <Loader2 size={10} className="animate-spin" />}
                     <span>Materials Project</span>
-                    {mpStage.status === 'done' && <span className="ml-auto font-mono text-[9px]">{streamingStructures.length} structs</span>}
+                    {mpStage.status === 'done' && <span className="ml-auto font-mono text-[9px]">{mpStage.structures?.length || 0} structs</span>}
                   </div>
                 );
               })()}
+
+              {/* OQMD + AFLOW database status */}
+              {[
+                { key: 'db_oqmd', label: 'OQMD' },
+                { key: 'db_aflow', label: 'AFLOW' },
+              ].map(db => {
+                const stage = stages.find(s => s.stage === db.key);
+                if (!stage) return null;
+                const isDone = stage.status === 'done';
+                const count = stage.structures?.length ?? 0;
+                return (
+                  <div key={db.key} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all duration-300 ${
+                    isDone ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-600'
+                  }`}>
+                    {isDone ? <CheckCircle2 size={10} /> : <Loader2 size={10} className="animate-spin" />}
+                    <span>{db.label}</span>
+                    {isDone && <span className="ml-auto font-mono text-[9px]">{count} entries</span>}
+                  </div>
+                );
+              })}
 
               {/* Skeleton cards when no papers yet */}
               {streamingPapers.length === 0 && (
@@ -708,8 +729,20 @@ const IdeaAgent: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-bold text-[#0A1128]">{s.formula}</span>
                             <span className="text-[10px] text-gray-400 font-mono">{s.material_id}</span>
+                            {s.source && (
+                              <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${
+                                s.source === 'OQMD' ? 'bg-violet-50 text-violet-600 border-violet-200'
+                                : s.source === 'AFLOW' ? 'bg-sky-50 text-sky-600 border-sky-200'
+                                : 'bg-gray-50 text-gray-500 border-gray-200'
+                              }`}>{s.source}</span>
+                            )}
                           </div>
-                          <p className="text-[10px] text-gray-400 mt-0.5">{s.crystal_system} · E_hull={s.energy_above_hull} eV/atom</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {s.crystal_system}
+                            {s.energy_above_hull !== 'N/A' && ` · E_hull=${s.energy_above_hull} eV/atom`}
+                            {s.formation_energy && ` · ΔHf=${s.formation_energy}`}
+                            {s.band_gap && ` · Eg=${s.band_gap} eV`}
+                          </p>
                         </motion.div>
                       ))}
                     </AnimatePresence>

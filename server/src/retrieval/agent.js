@@ -263,6 +263,88 @@ async function searchMaterialsProject(formula) {
   };
 }
 
+// ─── OQMD (Open Quantum Materials Database) ──────────────────────────────────
+
+async function searchOQMD(formula, limit = 4) {
+  const url = `https://oqmd.org/oqmdapi/formationenergy?composition=${encodeURIComponent(formula)}&fields=name,entry_id,spacegroup,delta_e,stability,band_gap&limit=${limit}`;
+  const res = await httpGet(url);
+  if (!res.ok) return { success: false, error: `OQMD API ${res.status}` };
+
+  const parsed = safeJson(res.body);
+  const docs = parsed?.data || [];
+  if (!Array.isArray(docs) || docs.length === 0) {
+    return { success: true, results: [] };
+  }
+
+  docs.sort((a, b) => (a.stability ?? 999) - (b.stability ?? 999));
+
+  return {
+    success: true,
+    results: docs.slice(0, 4).map((doc) => ({
+      material_id: `oqmd-${doc.entry_id}`,
+      formula: doc.name || formula,
+      crystal_system: doc.spacegroup || 'Unknown',
+      space_group: doc.spacegroup || null,
+      energy_above_hull: doc.stability !== undefined && doc.stability !== null ? Number(doc.stability).toFixed(3) : 'N/A',
+      formation_energy: doc.delta_e !== undefined ? Number(doc.delta_e).toFixed(3) : null,
+      band_gap: doc.band_gap !== undefined ? Number(doc.band_gap).toFixed(2) : null,
+      theoretical: null,
+      source: 'OQMD',
+      selection_reason: doc.stability === 0
+        ? 'Ground state (OQMD hull)'
+        : doc.stability !== undefined
+          ? `${Number(doc.stability).toFixed(3)} eV/atom above hull (OQMD)`
+          : 'OQMD entry',
+    })),
+  };
+}
+
+// ─── AFLOW ───────────────────────────────────────────────────────────────────
+
+function formulaToSpecies(formula) {
+  const matches = formula.match(/[A-Z][a-z]?/g);
+  return matches ? [...new Set(matches)] : [];
+}
+
+async function searchAFLOW(formula, limit = 4) {
+  const species = formulaToSpecies(formula);
+  if (species.length === 0) return { success: false, error: 'No species extracted.' };
+
+  const speciesStr = species.join(',');
+  const url = `https://aflow.org/API/aflux/?species(${speciesStr}),nspecies(${species.length}),paging(1),format(json)`;
+  const res = await httpGet(url);
+  if (!res.ok) return { success: false, error: `AFLOW API ${res.status}` };
+
+  const parsed = safeJson(res.body);
+  if (!parsed || typeof parsed !== 'object') return { success: true, results: [] };
+
+  const entries = Object.values(parsed).filter((e) => e && typeof e === 'object' && e.compound);
+
+  const seen = new Set();
+  const deduped = [];
+  for (const entry of entries) {
+    const key = `${entry.compound}_${entry.spacegroup_relax}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(entry);
+    }
+  }
+
+  return {
+    success: true,
+    results: deduped.slice(0, limit).map((entry) => ({
+      material_id: entry.auid || 'N/A',
+      formula: entry.compound || formula,
+      crystal_system: entry.Pearson_symbol_relax || 'Unknown',
+      space_group: entry.spacegroup_relax ? String(entry.spacegroup_relax) : null,
+      energy_above_hull: 'N/A',
+      theoretical: null,
+      source: 'AFLOW',
+      selection_reason: `AFLOW entry — spacegroup ${entry.spacegroup_relax || '?'}, Pearson ${entry.Pearson_symbol_relax || '?'}`,
+    })),
+  };
+}
+
 // ─── LLM helpers ─────────────────────────────────────────────────────────────
 
 async function llm(messages, opts = {}) {
@@ -560,19 +642,23 @@ User prompt: "${userPrompt}"`,
       }).catch(() => { emit({ type: 'stage', stage: 'lit_core', title: 'CORE — unavailable', status: 'done' }); return []; }),
     ]);
 
-    // Start MP structure lookup in parallel (use heuristic formula)
+    // Start structure database lookups in parallel (MP + OQMD + AFLOW)
     const mpFormulas = heuristicFormula ? [heuristicFormula] : [];
     emit({
       type: 'stage', stage: 'structure_lookup',
       title: mpFormulas.length > 0 ? `Searching Materials Project — ${mpFormulas.join(', ')}` : 'Searching Materials Project',
       status: 'active',
     });
+    emit({ type: 'stage', stage: 'db_oqmd', title: 'Searching OQMD…', status: 'active' });
+    emit({ type: 'stage', stage: 'db_aflow', title: 'Searching AFLOW…', status: 'active' });
+
+    let oqmdStructures = [];
+    let aflowStructures = [];
 
     const mpSearchPromise = (async () => {
-      // Wait for LLM to finish to get better formulas, but with a timeout
       const raceResult = await Promise.race([
         llmIntentPromise.then(() => intent.candidate_formulas?.slice(0, 2) || []),
-        new Promise((resolve) => setTimeout(() => resolve([]), 5000)), // 5s max wait
+        new Promise((resolve) => setTimeout(() => resolve([]), 5000)),
       ]);
       const finalFormulas = (Array.isArray(raceResult) && raceResult.length > 0) ? raceResult : mpFormulas;
 
@@ -587,13 +673,63 @@ User prompt: "${userPrompt}"`,
         status: 'done',
         content: allStructures.length > 0
           ? allStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (${s.crystal_system}, E_hull=${s.energy_above_hull})`).join('\n')
-          : 'Using literature guidance only.',
+          : 'No MP results.',
         structures: allStructures,
       });
     })();
 
+    const oqmdSearchPromise = (async () => {
+      const raceResult = await Promise.race([
+        llmIntentPromise.then(() => intent.candidate_formulas?.slice(0, 2) || []),
+        new Promise((resolve) => setTimeout(() => resolve([]), 5000)),
+      ]);
+      const finalFormulas = (Array.isArray(raceResult) && raceResult.length > 0) ? raceResult : mpFormulas;
+
+      for (const formula of finalFormulas.slice(0, 2)) {
+        const oqmdResult = await searchOQMD(formula, 4);
+        if (oqmdResult.success) oqmdStructures.push(...oqmdResult.results);
+      }
+
+      emit({
+        type: 'stage', stage: 'db_oqmd',
+        title: oqmdStructures.length > 0 ? `OQMD — ${oqmdStructures.length} entries` : 'OQMD — no results',
+        status: 'done',
+        content: oqmdStructures.length > 0
+          ? oqmdStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (${s.space_group}, ΔHf=${s.formation_energy || '?'} eV/atom)`).join('\n')
+          : 'No OQMD results.',
+        structures: oqmdStructures,
+      });
+    })().catch(() => {
+      emit({ type: 'stage', stage: 'db_oqmd', title: 'OQMD — unavailable', status: 'done' });
+    });
+
+    const aflowSearchPromise = (async () => {
+      const raceResult = await Promise.race([
+        llmIntentPromise.then(() => intent.candidate_formulas?.slice(0, 2) || []),
+        new Promise((resolve) => setTimeout(() => resolve([]), 5000)),
+      ]);
+      const finalFormulas = (Array.isArray(raceResult) && raceResult.length > 0) ? raceResult : mpFormulas;
+
+      for (const formula of finalFormulas.slice(0, 1)) {
+        const aflowResult = await searchAFLOW(formula, 4);
+        if (aflowResult.success) aflowStructures.push(...aflowResult.results);
+      }
+
+      emit({
+        type: 'stage', stage: 'db_aflow',
+        title: aflowStructures.length > 0 ? `AFLOW — ${aflowStructures.length} entries` : 'AFLOW — no results',
+        status: 'done',
+        content: aflowStructures.length > 0
+          ? aflowStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (SG ${s.space_group}, ${s.crystal_system})`).join('\n')
+          : 'No AFLOW results.',
+        structures: aflowStructures,
+      });
+    })().catch(() => {
+      emit({ type: 'stage', stage: 'db_aflow', title: 'AFLOW — unavailable', status: 'done' });
+    });
+
     // ── Wait for all parallel work to complete ──
-    const [litResults] = await Promise.all([litSearchPromise, mpSearchPromise, llmIntentPromise]);
+    const [litResults] = await Promise.all([litSearchPromise, mpSearchPromise, oqmdSearchPromise, aflowSearchPromise, llmIntentPromise]);
 
     // Deduplicate papers
     const allPapers = litResults.flat();
@@ -606,6 +742,9 @@ User prompt: "${userPrompt}"`,
       }
     }
     papers = papers.slice(0, 10);
+
+    // Merge OQMD + AFLOW structures into allStructures (after MP)
+    allStructures.push(...oqmdStructures, ...aflowStructures);
 
     // If LLM gave us a better literature query and we got few results, do a supplementary search
     const llmQuery = intent.literature_query || '';
@@ -638,8 +777,8 @@ User prompt: "${userPrompt}"`,
       ).join('\n');
 
       const structureSummary = allStructures.map((structure) =>
-        `${structure.formula} — ${structure.material_id}, ${structure.crystal_system}, E_hull=${structure.energy_above_hull} eV/atom (${structure.selection_reason})`
-      ).join('\n') || 'No MP structures retrieved.';
+        `${structure.formula} — ${structure.material_id}, ${structure.crystal_system}, E_hull=${structure.energy_above_hull} eV/atom${structure.source ? ` [${structure.source}]` : ''} (${structure.selection_reason})`
+      ).join('\n') || 'No structures retrieved from any database.';
 
       const ideaRaw = await llm([
         {
@@ -653,7 +792,7 @@ Research type hinted: ${intent.research_type}
 Literature evidence (from CrossRef/OpenAlex/arXiv/CORE):
 ${paperSummary}
 
-Materials Project structures:
+Materials database structures (Materials Project + OQMD + AFLOW):
 ${structureSummary}
 
 Generate 2-3 research idea cards. For each idea, provide concrete literature-grounded modeling advice.
@@ -797,4 +936,4 @@ Return ONLY a JSON object — no markdown, no prose:
   }
 }
 
-module.exports = { runRetrievalAgentStream };
+module.exports = { runRetrievalAgentStream, searchMaterialsProject, searchOQMD, searchAFLOW };

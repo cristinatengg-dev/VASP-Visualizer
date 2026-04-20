@@ -28,7 +28,7 @@ const { parseSciencePdfFile } = require('./src/rendering/parse-pdf');
 const { parseScienceText } = require('./src/rendering/parse-science');
 const { validateRenderingImage } = require('./src/rendering/validate-image');
 const { generateRenderingImages } = require('./src/rendering/generate-image');
-const { runRetrievalAgentStream } = require('./src/retrieval/agent');
+const { runRetrievalAgentStream, searchMaterialsProject, searchOQMD, searchAFLOW } = require('./src/retrieval/agent');
 const { createCatalystRouter } = require('./src/catalyst/router');
 const { compileComputeInputSet } = require('./src/compute/compile-input-set');
 const { listComputeProfiles, getComputeProfile } = require('./src/compute/profiles');
@@ -1987,6 +1987,26 @@ app.post('/api/agent/retrieve', requireAgentAccess('retrieval'), async (req, res
             res.end();
         }
     }
+});
+
+// ── Route: GET /api/materials/search — Battery Materials Explorer ─────────────
+app.get('/api/materials/search', async (req, res) => {
+    const { formula } = req.query;
+    if (!formula) return res.status(400).json({ error: 'formula query parameter is required' });
+
+    const results = { mp: [], oqmd: [], aflow: [] };
+
+    const [mpRes, oqmdRes, aflowRes] = await Promise.allSettled([
+        searchMaterialsProject(formula),
+        searchOQMD(formula, 6),
+        searchAFLOW(formula, 6),
+    ]);
+
+    if (mpRes.status === 'fulfilled' && mpRes.value.success) results.mp = mpRes.value.results;
+    if (oqmdRes.status === 'fulfilled' && oqmdRes.value.success) results.oqmd = oqmdRes.value.results;
+    if (aflowRes.status === 'fulfilled' && aflowRes.value.success) results.aflow = aflowRes.value.results;
+
+    res.json({ success: true, formula, results });
 });
 
 // ── Route 2: POST /api/agent/generate-image ───────────────────────────────────
