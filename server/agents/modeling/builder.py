@@ -180,85 +180,212 @@ def create_rocksalt_structure(a: float, species_a: str, species_b: str) -> Struc
     )
 
 def get_fallback_structure(formula: str) -> Tuple[Optional[Structure], Optional[str]]:
-    """Provide common structures when MP API is blocked."""
+    """Provide common structures when external APIs are unreachable."""
     sys.stderr.write(f"Fallback: Searching for '{formula}' locally...\n")
-    
-    # Normalize simple case
+
     f = formula.strip()
-    
+    f_lower = f.lower().replace(' ', '').replace('-', '')
+
+    # Descriptive name aliases → canonical formula
+    DESCRIPTIVE_ALIASES = {
+        'p2layeredoxide': 'NaCoO2',
+        'p2type': 'NaCoO2',
+        'p2typelayeredoxide': 'NaCoO2',
+        'o3layeredoxide': 'LiCoO2',
+        'o3type': 'LiCoO2',
+        'layeredoxide': 'LiCoO2',
+        'lfp': 'LiFePO4',
+        'lco': 'LiCoO2',
+        'lmo': 'LiMn2O4',
+        'nmc': 'LiNiO2',
+        'nca': 'LiNiO2',
+        'nasicon': 'Na3V2P3O12',
+        'spinel': 'LiMn2O4',
+        'olivine': 'LiFePO4',
+        'garnet': 'Li7La3Zr2O12',
+        'perovskite': 'SrTiO3',
+        'rutile': 'TiO2',
+        'wurtzite': 'ZnO',
+        'rocksalt': 'NaCl',
+        'fluorite': 'CeO2',
+    }
+
+    resolved = DESCRIPTIVE_ALIASES.get(f_lower, f)
+
     try:
-        # FCC Metals
-        if f in ["Cu", "Ag", "Au", "Al", "Ni", "Pt", "Pd"]:
-            # Approx lattice constants (Angstroms)
-            lattice_constants = {
-                "Cu": 3.61, "Ag": 4.09, "Au": 4.08, "Al": 4.05, 
-                "Ni": 3.52, "Pt": 3.92, "Pd": 3.89
-            }
-            a = lattice_constants.get(f, 3.8)
-            # Create conventional standard FCC
-            s = Structure.from_spacegroup("Fm-3m", Lattice.cubic(a), [f], [[0, 0, 0]])
-            return s, f"{f} (Fallback FCC)"
-            
-        # BCC Metals
-        elif f in ["Fe", "W", "Mo", "Ta"]:
-            lattice_constants = {
-                "Fe": 2.87, "W": 3.16, "Mo": 3.15, "Ta": 3.30
-            }
-            a = lattice_constants.get(f, 3.0)
-            s = Structure.from_spacegroup("Im-3m", Lattice.cubic(a), [f], [[0, 0, 0]])
-            return s, f"{f} (Fallback BCC)"
-            
-        # Diamond/Zincblende
-        elif f in ["Si", "Ge", "C"]:
-            lc = {"Si": 5.43, "Ge": 5.66, "C": 3.57}
-            a = lc.get(f, 5.43)
-            s = Structure.from_spacegroup("Fd-3m", Lattice.cubic(a), [f], [[0, 0, 0]])
-            return s, f"{f} (Fallback Diamond)"
-            
-        # Simple Oxides
-        elif f == "TiO2":
-            # Rutile TiO2 (P42/mnm)
-            a = 4.594
-            c = 2.959
-            latt = Lattice.tetragonal(a, c)
-            s = Structure.from_spacegroup("P42/mnm", latt, ["Ti", "O"], 
-                                        [[0,0,0], [0.305, 0.305, 0]])
+        # ── FCC Metals ──
+        fcc_lc = {"Cu": 3.61, "Ag": 4.09, "Au": 4.08, "Al": 4.05, "Ni": 3.52, "Pt": 3.92, "Pd": 3.89}
+        if resolved in fcc_lc:
+            a = fcc_lc[resolved]
+            s = Structure.from_spacegroup("Fm-3m", Lattice.cubic(a), [resolved], [[0, 0, 0]])
+            return s, f"{resolved} (Fallback FCC)"
+
+        # ── BCC Metals ──
+        bcc_lc = {"Fe": 2.87, "W": 3.16, "Mo": 3.15, "Ta": 3.30, "Cr": 2.88, "V": 3.03, "Nb": 3.30}
+        if resolved in bcc_lc:
+            a = bcc_lc[resolved]
+            s = Structure.from_spacegroup("Im-3m", Lattice.cubic(a), [resolved], [[0, 0, 0]])
+            return s, f"{resolved} (Fallback BCC)"
+
+        # ── Diamond/Zincblende ──
+        diamond_lc = {"Si": 5.43, "Ge": 5.66, "C": 3.57}
+        if resolved in diamond_lc:
+            a = diamond_lc[resolved]
+            s = Structure.from_spacegroup("Fd-3m", Lattice.cubic(a), [resolved], [[0, 0, 0]])
+            return s, f"{resolved} (Fallback Diamond)"
+
+        # ── Simple Oxides ──
+        if resolved == "TiO2":
+            latt = Lattice.tetragonal(4.594, 2.959)
+            s = Structure.from_spacegroup("P42/mnm", latt, ["Ti", "O"], [[0,0,0], [0.305, 0.305, 0]])
             return s, "TiO2 (Fallback Rutile)"
-            
-        elif f == "ZnO":
-            # Wurtzite ZnO (P63mc)
-            a = 3.25
-            c = 5.20
-            latt = Lattice.hexagonal(a, c)
-            # Zn at (1/3, 2/3, 0), O at (1/3, 2/3, 0.375)
-            s = Structure.from_spacegroup("P63mc", latt, ["Zn", "O"],
-                                        [[1/3, 2/3, 0], [1/3, 2/3, 0.375]])
+
+        if resolved == "ZnO":
+            latt = Lattice.hexagonal(3.25, 5.20)
+            s = Structure.from_spacegroup("P63mc", latt, ["Zn", "O"], [[1/3, 2/3, 0], [1/3, 2/3, 0.375]])
             return s, "ZnO (Fallback Wurtzite)"
 
-        # Rocksalt structures (NaCl, MgO)
-        elif f == "NaCl":
+        if resolved == "NaCl":
             s = create_rocksalt_structure(5.64, "Na", "Cl")
             return s, "NaCl (Fallback Rocksalt)"
-            
-        elif f == "MgO":
+
+        if resolved == "MgO":
             s = create_rocksalt_structure(4.212, "Mg", "O")
             return s, "MgO (Fallback Rocksalt)"
-            
-        elif f == "Graphite" or f == "Graphene" or f == "C":
-            # Graphite (P63/mmc)
-            # a=2.46, c=6.71
-            a = 2.46
-            c = 6.71
-            latt = Lattice.hexagonal(a, c)
-            # C at (0,0,0), (0,0,0.5), (1/3, 2/3, 0), (2/3, 1/3, 0.5)
-            # This is Bernal stacked graphite
-            s = Structure.from_spacegroup("P63/mmc", latt, ["C", "C"],
-                                        [[0, 0, 0], [1/3, 2/3, 0]])
+
+        if resolved == "CeO2":
+            s = Structure.from_spacegroup("Fm-3m", Lattice.cubic(5.411), ["Ce", "O"], [[0,0,0], [0.25, 0.25, 0.25]])
+            return s, "CeO2 (Fallback Fluorite)"
+
+        if resolved == "SrTiO3":
+            s = Structure.from_spacegroup("Pm-3m", Lattice.cubic(3.905), ["Sr", "Ti", "O"], [[0,0,0], [0.5,0.5,0.5], [0.5,0.5,0]])
+            return s, "SrTiO3 (Fallback Perovskite)"
+
+        if resolved in ("Graphite", "Graphene"):
+            latt = Lattice.hexagonal(2.46, 6.71)
+            s = Structure.from_spacegroup("P63/mmc", latt, ["C", "C"], [[0, 0, 0], [1/3, 2/3, 0]])
             return s, "Graphite (Fallback)"
+
+        # ══════════════════════════════════════════════════════════════════
+        # Battery Cathode Materials
+        # ══════════════════════════════════════════════════════════════════
+
+        # LiCoO2 — O3 layered (R-3m), the canonical LCO cathode
+        if resolved == "LiCoO2":
+            latt = Lattice.hexagonal(2.816, 14.08)
+            s = Structure.from_spacegroup("R-3m", latt, ["Li", "Co", "O"],
+                                          [[0, 0, 0.5], [0, 0, 0], [0, 0, 0.2603]])
+            return s, "LiCoO2 (Fallback O3 R-3m)"
+
+        # NaCoO2 — P2 layered (P63/mmc), sodium-ion cathode
+        if resolved == "NaCoO2":
+            latt = Lattice.hexagonal(2.83, 10.81)
+            s = Structure.from_spacegroup("P63/mmc", latt, ["Na", "Co", "O"],
+                                          [[1/3, 2/3, 0.75], [0, 0, 0], [1/3, 2/3, 0.085]])
+            return s, "NaCoO2 (Fallback P2 P63/mmc)"
+
+        # LiFePO4 — olivine (Pnma), LFP cathode
+        if resolved == "LiFePO4":
+            latt = Lattice.orthorhombic(10.332, 6.010, 4.692)
+            s = Structure.from_spacegroup("Pnma", latt,
+                                          ["Li", "Fe", "P", "O", "O", "O"],
+                                          [[0, 0, 0], [0.2822, 0.25, 0.9735],
+                                           [0.0949, 0.25, 0.4181],
+                                           [0.0966, 0.25, 0.7427],
+                                           [0.4573, 0.25, 0.2067],
+                                           [0.1657, 0.0464, 0.2852]])
+            return s, "LiFePO4 (Fallback Olivine Pnma)"
+
+        # LiMn2O4 — spinel (Fd-3m), spinel cathode
+        if resolved == "LiMn2O4":
+            s = Structure.from_spacegroup("Fd-3m", Lattice.cubic(8.245),
+                                          ["Li", "Mn", "O"],
+                                          [[0.125, 0.125, 0.125], [0.5, 0.5, 0.5], [0.2625, 0.2625, 0.2625]])
+            return s, "LiMn2O4 (Fallback Spinel Fd-3m)"
+
+        # LiNiO2 — layered (R-3m), NCA/NMC base
+        if resolved == "LiNiO2":
+            latt = Lattice.hexagonal(2.878, 14.19)
+            s = Structure.from_spacegroup("R-3m", latt, ["Li", "Ni", "O"],
+                                          [[0, 0, 0.5], [0, 0, 0], [0, 0, 0.259]])
+            return s, "LiNiO2 (Fallback Layered R-3m)"
+
+        # NaMnO2 — O3 layered (C2/m), sodium cathode
+        if resolved == "NaMnO2":
+            latt = Lattice.monoclinic(5.672, 2.856, 5.807, 113.2)
+            s = Structure.from_spacegroup("C2/m", latt, ["Na", "Mn", "O", "O"],
+                                          [[0, 0.5, 0.5], [0, 0, 0], [0.227, 0, 0.222], [0.274, 0.5, 0.776]])
+            return s, "NaMnO2 (Fallback O3 C2/m)"
+
+        # LiTiO2 — ramsdellite / anatase-related, anode
+        if resolved == "LiTiO2":
+            latt = Lattice.tetragonal(4.13, 8.52)
+            s = Structure.from_spacegroup("I41/amd", latt, ["Li", "Ti", "O"],
+                                          [[0, 0.75, 0.125], [0, 0.25, 0.375], [0, 0.25, 0.1665]])
+            return s, "LiTiO2 (Fallback I41/amd)"
+
+        # Na3V2P3O12 — NASICON Na3V2(PO4)3 (R-3c)
+        if resolved in ("Na3V2P3O12", "Na3V2(PO4)3"):
+            latt = Lattice.hexagonal(8.729, 21.805)
+            s = Structure.from_spacegroup("R-3c", latt,
+                                          ["Na", "Na", "V", "P", "O", "O", "O", "O"],
+                                          [[0.6435, 0, 0.25],
+                                           [0, 0, 0],
+                                           [0, 0, 0.1479],
+                                           [0.2892, 0, 0.25],
+                                           [0.1816, 0.1691, 0.1915],
+                                           [0.1923, 0.9836, 0.0834],
+                                           [0.1635, 0.0178, 0.1957],
+                                           [0.0245, 0.2064, 0.1946]])
+            return s, "Na3V2(PO4)3 (Fallback NASICON R-3c)"
+
+        # ══════════════════════════════════════════════════════════════════
+        # Solid Electrolytes
+        # ══════════════════════════════════════════════════════════════════
+
+        # Li3PS4 — beta phase (Pnma), sulfide solid electrolyte
+        if resolved == "Li3PS4":
+            latt = Lattice.orthorhombic(12.819, 8.219, 6.124)
+            s = Structure.from_spacegroup("Pnma", latt, ["Li", "Li", "P", "S", "S", "S"],
+                                          [[0.342, 0.25, 0.482],
+                                           [0.413, 0.015, 0.893],
+                                           [0.0867, 0.25, 0.4134],
+                                           [0.154, 0.25, 0.732],
+                                           [0.024, 0.25, 0.208],
+                                           [0.103, 0.036, 0.422]])
+            return s, "Li3PS4 (Fallback beta Pnma)"
+
+        # Li7La3Zr2O12 — garnet (Ia-3d), LLZO solid electrolyte
+        if resolved == "Li7La3Zr2O12":
+            s = Structure.from_spacegroup("Ia-3d", Lattice.cubic(12.968),
+                                          ["Li", "Li", "La", "Zr", "O"],
+                                          [[0.375, 0, 0.25],
+                                           [0.0944, 0.6856, 0.5722],
+                                           [0.125, 0, 0.25],
+                                           [0, 0, 0],
+                                           [0.2812, 0.1016, 0.1984]])
+            return s, "Li7La3Zr2O12 (Fallback Garnet Ia-3d)"
+
+        # ══════════════════════════════════════════════════════════════════
+        # Last resort: try pymatgen Composition → simple cubic placeholder
+        # ══════════════════════════════════════════════════════════════════
+        try:
+            comp = Composition(resolved)
+            elements = [str(el) for el in comp.elements]
+            fracs = [comp.get_atomic_fraction(el) for el in comp.elements]
+            n_el = len(elements)
+            a_guess = 3.0 + 0.5 * n_el
+            coords = [[i / n_el, i / n_el, i / n_el] for i in range(n_el)]
+            latt = Lattice.cubic(a_guess)
+            s = Structure(latt, elements, coords)
+            sys.stderr.write(f"Fallback: Built placeholder cubic cell for {comp.reduced_formula}\n")
+            return s, f"{comp.reduced_formula} (Fallback placeholder)"
+        except Exception as e2:
+            sys.stderr.write(f"Fallback composition parse failed: {e2}\n")
 
     except Exception as e:
         sys.stderr.write(f"Fallback Error: {e}\n")
-        
+
     return None, None
 
 def get_structure_from_optimade_endpoint(
