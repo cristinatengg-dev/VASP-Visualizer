@@ -11,6 +11,7 @@ import {
   ComputeIntent, ServerComputeProfile, JobStatus, ComputeResult,
   WorkflowType, QualityType, CompiledInputs
 } from './types';
+import { Scene3D } from '../../components/Scene3D';
 import { API_BASE_URL } from '../../config';
 
 const STEPS = [
@@ -245,7 +246,7 @@ const ComputeAgent: React.FC = () => {
     switch (s) {
       case 'completed': return 'bg-green-600';
       case 'failed': return 'bg-red-600';
-      case 'running': return 'bg-blue-600';
+      case 'running': return 'bg-[#2E4A8E]';
       case 'queued': return 'bg-amber-500';
       default: return 'bg-gray-500';
     }
@@ -261,7 +262,7 @@ const ComputeAgent: React.FC = () => {
               <ArrowLeft size={20} className="text-gray-500" />
             </button>
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-[12px] bg-[#0A1128] flex items-center justify-center shadow-lg shadow-blue-900/10">
+              <div className="w-9 h-9 rounded-[12px] bg-[#0A1128] flex items-center justify-center shadow-lg shadow-[#0A1128]/10">
                 <Cpu size={18} className="text-white" />
               </div>
               <div>
@@ -279,11 +280,11 @@ const ComputeAgent: React.FC = () => {
               const isCompleted = idx < currentStepIndex;
               return (
                 <React.Fragment key={step.id}>
-                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
-                    isActive ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-100' : 'text-gray-400'
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[16px] transition-all ${
+                    isActive ? 'bg-[#2E4A8E]/10 text-[#2E4A8E] ring-1 ring-[#2E4A8E]/20' : 'text-gray-400'
                   }`}>
                     <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      isActive ? 'bg-blue-600 text-white' : isCompleted ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'
+                      isActive ? 'bg-[#2E4A8E] text-white' : isCompleted ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'
                     }`}>
                       {isCompleted ? <CheckCircle2 size={12} /> : idx + 1}
                     </div>
@@ -344,12 +345,12 @@ const ComputeAgent: React.FC = () => {
                               <span className="font-mono">{molecularData.atoms.length}</span> Atoms
                             </div>
                             <div className="text-[11px] text-gray-500">
-                              Lattice: <span className="font-semibold text-blue-600">{molecularData.latticeVectors ? 'Periodic' : 'Non-periodic'}</span>
+                              Lattice: <span className="font-semibold text-[#2E4A8E]">{molecularData.latticeVectors ? 'Periodic' : 'Non-periodic'}</span>
                             </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 text-amber-500 bg-amber-50 p-3 rounded-xl">
+                        <div className="flex items-center gap-2 text-amber-500 bg-amber-50 p-3 rounded-[16px]">
                           <AlertCircle size={14} />
                           <span className="text-xs font-medium">No structure loaded. Go to Modeling Agent first.</span>
                         </div>
@@ -370,9 +371,9 @@ const ComputeAgent: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100/50">
-                      <h3 className="text-xs font-bold text-blue-900/40 uppercase tracking-widest mb-2">Fixed Atoms</h3>
-                      <p className="text-xs text-blue-700">
+                    <div className="p-4 bg-[#2E4A8E]/5 rounded-[20px] border border-[#2E4A8E]/10">
+                      <h3 className="text-xs font-bold text-[#2E4A8E]/40 uppercase tracking-widest mb-2">Fixed Atoms</h3>
+                      <p className="text-xs text-[#2E4A8E]">
                         {selectedAtomIds.length > 0
                           ? `${selectedAtomIds.length} atoms selected for fixing (selective dynamics).`
                           : 'No atoms selected for fixing. Full relaxation for all atoms.'}
@@ -380,8 +381,16 @@ const ComputeAgent: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="bg-[#0A1128]/5 rounded-2xl flex items-center justify-center border-2 border-dashed border-gray-200 min-h-[300px]">
-                    <p className="text-xs text-gray-400 italic">Structure Preview (Real-time Sync)</p>
+                  <div className="bg-[#0A1128] rounded-[24px] overflow-hidden min-h-[300px] relative">
+                    {molecularData ? (
+                      <div className="w-full h-[300px]">
+                        <Scene3D />
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-[300px]">
+                        <p className="text-xs text-white/40 italic">No structure loaded</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -394,13 +403,13 @@ const ComputeAgent: React.FC = () => {
                       <button
                         key={wf}
                         onClick={() => setIntent({ ...intent, workflow: wf })}
-                        className={`p-4 rounded-2xl border text-left transition-all ${
+                        className={`p-4 rounded-[20px] border text-left transition-all ${
                           intent.workflow === wf
-                            ? 'bg-blue-600 border-blue-600 shadow-lg shadow-blue-200'
-                            : 'bg-white border-gray-100 hover:border-blue-200'
+                            ? 'bg-[#0A1128] border-[#0A1128] shadow-lg shadow-[#0A1128]/10'
+                            : 'bg-white border-gray-100 hover:border-[#2E4A8E]/30'
                         }`}
                       >
-                        <p className={`text-[10px] font-bold uppercase tracking-widest ${intent.workflow === wf ? 'text-blue-100' : 'text-gray-400'}`}>Workflow</p>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${intent.workflow === wf ? 'text-white/60' : 'text-gray-400'}`}>Workflow</p>
                         <p className={`text-sm font-bold mt-1 capitalize ${intent.workflow === wf ? 'text-white' : 'text-[#0A1128]'}`}>{wf}</p>
                       </button>
                     ))}
@@ -409,12 +418,12 @@ const ComputeAgent: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-4">
                       <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Accuracy & Quality</h3>
-                      <div className="flex gap-2 p-1 bg-gray-50 rounded-xl border border-gray-100">
+                      <div className="flex gap-2 p-1 bg-gray-50 rounded-[16px] border border-gray-100">
                         {(['fast', 'standard', 'high'] as QualityType[]).map(q => (
                           <button
                             key={q}
                             onClick={() => setIntent({ ...intent, quality: q })}
-                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                            className={`flex-1 py-2 text-xs font-bold rounded-[16px] transition-all ${
                               intent.quality === q ? 'bg-white text-[#0A1128] shadow-sm' : 'text-gray-400 hover:text-gray-600'
                             }`}
                           >
@@ -429,13 +438,13 @@ const ComputeAgent: React.FC = () => {
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           onClick={() => setIntent({ ...intent, vdw: !intent.vdw })}
-                          className={`flex items-center justify-between p-3 rounded-xl border text-xs font-medium transition-all ${intent.vdw ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-100 text-gray-500'}`}
+                          className={`flex items-center justify-between p-3 rounded-[16px] border text-xs font-medium transition-all ${intent.vdw ? 'border-[#2E4A8E]/30 bg-[#2E4A8E]/5 text-[#2E4A8E]' : 'border-gray-100 text-gray-500'}`}
                         >
                           vDW (D3) {intent.vdw ? 'ON' : 'OFF'}
                         </button>
                         <button
                           onClick={() => setIntent({ ...intent, spin_mode: intent.spin_mode === 'auto' ? 'none' : 'auto' })}
-                          className={`flex items-center justify-between p-3 rounded-xl border text-xs font-medium transition-all ${intent.spin_mode !== 'none' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-100 text-gray-500'}`}
+                          className={`flex items-center justify-between p-3 rounded-[16px] border text-xs font-medium transition-all ${intent.spin_mode !== 'none' ? 'border-[#2E4A8E]/30 bg-[#2E4A8E]/5 text-[#2E4A8E]' : 'border-gray-100 text-gray-500'}`}
                         >
                           Spin {intent.spin_mode !== 'none' ? 'ON' : 'OFF'}
                         </button>
@@ -454,7 +463,7 @@ const ComputeAgent: React.FC = () => {
                       <span className="text-sm">Loading compute profiles...</span>
                     </div>
                   ) : profiles.length === 0 ? (
-                    <div className="flex items-center gap-2 text-amber-500 bg-amber-50 p-4 rounded-xl">
+                    <div className="flex items-center gap-2 text-amber-500 bg-amber-50 p-4 rounded-[16px]">
                       <AlertCircle size={14} />
                       <span className="text-xs font-medium">No compute profiles available. Configure HPC env vars on the server.</span>
                     </div>
@@ -465,7 +474,7 @@ const ComputeAgent: React.FC = () => {
                         onClick={() => setSelectedProfileId(profile.id)}
                         className={`w-full p-6 rounded-[24px] border-2 text-left transition-all flex items-center justify-between ${
                           selectedProfileId === profile.id
-                            ? 'border-blue-600 bg-blue-50/30'
+                            ? 'border-[#2E4A8E] bg-[#2E4A8E]/5'
                             : profile.configured
                               ? 'border-gray-100 hover:border-gray-200'
                               : 'border-gray-100 opacity-50 cursor-not-allowed'
@@ -473,8 +482,8 @@ const ComputeAgent: React.FC = () => {
                         disabled={!profile.configured}
                       >
                         <div className="flex items-center gap-6">
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                            selectedProfileId === profile.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'
+                          <div className={`w-12 h-12 rounded-[16px] flex items-center justify-center ${
+                            selectedProfileId === profile.id ? 'bg-[#2E4A8E] text-white' : 'bg-gray-100 text-gray-400'
                           }`}>
                             <Server size={24} />
                           </div>
@@ -498,7 +507,7 @@ const ComputeAgent: React.FC = () => {
                             )}
                           </div>
                         </div>
-                        {selectedProfileId === profile.id && <CheckCircle2 className="text-blue-600" />}
+                        {selectedProfileId === profile.id && <CheckCircle2 className="text-[#2E4A8E]" />}
                       </button>
                     ))
                   )}
@@ -511,7 +520,7 @@ const ComputeAgent: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Compiled VASP Inputs</h3>
                     <div className="flex gap-2">
-                      {isCompiling && <span className="flex items-center gap-1 text-blue-600 text-[10px] font-bold"><Loader2 size={12} className="animate-spin" /> COMPILING...</span>}
+                      {isCompiling && <span className="flex items-center gap-1 text-[#2E4A8E] text-[10px] font-bold"><Loader2 size={12} className="animate-spin" /> COMPILING...</span>}
                       {compiledInputs && <span className="px-2 py-0.5 bg-green-50 text-green-600 text-[10px] font-bold rounded">COMPILED</span>}
                       {compileError && <span className="px-2 py-0.5 bg-red-50 text-red-600 text-[10px] font-bold rounded">ERROR</span>}
                       <button onClick={handleCompile} className="p-1 hover:bg-gray-100 rounded transition-colors" title="Re-compile">
@@ -521,7 +530,7 @@ const ComputeAgent: React.FC = () => {
                   </div>
 
                   {compileError && (
-                    <div className="flex items-start gap-2 p-4 bg-red-50 text-red-700 rounded-xl border border-red-100">
+                    <div className="flex items-start gap-2 p-4 bg-red-50 text-red-700 rounded-[16px] border border-red-100">
                       <XCircle size={16} className="mt-0.5 flex-shrink-0" />
                       <div>
                         <p className="text-xs font-bold">Compilation Failed</p>
@@ -540,16 +549,16 @@ const ComputeAgent: React.FC = () => {
                           <div
                             key={file}
                             onClick={() => setSelectedPreviewFile(fileKey)}
-                            className={`p-4 border rounded-2xl flex flex-col items-center gap-2 cursor-pointer transition-all ${
+                            className={`p-4 border rounded-[20px] flex flex-col items-center gap-2 cursor-pointer transition-all ${
                               selectedPreviewFile === fileKey
-                                ? 'border-blue-500 bg-blue-50/50 ring-1 ring-blue-500'
+                                ? 'border-[#2E4A8E] bg-[#2E4A8E]/5 ring-1 ring-[#2E4A8E]'
                                 : 'border-gray-100 hover:bg-gray-50'
                             }`}
                           >
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${selectedPreviewFile === fileKey ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                            <div className={`w-8 h-8 rounded-[16px] flex items-center justify-center ${selectedPreviewFile === fileKey ? 'bg-[#2E4A8E] text-white' : 'bg-gray-100 text-gray-400'}`}>
                               <Eye size={16} />
                             </div>
-                            <span className={`text-xs font-bold font-mono ${selectedPreviewFile === fileKey ? 'text-blue-600' : 'text-[#0A1128]'}`}>{file}</span>
+                            <span className={`text-xs font-bold font-mono ${selectedPreviewFile === fileKey ? 'text-[#2E4A8E]' : 'text-[#0A1128]'}`}>{file}</span>
                           </div>
                           );
                         })}
@@ -557,18 +566,18 @@ const ComputeAgent: React.FC = () => {
 
                       <div className="bg-[#0A1128] rounded-2xl p-6 text-white overflow-hidden relative">
                         <div className="relative z-10">
-                          <h4 className="text-[10px] font-bold text-blue-300 uppercase tracking-widest mb-4">
+                          <h4 className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-4">
                             {selectedPreviewFile === 'POTCAR' ? 'POTCAR Specification' : `File Preview: ${selectedPreviewFile}`}
                           </h4>
                           {selectedPreviewFile === 'POTCAR' ? (
                             <div className="space-y-4">
-                              <p className="text-[11px] text-blue-200/80 leading-relaxed">
+                              <p className="text-[11px] text-white/50 leading-relaxed">
                                 POTCAR files contain licensed VASP pseudopotentials and cannot be generated.
                                 When submitting to your HPC cluster, the server will automatically assemble
                                 POTCAR from your cluster's pseudopotential library.
                               </p>
                               <div className="mt-3 space-y-2">
-                                <p className="text-[10px] font-bold text-blue-300 uppercase tracking-widest">Required Pseudopotentials</p>
+                                <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Required Pseudopotentials</p>
                                 {(() => {
                                   try {
                                     const specRaw = compiledInputs.files['POTCAR.spec.json' as keyof typeof compiledInputs.files];
@@ -578,7 +587,7 @@ const ComputeAgent: React.FC = () => {
                                     return (
                                       <div className="flex flex-wrap gap-2 mt-1">
                                         {symbols.map((sym: string, i: number) => (
-                                          <span key={i} className="px-3 py-1.5 bg-white/10 rounded-lg text-xs font-mono font-bold text-white">
+                                          <span key={i} className="px-3 py-1.5 bg-white/10 rounded-[16px] text-xs font-mono font-bold text-white">
                                             {sym} <span className="text-white/40 ml-1">PBE</span>
                                           </span>
                                         ))}
@@ -589,10 +598,10 @@ const ComputeAgent: React.FC = () => {
                                   }
                                 })()}
                               </div>
-                              <div className="mt-3 p-3 bg-white/5 rounded-xl border border-white/10">
+                              <div className="mt-3 p-3 bg-white/5 rounded-[16px] border border-white/10">
                                 <p className="text-[10px] text-white/50">
-                                  On job submission, the server runs <code className="text-blue-300">materializeRemotePotcar()</code> via
-                                  SSH to concatenate the correct POTCAR from <code className="text-blue-300">HPC_REMOTE_POTCAR_DIR</code> on your cluster.
+                                  On job submission, the server runs <code className="text-white/70">materializeRemotePotcar()</code> via
+                                  SSH to concatenate the correct POTCAR from <code className="text-white/70">HPC_REMOTE_POTCAR_DIR</code> on your cluster.
                                 </p>
                               </div>
                             </div>
@@ -602,7 +611,7 @@ const ComputeAgent: React.FC = () => {
                           </pre>
                           )}
                         </div>
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 blur-[80px] rounded-full -mr-20 -mt-20" />
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-[#2E4A8E]/10 blur-[80px] rounded-full -mr-20 -mt-20" />
                       </div>
                     </>
                   )}
@@ -614,8 +623,8 @@ const ComputeAgent: React.FC = () => {
                 <div className="p-8 space-y-6">
                   {!jobStatus ? (
                     <div className="flex flex-col items-center justify-center text-center space-y-6 py-8">
-                      <div className="w-20 h-20 rounded-[32px] bg-blue-50 flex items-center justify-center">
-                        <Zap size={32} className="text-blue-600" />
+                      <div className="w-20 h-20 rounded-[32px] bg-[#2E4A8E]/10 flex items-center justify-center">
+                        <Zap size={32} className="text-[#2E4A8E]" />
                       </div>
                       <div>
                         <h3 className="text-lg font-bold text-[#0A1128]">Ready to Launch</h3>
@@ -625,7 +634,7 @@ const ComputeAgent: React.FC = () => {
                             : 'Select an HPC profile first.'}
                         </p>
                         {submitError && (
-                          <p className="text-xs text-red-600 mt-2 bg-red-50 p-2 rounded-lg">{submitError}</p>
+                          <p className="text-xs text-red-600 mt-2 bg-red-50 p-2 rounded-[16px]">{submitError}</p>
                         )}
                       </div>
                     </div>
@@ -634,7 +643,7 @@ const ComputeAgent: React.FC = () => {
                       {/* Status Banner */}
                       <div className={`flex items-center justify-between p-6 ${statusColor(jobStatus.status)} rounded-[24px] text-white`}>
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                          <div className="w-10 h-10 bg-white/20 rounded-[16px] flex items-center justify-center">
                             {jobStatus.status === 'running' || jobStatus.status === 'queued'
                               ? <Loader2 size={20} className="animate-spin" />
                               : jobStatus.status === 'completed'
@@ -685,7 +694,7 @@ const ComputeAgent: React.FC = () => {
 
                       {/* Warnings */}
                       {warnings.length > 0 && (
-                        <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+                        <div className="p-4 bg-amber-50 rounded-[16px] border border-amber-100">
                           <h4 className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2">Warnings ({warnings.length})</h4>
                           {warnings.map((w, i) => (
                             <p key={i} className="text-xs text-amber-700 mt-1">• {w}</p>
@@ -721,7 +730,7 @@ const ComputeAgent: React.FC = () => {
               ) : currentStepIndex === 4 ? (
                 <button
                   onClick={() => navigate('/')}
-                  className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold bg-[#0A1128] text-white shadow-lg shadow-blue-200 hover:bg-blue-900"
+                  className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold bg-[#0A1128] text-white shadow-lg shadow-[#0A1128]/10 hover:bg-[#162044]"
                 >
                   Back to Home
                 </button>
@@ -729,7 +738,7 @@ const ComputeAgent: React.FC = () => {
                 <button
                   onClick={handleNext}
                   disabled={currentStepIndex === 0 && !molecularData}
-                  className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold transition-all shadow-lg bg-[#0A1128] text-white shadow-blue-200 hover:bg-blue-900 disabled:opacity-50"
+                  className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold transition-all shadow-lg bg-[#0A1128] text-white shadow-[#0A1128]/10 hover:bg-[#162044] disabled:opacity-50"
                 >
                   Next: {STEPS[currentStepIndex + 1]?.label} <ChevronRight size={16} />
                 </button>

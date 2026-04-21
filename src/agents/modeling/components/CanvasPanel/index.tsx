@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ModelingIntent } from '../../types/modeling';
 import { Scene3D } from '../../../../components/Scene3D';
@@ -6,10 +6,44 @@ import { useStore } from '../../../../store/useStore';
 import { saveAs } from 'file-saver';
 import { exportToPOSCAR } from '../../../../utils/poscarExporter';
 
+type ToolMode = 'select' | 'move' | 'rotate' | 'scale' | 'measure' | 'angle';
+
 const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) => {
   const navigate = useNavigate();
   const molecularData = useStore(state => state.molecularData);
+  const isEditMode = useStore(state => state.isEditMode);
+  const setIsEditMode = useStore(state => state.setIsEditMode);
+  const triggerRotation = useStore(state => state.triggerRotation);
+  const setMeasurementInfo = useStore(state => state.setMeasurementInfo);
   const atomCount = molecularData?.atoms?.length ?? null;
+  const [activeMode, setActiveMode] = useState<ToolMode>('select');
+
+  const handleModeChange = (mode: ToolMode) => {
+    setActiveMode(mode);
+
+    setIsEditMode(false);
+    setMeasurementInfo(null);
+
+    switch (mode) {
+      case 'move':
+        setIsEditMode(true);
+        break;
+      case 'rotate':
+        triggerRotation(45);
+        setActiveMode('select');
+        break;
+      case 'scale':
+        triggerRotation(-45);
+        setActiveMode('select');
+        break;
+      case 'measure':
+        setMeasurementInfo({ type: 'bond-click', value: null });
+        break;
+      case 'angle':
+        setMeasurementInfo({ type: 'angle', value: null });
+        break;
+    }
+  };
 
   const handleExportPOSCAR = () => {
     if (!molecularData) return;
@@ -20,12 +54,11 @@ const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) =>
 
   return (
     <div className="w-full h-full relative">
-      {/* 3D 渲染占位 */}
       <div className="absolute inset-0 bg-gradient-to-br from-[#111] to-[#050505] flex items-center justify-center">
         {!molecularData ? (
           <div className="text-center space-y-4 max-w-md px-6">
-            <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-16 h-16 bg-[#2E4A8E]/10 border border-[#2E4A8E]/20 rounded-[16px] flex items-center justify-center mx-auto mb-6">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-[#2E4A8E]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
               </svg>
             </div>
@@ -41,18 +74,17 @@ const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) =>
         )}
       </div>
 
-      {/* 顶部工具栏 - 第一优先级功能 */}
       <div className="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none">
         <div className="flex gap-2 pointer-events-auto">
           <div className="bg-white border border-gray-100 rounded-[16px] shadow-[0_4px_20px_rgba(0,0,0,0.08)] p-1 flex gap-1">
-            <ToolbarButton icon="select" active />
-            <ToolbarButton icon="move" />
-            <ToolbarButton icon="rotate" />
-            <ToolbarButton icon="scale" />
+            <ToolbarButton icon="select" active={activeMode === 'select'} onClick={() => handleModeChange('select')} />
+            <ToolbarButton icon="move" active={activeMode === 'move'} onClick={() => handleModeChange('move')} />
+            <ToolbarButton icon="rotate" active={false} onClick={() => handleModeChange('rotate')} />
+            <ToolbarButton icon="scale" active={false} onClick={() => handleModeChange('scale')} />
           </div>
           <div className="bg-white border border-gray-100 rounded-[16px] shadow-[0_4px_20px_rgba(0,0,0,0.08)] p-1 flex gap-1">
-            <ToolbarButton icon="measure" />
-            <ToolbarButton icon="angle" />
+            <ToolbarButton icon="measure" active={activeMode === 'measure'} onClick={() => handleModeChange('measure')} />
+            <ToolbarButton icon="angle" active={activeMode === 'angle'} onClick={() => handleModeChange('angle')} />
           </div>
         </div>
 
@@ -81,7 +113,6 @@ const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) =>
         </div>
       </div>
 
-      {/* 右下角：快捷状态 */}
       {intent && (
         <div className="absolute bottom-4 right-4 bg-white border border-gray-100 rounded-[16px] shadow-[0_4px_20px_rgba(0,0,0,0.08)] p-3 text-[10px] font-mono text-gray-600 space-y-1">
           <div>ATOMS: {atomCount ?? '--'}</div>
@@ -93,9 +124,10 @@ const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) =>
   );
 };
 
-const ToolbarButton: React.FC<{ icon: string; active?: boolean }> = ({ icon, active }) => (
+const ToolbarButton: React.FC<{ icon: string; active?: boolean; onClick: () => void }> = ({ icon, active, onClick }) => (
   <button
     type="button"
+    onClick={onClick}
     className={`h-8 flex items-center gap-2 px-3 rounded-[32px] transition-colors ${
       active
         ? 'bg-white text-[#0A1128] shadow-[0_4px_20px_rgba(0,0,0,0.08)] ring-1 ring-black/5 font-semibold'

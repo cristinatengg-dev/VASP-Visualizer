@@ -345,44 +345,55 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
               </span>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 space-y-3">
               <input
                 value={editMaterial}
                 onChange={(event) => setEditMaterial(event.target.value)}
                 placeholder="Material"
                 className="w-full rounded-[16px] border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700 outline-none transition focus:border-gray-300 focus:bg-white"
               />
-              <input
-                value={editSurface}
-                onChange={(event) => setEditSurface(event.target.value)}
-                placeholder="Surface e.g. (111)"
-                className="w-full rounded-[16px] border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700 outline-none transition focus:border-gray-300 focus:bg-white"
-              />
-              <input
-                value={editVacuum}
-                onChange={(event) => setEditVacuum(event.target.value)}
-                placeholder="Vacuum (A)"
-                className="w-full rounded-[16px] border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700 outline-none transition focus:border-gray-300 focus:bg-white"
-              />
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <input
-                  value={editSupercellX}
-                  onChange={(event) => setEditSupercellX(event.target.value)}
-                  placeholder="a"
+                  value={editSurface}
+                  onChange={(event) => setEditSurface(event.target.value)}
+                  placeholder="Surface e.g. (111)"
                   className="w-full rounded-[16px] border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700 outline-none transition focus:border-gray-300 focus:bg-white"
                 />
                 <input
-                  value={editSupercellY}
-                  onChange={(event) => setEditSupercellY(event.target.value)}
-                  placeholder="b"
+                  value={editVacuum}
+                  onChange={(event) => setEditVacuum(event.target.value)}
+                  placeholder="Vacuum (A)"
                   className="w-full rounded-[16px] border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700 outline-none transition focus:border-gray-300 focus:bg-white"
                 />
-                <input
-                  value={editSupercellZ}
-                  onChange={(event) => setEditSupercellZ(event.target.value)}
-                  placeholder="c"
-                  className="w-full rounded-[16px] border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700 outline-none transition focus:border-gray-300 focus:bg-white"
-                />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Supercell</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-gray-400 uppercase">a</span>
+                    <input
+                      value={editSupercellX}
+                      onChange={(event) => setEditSupercellX(event.target.value)}
+                      className="w-full rounded-[16px] border border-gray-200 bg-gray-50 pl-7 pr-3 py-3 text-sm text-gray-700 outline-none transition focus:border-gray-300 focus:bg-white font-mono text-center"
+                    />
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-gray-400 uppercase">b</span>
+                    <input
+                      value={editSupercellY}
+                      onChange={(event) => setEditSupercellY(event.target.value)}
+                      className="w-full rounded-[16px] border border-gray-200 bg-gray-50 pl-7 pr-3 py-3 text-sm text-gray-700 outline-none transition focus:border-gray-300 focus:bg-white font-mono text-center"
+                    />
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-gray-400 uppercase">c</span>
+                    <input
+                      value={editSupercellZ}
+                      onChange={(event) => setEditSupercellZ(event.target.value)}
+                      className="w-full rounded-[16px] border border-gray-200 bg-gray-50 pl-7 pr-3 py-3 text-sm text-gray-700 outline-none transition focus:border-gray-300 focus:bg-white font-mono text-center"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -727,12 +738,12 @@ const CatalystToolkitPanel: React.FC = () => {
       </div>
 
       {toolError && (
-        <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
+        <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-[16px] text-xs text-red-600">
           {toolError}
         </div>
       )}
       {toolSuccess && (
-        <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-xl text-xs text-green-600">
+        <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-[16px] text-xs text-green-600">
           {toolSuccess}
         </div>
       )}
@@ -741,11 +752,11 @@ const CatalystToolkitPanel: React.FC = () => {
       <div className="mt-3 p-3 bg-white rounded-[16px] border border-indigo-100">
         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Build Slab from Current Structure</p>
         <div className="grid grid-cols-5 gap-2">
-          <input value={slabMillerH} onChange={e => setSlabMillerH(e.target.value)} placeholder="h" className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
-          <input value={slabMillerK} onChange={e => setSlabMillerK(e.target.value)} placeholder="k" className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
-          <input value={slabMillerL} onChange={e => setSlabMillerL(e.target.value)} placeholder="l" className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
-          <input value={slabThickness} onChange={e => setSlabThickness(e.target.value)} placeholder="thick" className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" title="Slab thickness (A)" />
-          <input value={slabVacuum} onChange={e => setSlabVacuum(e.target.value)} placeholder="vac" className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" title="Vacuum thickness (A)" />
+          <input value={slabMillerH} onChange={e => setSlabMillerH(e.target.value)} placeholder="h" className="rounded-[16px] border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+          <input value={slabMillerK} onChange={e => setSlabMillerK(e.target.value)} placeholder="k" className="rounded-[16px] border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+          <input value={slabMillerL} onChange={e => setSlabMillerL(e.target.value)} placeholder="l" className="rounded-[16px] border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+          <input value={slabThickness} onChange={e => setSlabThickness(e.target.value)} placeholder="thick" className="rounded-[16px] border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" title="Slab thickness (A)" />
+          <input value={slabVacuum} onChange={e => setSlabVacuum(e.target.value)} placeholder="vac" className="rounded-[16px] border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" title="Vacuum thickness (A)" />
         </div>
         <button
           onClick={async () => {
@@ -761,7 +772,7 @@ const CatalystToolkitPanel: React.FC = () => {
             }
           }}
           disabled={isLoading}
-          className="mt-2 w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+          className="mt-2 w-full py-2 bg-indigo-600 text-white rounded-[16px] text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
         >
           {isLoading ? 'Building...' : 'Build Slab'}
         </button>
@@ -771,7 +782,7 @@ const CatalystToolkitPanel: React.FC = () => {
       <div className="mt-3 p-3 bg-white rounded-[16px] border border-indigo-100">
         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Freeze Bottom Layers</p>
         <div className="flex gap-2">
-          <input value={freezeLayers} onChange={e => setFreezeLayers(e.target.value)} placeholder="N layers" className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-mono outline-none focus:border-indigo-300" />
+          <input value={freezeLayers} onChange={e => setFreezeLayers(e.target.value)} placeholder="N layers" className="flex-1 rounded-[16px] border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-mono outline-none focus:border-indigo-300" />
           <button
             onClick={async () => {
               const result = await callCatalystTool('fix_atoms_by_layers', {
@@ -783,7 +794,7 @@ const CatalystToolkitPanel: React.FC = () => {
               }
             }}
             disabled={isLoading}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+            className="px-4 py-2 bg-indigo-600 text-white rounded-[16px] text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
           >
             Apply
           </button>
@@ -793,10 +804,19 @@ const CatalystToolkitPanel: React.FC = () => {
       {/* Supercell */}
       <div className="mt-3 p-3 bg-white rounded-[16px] border border-indigo-100">
         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Supercell</p>
-        <div className="flex gap-2">
-          <input value={superA} onChange={e => setSuperA(e.target.value)} placeholder="a" className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
-          <input value={superB} onChange={e => setSuperB(e.target.value)} placeholder="b" className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
-          <input value={superC} onChange={e => setSuperC(e.target.value)} placeholder="c" className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+        <div className="grid grid-cols-4 gap-2">
+          <div className="relative">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-gray-400">a</span>
+            <input value={superA} onChange={e => setSuperA(e.target.value)} className="w-full rounded-[16px] border border-gray-200 bg-gray-50 pl-6 pr-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+          </div>
+          <div className="relative">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-gray-400">b</span>
+            <input value={superB} onChange={e => setSuperB(e.target.value)} className="w-full rounded-[16px] border border-gray-200 bg-gray-50 pl-6 pr-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+          </div>
+          <div className="relative">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-gray-400">c</span>
+            <input value={superC} onChange={e => setSuperC(e.target.value)} className="w-full rounded-[16px] border border-gray-200 bg-gray-50 pl-6 pr-2 py-2 text-xs text-center font-mono outline-none focus:border-indigo-300" />
+          </div>
           <button
             onClick={async () => {
               const result = await callCatalystTool('make_supercell', {
@@ -808,7 +828,7 @@ const CatalystToolkitPanel: React.FC = () => {
               }
             }}
             disabled={isLoading}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+            className="px-3 py-2 bg-indigo-600 text-white rounded-[16px] text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
           >
             Apply
           </button>
@@ -828,7 +848,7 @@ const CatalystToolkitPanel: React.FC = () => {
             }
           }}
           disabled={isLoading}
-          className="w-full py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 transition-colors disabled:opacity-50"
+          className="w-full py-2 bg-gray-100 text-gray-700 rounded-[16px] text-xs font-bold hover:bg-gray-200 transition-colors disabled:opacity-50"
         >
           Analyze Symmetry
         </button>
