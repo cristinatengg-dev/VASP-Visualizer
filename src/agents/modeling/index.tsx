@@ -28,7 +28,7 @@ const ModelingAgent: React.FC = () => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex min-h-screen w-full bg-[#F5F5F0] p-6 gap-6 overflow-hidden">
+    <div className="flex h-screen w-full bg-[#F5F5F0] p-6 gap-6 overflow-hidden">
       <div className="w-[400px] flex flex-col rounded-[24px] bg-white shadow-[0_4px_30px_rgba(0,0,0,0.05)] ring-1 ring-black/5 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -43,7 +43,7 @@ const ModelingAgent: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 relative rounded-[24px] bg-white shadow-[0_4px_30px_rgba(0,0,0,0.05)] ring-1 ring-black/5 overflow-hidden">
+      <div className="flex-1 h-full relative rounded-[24px] bg-white shadow-[0_4px_30px_rgba(0,0,0,0.05)] ring-1 ring-black/5 overflow-hidden">
         <CanvasPanel intent={intent} />
       </div>
     </div>

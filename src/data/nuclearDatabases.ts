@@ -1,45 +1,11 @@
-export type NuclearDatabaseCategory =
-  | 'Structure'
-  | 'Properties'
-  | 'Thermodynamics'
-  | 'Irradiation'
-  | 'Fusion Interactions'
-  | 'Nuclear Data'
-  | 'Interatomic Models';
+import type { ExplorerDatabaseRecord, ExplorerTier, ExplorerIntegrationStage } from './explorerTypes';
 
-export type NuclearDatabaseTier = 'open' | 'controlled' | 'commercial';
+export type NuclearDatabaseTier = ExplorerTier;
+export type NuclearDatabaseIntegrationStage = ExplorerIntegrationStage;
+export type NuclearDatabaseRecord = ExplorerDatabaseRecord;
+export type NuclearDatabaseCategory = ExplorerDatabaseRecord['category'];
 
-export type NuclearDatabaseAccess =
-  | 'Open API'
-  | 'Open download'
-  | 'Public account'
-  | 'Portal / registration'
-  | 'Member / NDA'
-  | 'Commercial license';
-
-export type NuclearDatabaseIntegrationStage =
-  | 'connected'
-  | 'ready'
-  | 'metadata-first'
-  | 'apply-first'
-  | 'license-first';
-
-export interface NuclearDatabaseRecord {
-  id: string;
-  name: string;
-  shortName: string;
-  category: NuclearDatabaseCategory;
-  tier: NuclearDatabaseTier;
-  access: NuclearDatabaseAccess;
-  integrationStage: NuclearDatabaseIntegrationStage;
-  officialUrl: string;
-  scope: string;
-  summary: string;
-  statusNote: string;
-  projectFit: string;
-}
-
-export const NUCLEAR_DATABASES: NuclearDatabaseRecord[] = [
+export const NUCLEAR_DATABASES: ExplorerDatabaseRecord[] = [
   {
     id: 'materials-project',
     name: 'Materials Project',
