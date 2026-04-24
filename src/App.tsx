@@ -10,6 +10,7 @@ import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import CookiePolicy from './pages/CookiePolicy';
 import MaterialsExplorer from './pages/MaterialsExplorer';
+import NuclearMaterialsExplorer from './pages/NuclearMaterialsExplorer';
 import RenderingAgent from './agents/rendering';
 import ModelingAgent from './agents/modeling';
 import ComputeAgent from './agents/compute';
@@ -125,6 +126,8 @@ function App() {
       {/* 其他页面 */}
       <Route path="/explore" element={<Explore />} />
       <Route path="/materials" element={<MaterialsExplorer />} />
+      <Route path="/materials/battery" element={<MaterialsExplorer />} />
+      <Route path="/materials/nuclear" element={<NuclearMaterialsExplorer />} />
       <Route path="/manual" element={<Manual />} />
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
