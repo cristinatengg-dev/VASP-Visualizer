@@ -32,10 +32,10 @@ import {
   LogIn,
   Box,
   BookOpen,
-  Database,
 } from "lucide-react";
 import { useStore } from "../store/useStore";
 import { LEGAL_LINKS } from "../constants/legal";
+import { MATERIAL_EXPLORER_CARDS } from "../data/materialExplorerRegistry";
 
 // ─── 动画配置 ─────────────────────────────────────────────────────────────────
 
@@ -608,34 +608,28 @@ const HeroSection: React.FC = () => {
 
           {/* ⑤-b Materials Explorer entries */}
           <motion.div variants={itemVariants} className="w-full mt-1">
-            <div className="grid w-full gap-3 md:grid-cols-2">
-              <button
-                onClick={() => navigate("/materials")}
-                className="w-full flex items-center gap-4 p-4 bg-white/80 border border-gray-100 rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgba(26,42,78,0.08)] hover:border-gray-200 hover:-translate-y-0.5 active:translate-y-0 transition-all text-left group"
-              >
-                <div className="w-10 h-10 rounded-[14px] bg-gradient-to-br from-emerald-600 to-teal-600 flex items-center justify-center shrink-0">
-                  <Database size={18} className="text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-[#0A1128]">Battery Materials Explorer</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Search MP + OQMD + AFLOW for cathodes, anodes, and solid electrolytes</p>
-                </div>
-                <ChevronRight size={14} className="text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all shrink-0" />
-              </button>
-
-              <button
-                onClick={() => navigate("/materials/nuclear")}
-                className="w-full flex items-center gap-4 p-4 bg-white/80 border border-gray-100 rounded-[20px] shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgba(26,42,78,0.08)] hover:border-gray-200 hover:-translate-y-0.5 active:translate-y-0 transition-all text-left group"
-              >
-                <div className="w-10 h-10 rounded-[14px] bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center shrink-0">
-                  <Database size={18} className="text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-[#0A1128]">Nuclear Materials Explorer</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Search live structure sources and map open, controlled, and licensed nuclear data</p>
-                </div>
-                <ChevronRight size={14} className="text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all shrink-0" />
-              </button>
+            <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {MATERIAL_EXPLORER_CARDS.map((card) => {
+                const Icon = card.icon;
+                return (
+                  <button
+                    key={card.id}
+                    onClick={() => navigate(card.route)}
+                    className="h-full w-full text-left group rounded-[20px] border border-gray-100 bg-white/80 p-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)] transition-all hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-[0_4px_20px_rgba(26,42,78,0.08)] active:translate-y-0"
+                  >
+                    <div className="flex h-full items-start gap-4">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br ${card.iconGradient}`}>
+                        <Icon size={18} className="text-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-[#0A1128]">{card.title}</p>
+                        <p className="mt-0.5 text-[10px] leading-relaxed text-gray-400">{card.description}</p>
+                      </div>
+                      <ChevronRight size={14} className={`shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 ${card.hoverText}`} />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </motion.div>
 

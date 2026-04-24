@@ -11,6 +11,10 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import CookiePolicy from './pages/CookiePolicy';
 import MaterialsExplorer from './pages/MaterialsExplorer';
 import NuclearMaterialsExplorer from './pages/NuclearMaterialsExplorer';
+import SupercapacitorMaterialsExplorer from './pages/SupercapacitorMaterialsExplorer';
+import HydrogenStorageMaterialsExplorer from './pages/HydrogenStorageMaterialsExplorer';
+import ThermalStorageMaterialsExplorer from './pages/ThermalStorageMaterialsExplorer';
+import FlowBatteryMaterialsExplorer from './pages/FlowBatteryMaterialsExplorer';
 import RenderingAgent from './agents/rendering';
 import ModelingAgent from './agents/modeling';
 import ComputeAgent from './agents/compute';
@@ -128,6 +132,10 @@ function App() {
       <Route path="/materials" element={<MaterialsExplorer />} />
       <Route path="/materials/battery" element={<MaterialsExplorer />} />
       <Route path="/materials/nuclear" element={<NuclearMaterialsExplorer />} />
+      <Route path="/materials/supercapacitor" element={<SupercapacitorMaterialsExplorer />} />
+      <Route path="/materials/hydrogen-storage" element={<HydrogenStorageMaterialsExplorer />} />
+      <Route path="/materials/thermal-storage" element={<ThermalStorageMaterialsExplorer />} />
+      <Route path="/materials/flow-battery" element={<FlowBatteryMaterialsExplorer />} />
       <Route path="/manual" element={<Manual />} />
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
