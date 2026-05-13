@@ -28,6 +28,9 @@ const { parseSciencePdfFile } = require('./src/rendering/parse-pdf');
 const { parseScienceText } = require('./src/rendering/parse-science');
 const { validateRenderingImage } = require('./src/rendering/validate-image');
 const { generateRenderingImages } = require('./src/rendering/generate-image');
+const { profileFigureData } = require('./src/rendering/profile-figure-data');
+const { compileFigureContract } = require('./src/rendering/compile-figure');
+const { runFigureRender } = require('./src/rendering/run-figure');
 const { runRetrievalAgentStream, searchMaterialsProject, searchOQMD, searchAFLOW } = require('./src/retrieval/agent');
 const { createCatalystRouter } = require('./src/catalyst/router');
 const { compileComputeInputSet } = require('./src/compute/compile-input-set');
@@ -1925,6 +1928,98 @@ app.post('/api/agent/parse-science', requireAgentAccess('rendering'), async (req
     } catch (err) {
         console.error('[agent/parse-science]', err.message);
         return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── Route 1.5: POST /api/agent/profile-figure-data ────────────────────────────
+app.post('/api/agent/profile-figure-data', requireAgentAccess('rendering'), upload.single('file'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ success: false, error: 'No figure data file uploaded' });
+    }
+
+    try {
+        const profile = await profileFigureData({
+            filePath: req.file.path,
+            originalName: req.file.originalname,
+        });
+        return res.json({ success: true, profile });
+    } catch (err) {
+        console.error('[agent/profile-figure-data]', err.message);
+        return res.status(500).json({ success: false, error: err.message });
+    } finally {
+        if (req.file) require('fs').unlink(req.file.path, () => {});
+    }
+});
+
+// ── Route 1.6: POST /api/agent/compile-figure ─────────────────────────────────
+app.post('/api/agent/compile-figure', requireAgentAccess('rendering'), async (req, res) => {
+    const {
+        profile,
+        figureBrief = {},
+        figureType = 'grouped_bar',
+        exportOptions = {},
+        statisticalRules = {},
+        columnHints = {},
+    } = req.body || {};
+
+    if (!profile || typeof profile !== 'object') {
+        return res.status(400).json({ success: false, error: 'Figure data profile is required' });
+    }
+
+    try {
+        const result = await compileFigureContract({
+            profile,
+            figureBrief,
+            figureType,
+            exportOptions,
+            statisticalRules,
+            columnHints,
+        });
+        return res.json({ success: true, ...result });
+    } catch (err) {
+        console.error('[agent/compile-figure]', err.message);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── Route 1.7: POST /api/agent/generate-figure ────────────────────────────────
+app.post('/api/agent/generate-figure', requireAgentAccess('rendering'), upload.single('file'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ success: false, error: 'No figure data file uploaded' });
+    }
+
+    let contract = null;
+    let exportOptions = {};
+    try {
+        contract = req.body?.contract ? JSON.parse(String(req.body.contract)) : null;
+    } catch {
+        return res.status(400).json({ success: false, error: 'Invalid figure contract JSON' });
+    }
+
+    try {
+        exportOptions = req.body?.exportOptions ? JSON.parse(String(req.body.exportOptions)) : {};
+    } catch {
+        return res.status(400).json({ success: false, error: 'Invalid export options JSON' });
+    }
+
+    if (!contract || typeof contract !== 'object') {
+        return res.status(400).json({ success: false, error: 'Figure contract is required' });
+    }
+
+    try {
+        const result = await runFigureRender({
+            filePath: req.file.path,
+            originalName: req.file.originalname,
+            contract,
+            exportOptions,
+        });
+        await recordAgentUsage(req.body?.userId, 'rendering');
+        return res.json({ success: true, ...result });
+    } catch (err) {
+        console.error('[agent/generate-figure]', err.message);
+        return res.status(500).json({ success: false, error: err.message });
+    } finally {
+        if (req.file) require('fs').unlink(req.file.path, () => {});
     }
 });
 

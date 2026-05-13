@@ -191,3 +191,146 @@ export interface CoverProject {
   currentStep: WorkflowStep;
   generationMode: GenerationMode;
 }
+
+// ─── Data Figure Mode ──────────────────────────────────────────────────────────
+
+export type RenderKind = 'illustration' | 'figure';
+
+export type FigureChartType =
+  | 'grouped_bar'
+  | 'line'
+  | 'scatter'
+  | 'heatmap'
+  | 'multi_panel';
+
+export type FigureColumnType = 'numeric' | 'categorical' | 'date';
+
+export interface FigureColumnProfile {
+  name: string;
+  type: FigureColumnType;
+  missingCount: number;
+  uniqueCount: number;
+  summary: Record<string, string | number | boolean | null | string[]>;
+}
+
+export interface FigureAxisRecommendation {
+  x?: string | null;
+  y?: string | null;
+  group?: string | null;
+  value?: string | null;
+}
+
+export interface FigureDataProfile {
+  rowCount: number;
+  columns: FigureColumnProfile[];
+  numericColumns: string[];
+  categoricalColumns: string[];
+  dateColumns: string[];
+  previewRows: Array<Record<string, string>>;
+  recommendedMappings: Record<string, FigureAxisRecommendation>;
+}
+
+export interface FigureBriefInput {
+  narrative: string;
+  captionDraft: string;
+  targetJournal: JournalPreset;
+  multiPanel: boolean;
+}
+
+export interface FigureColumnHints {
+  x: string;
+  y: string;
+  group: string;
+  secondary: string;
+}
+
+export type FigureErrorMode = 'none' | 'std' | 'sem' | 'ci95';
+
+export interface FigureStatisticalRules {
+  errorMode: FigureErrorMode;
+  showSignificance: boolean;
+  logScale: boolean;
+  showIndividualPoints: boolean;
+}
+
+export interface FigureExportOptions {
+  targetJournal: JournalPreset;
+  widthPx: number;
+  heightPx: number;
+  formats: Array<'svg' | 'png' | 'script' | 'json'>;
+  layout: 'landscape' | 'square' | '2x2';
+  palette: string;
+}
+
+export interface FigurePanelContract {
+  id: string;
+  title: string;
+  chart_type: Exclude<FigureChartType, 'multi_panel'>;
+  x_column: string | null;
+  y_column: string | null;
+  series_column: string | null;
+  secondary_column: string | null;
+  aggregator: 'mean' | 'median' | 'none' | string;
+  show_points: boolean;
+}
+
+export interface FigureContract {
+  version: string;
+  render_kind: 'figure';
+  core_claim: string;
+  figure_title: string;
+  chart_archetype: FigureChartType;
+  panel_map: FigurePanelContract[];
+  columns_used: string[];
+  grouping: {
+    x: string | null;
+    y: string | null;
+    series: string | null;
+    secondary: string | null;
+  };
+  stats_needed: {
+    error_mode: FigureErrorMode;
+    significance: boolean;
+    log_scale: boolean;
+    show_points: boolean;
+  };
+  palette_policy: {
+    journal: string;
+    palette: string;
+    background: string;
+    grid: string;
+  };
+  export_bundle: {
+    journal: string;
+    width_px: number;
+    height_px: number;
+    formats: string[];
+    layout: string;
+  };
+  risks: string[];
+}
+
+export interface FigureQaCheck {
+  id: string;
+  label: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface FigureQaReport {
+  notes?: string[];
+  renderWarnings?: string[];
+  validation?: {
+    ok: boolean;
+    checks: FigureQaCheck[];
+    warnings: string[];
+  };
+}
+
+export interface FigureRenderResult {
+  figureScript: string;
+  figureSpec: FigureContract;
+  svgDataUrl: string;
+  pngDataUrl: string;
+  qaReport: FigureQaReport;
+}

@@ -20,6 +20,7 @@ import {
 
 import InputPanel from './components/InputPanel';
 import PlanCards from './components/PlanCards';
+import FigureMode from './FigureMode';
 
 import {
   StylePreferences,
@@ -29,6 +30,7 @@ import {
   PlanCard,
   ParsedScience,
   CompiledPrompt,
+  RenderKind,
 } from './types';
 
 import {
@@ -407,6 +409,7 @@ const BaseGenerationPanel: React.FC<{
 
 const RenderingAgent: React.FC = () => {
   const navigate = useNavigate();
+  const [renderKind, setRenderKind] = useState<RenderKind>('illustration');
 
   const presentRenderingError = useCallback((message: string) => {
     const raw = String(message || '').trim();
@@ -586,21 +589,56 @@ const RenderingAgent: React.FC = () => {
               </div>
               <div>
                 <p className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-widest">
-                  ILLUSTRATION AGENT
+                  {renderKind === 'illustration' ? 'ILLUSTRATION AGENT' : 'DATA FIGURE AGENT'}
                 </p>
                 <p className="text-xs font-bold text-[#0A1128] leading-none">
-                  SCIENTIFIC AI COVER
+                  {renderKind === 'illustration' ? 'SCIENTIFIC AI COVER' : 'PUBLICATION DATA FIGURES'}
                 </p>
               </div>
             </div>
           </div>
 
-          <StepIndicator currentStep={currentStep} />
+          <div className="flex items-center gap-4">
+            <div className="flex items-center rounded-[32px] border border-gray-200 bg-gray-50 p-1">
+              <button
+                type="button"
+                onClick={() => setRenderKind('illustration')}
+                className={`rounded-[24px] px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                  renderKind === 'illustration'
+                    ? 'bg-[#0A1128] text-white'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Illustration
+              </button>
+              <button
+                type="button"
+                onClick={() => setRenderKind('figure')}
+                className={`rounded-[24px] px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                  renderKind === 'figure'
+                    ? 'bg-[#0A1128] text-white'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Data Figure
+              </button>
+            </div>
+            {renderKind === 'illustration' ? (
+              <StepIndicator currentStep={currentStep} />
+            ) : (
+              <p className="hidden text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:block">
+                Profile · Contract · Render
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Main content */}
       <div className="max-w-4xl mx-auto px-4 py-8">
+        {renderKind === 'figure' ? (
+          <FigureMode />
+        ) : (
         <AnimatePresence mode="wait">
 
           {/* ── input / parsing ── */}
@@ -745,6 +783,7 @@ const RenderingAgent: React.FC = () => {
           )}
 
         </AnimatePresence>
+        )}
       </div>
     </div>
   );
