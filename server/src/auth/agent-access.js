@@ -36,7 +36,7 @@ function extractUserId(req) {
   }
 }
 
-const ADMIN_EMAILS = ['2218114919@qq.com', '205954619@qq.com', 'yiteng1881273@163.com'];
+const ADMIN_EMAILS = ['2218114919@qq.com', 'haayy@foxmail.com', 'yiteng1881273@163.com'];
 
 /**
  * Check whether a user can access a given agent.
