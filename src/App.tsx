@@ -1,7 +1,4 @@
-import { ControlPanel } from './components/ControlPanel';
-import { Scene3D } from './components/Scene3D';
 import { LoginPage } from './components/LoginPage';
-import { AccountDropdown } from './components/AccountDropdown';
 import HeroSection from './components/HeroSection';
 import SplashScreen from './components/SplashScreen';
 import Explore from './pages/Explore';
@@ -9,6 +6,7 @@ import Manual from './pages/Manual';
 import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import CookiePolicy from './pages/CookiePolicy';
+import ProjectWorkspace from './pages/ProjectWorkspace';
 import MaterialsExplorer from './pages/MaterialsExplorer';
 import NuclearMaterialsExplorer from './pages/NuclearMaterialsExplorer';
 import SupercapacitorMaterialsExplorer from './pages/SupercapacitorMaterialsExplorer';
@@ -27,25 +25,11 @@ import { Loader2 } from 'lucide-react';
 import { API_BASE_URL } from './config';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AgentGate } from './components/AgentGate';
-
-// Protected route: redirect to /login if not authenticated
-const AppRoute: React.FC = () => {
-  const { user } = useStore();
-  if (!user) return <Navigate to="/login" replace />;
-  return (
-    <div className="flex w-screen h-screen overflow-hidden bg-[#F5F5F0] p-6 gap-6">
-      <ControlPanel />
-      <div className="flex-1 h-full relative rounded-[24px] overflow-hidden shadow-[0_4px_30px_rgba(0,0,0,0.05)] bg-white ring-1 ring-black/5">
-        <AccountDropdown />
-        <Scene3D />
-      </div>
-    </div>
-  );
-};
+import { isLocalPreviewHost } from './utils/isLocalPreview';
 
 const AgentRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { user } = useStore();
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user && !isLocalPreviewHost()) return <Navigate to="/login" replace />;
   return children;
 };
 
@@ -125,8 +109,9 @@ function App() {
       <Route path="/" element={<HomePage />} />
       {/* 登录页 */}
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
-      {/* 主应用（需要登录） */}
-      <Route path="/app" element={<AppRoute />} />
+      {/* Unified workspace（需要登录） */}
+      <Route path="/workspace" element={<AgentRoute><ProjectWorkspace /></AgentRoute>} />
+      <Route path="/app" element={<Navigate to="/workspace?step=analyze&focus=viewer" replace />} />
       {/* 其他页面 */}
       <Route path="/explore" element={<Explore />} />
       <Route path="/materials" element={<MaterialsExplorer />} />

@@ -481,7 +481,7 @@ const IdeaAgent: React.FC = () => {
     if (card.blueprint?.structure_source?.phase_or_polymorph) {
       params.set('phase', card.blueprint.structure_source.phase_or_polymorph);
     }
-    navigate(`/agent/modeling?${params.toString()}`);
+    navigate(`/workspace?step=modeling&${params.toString()}`);
   };
 
   const hasResult = result !== null;

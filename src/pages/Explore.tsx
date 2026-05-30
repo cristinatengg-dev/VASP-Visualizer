@@ -279,7 +279,7 @@ const Explore: React.FC = () => {
             className="flex flex-col sm:flex-row items-center gap-3 pt-2 border-t border-gray-100"
           >
             <button
-              onClick={() => navigate("/app")}
+              onClick={() => navigate("/workspace?step=analyze&focus=viewer")}
               className="
                 group inline-flex items-center gap-2
                 px-7 py-3.5
@@ -292,7 +292,7 @@ const Explore: React.FC = () => {
                 transition-all duration-200
               "
             >
-              Launch Rendering Agent
+              Launch Project Workspace
               <ArrowRight
                 size={14}
                 strokeWidth={2.5}

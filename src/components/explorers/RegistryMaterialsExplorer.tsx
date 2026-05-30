@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Atom,
   Beaker,
-  BookOpen,
   ChevronRight,
   Database,
   ExternalLink,
@@ -335,7 +334,7 @@ const RegistryMaterialsExplorer: React.FC<{ config: RegistryExplorerConfig }> = 
     }
     if (entry.space_group) params.set('phase', entry.space_group);
     params.set('prompt', `${config.modelingPromptPrefix} ${entry.formula} (${entry.crystal_system}, ${entry.space_group || 'unknown SG'})`);
-    navigate(`/agent/modeling?${params.toString()}`);
+    navigate(`/workspace?step=modeling&${params.toString()}`);
   };
 
   const totalCount = results ? results.mp.length + results.oqmd.length + results.aflow.length : 0;

@@ -71,7 +71,7 @@ interface AgentCard {
 const AGENTS: AgentCard[] = [
   {
     id: "retrieval",
-    route: "/agent/retrieval",
+    route: "/workspace?step=idea",
     icon: <BookOpen size={16} strokeWidth={1.5} className="text-white" />,
     label: "Idea Agent",
     title: "Idea Creator",
@@ -81,7 +81,7 @@ const AGENTS: AgentCard[] = [
   },
   {
     id: "modeling",
-    route: "/agent/modeling",
+    route: "/workspace?step=modeling",
     icon: <Atom size={16} strokeWidth={1.5} className="text-white" />,
     label: "Modeling Agent",
     title: "Natural Language Modeler",
@@ -91,7 +91,7 @@ const AGENTS: AgentCard[] = [
   },
   {
     id: "compute",
-    route: "/agent/compute",
+    route: "/workspace?step=compute",
     icon: <Cpu size={16} strokeWidth={1.5} className="text-white" />,
     label: "Compute Agent",
     title: "Green AI Compute Engine",
@@ -102,17 +102,17 @@ const AGENTS: AgentCard[] = [
   },
   {
     id: "rendering",
-    route: "/app",
+    route: "/workspace?step=analyze&focus=viewer",
     icon: <Box size={16} strokeWidth={1.5} className="text-white" />,
-    label: "Rendering Agent",
-    title: "Cloud-Native Rendering",
+    label: "Analyze Workspace",
+    title: "Cloud-Native Viewer",
     description:
-      "Zero-latency rendering of massive trajectories with automated, industrial-grade insight reports.",
+      "Inspect structures, trajectories, and results inside the unified project workspace without breaking the session timeline.",
     tag: "Live",
   },
   {
     id: "cover",
-    route: "/agent/rendering",
+    route: "/workspace?step=analyze&focus=illustration",
     icon: <Sparkles size={16} strokeWidth={1.5} className="text-white" />,
     label: "Illustration Agent",
     title: "Scientific AI Cover",
@@ -513,7 +513,7 @@ const HeroSection: React.FC = () => {
       <div className="absolute top-6 right-8 z-30">
         {user ? (
           <button
-            onClick={() => navigate("/app")}
+            onClick={() => navigate("/workspace?step=idea")}
             className="
               inline-flex items-center gap-2
               px-5 py-2.5

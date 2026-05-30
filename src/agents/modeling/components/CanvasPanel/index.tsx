@@ -5,16 +5,23 @@ import { Scene3D } from '../../../../components/Scene3D';
 import { useStore } from '../../../../store/useStore';
 import { saveAs } from 'file-saver';
 import { exportToPOSCAR } from '../../../../utils/poscarExporter';
+import { MousePointer2, Trash2, X } from 'lucide-react';
 
 type ToolMode = 'select' | 'move' | 'rotate' | 'scale' | 'measure' | 'angle';
 
-const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) => {
+const CanvasPanel: React.FC<{
+  intent: ModelingIntent | null;
+  onSendToCompute?: () => void;
+}> = ({ intent, onSendToCompute }) => {
   const navigate = useNavigate();
   const molecularData = useStore(state => state.molecularData);
-  const isEditMode = useStore(state => state.isEditMode);
   const setIsEditMode = useStore(state => state.setIsEditMode);
   const triggerRotation = useStore(state => state.triggerRotation);
   const setMeasurementInfo = useStore(state => state.setMeasurementInfo);
+  const selectedAtomIds = useStore(state => state.selectedAtomIds);
+  const selectionMessage = useStore(state => state.selectionMessage);
+  const clearSelection = useStore(state => state.clearSelection);
+  const deleteSelectedAtoms = useStore(state => state.deleteSelectedAtoms);
   const atomCount = molecularData?.atoms?.length ?? null;
   const [activeMode, setActiveMode] = useState<ToolMode>('select');
 
@@ -91,7 +98,13 @@ const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) =>
         <div className="flex gap-2 pointer-events-auto">
           <button
             className="px-4 py-3 bg-green-600 text-white rounded-[32px] hover:bg-green-700 transition-colors shadow-sm font-medium text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
-            onClick={() => navigate('/agent/compute')}
+            onClick={() => {
+              if (onSendToCompute) {
+                onSendToCompute();
+                return;
+              }
+              navigate('/workspace?step=compute');
+            }}
             disabled={!molecularData}
             title="Send structure to Compute Agent"
           >
@@ -118,6 +131,42 @@ const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) =>
           <div>ATOMS: {atomCount ?? '--'}</div>
           <div>LATTICE: {intent.substrate?.supercell?.join('x') || '1x1x1'}</div>
           <div>VACUUM: {intent.substrate?.vacuum || '0'} Å</div>
+        </div>
+      )}
+
+      {molecularData && selectedAtomIds.length > 0 && (
+        <div className="absolute bottom-4 left-4 max-w-[min(360px,calc(100%-2rem))] bg-white border border-gray-100 rounded-[16px] shadow-[0_4px_20px_rgba(0,0,0,0.08)] p-3 pointer-events-auto">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex items-center gap-2">
+              <MousePointer2 className="h-4 w-4 shrink-0 text-[#2E4A8E]" />
+              <span className="truncate text-xs font-semibold text-[#0A1128]">
+                已选中 {selectedAtomIds.length} 个原子
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="h-7 w-7 shrink-0 rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 flex items-center justify-center"
+              title="清除选择"
+              aria-label="清除选择"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {selectionMessage ? (
+            <div className="mt-2 rounded-[12px] border border-yellow-200 bg-yellow-50 px-2 py-1.5 text-[11px] text-yellow-700">
+              {selectionMessage}
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={deleteSelectedAtoms}
+            className="mt-3 w-full h-9 rounded-[20px] border border-red-200 bg-red-50 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 flex items-center justify-center gap-2"
+            title="也可以按 Delete 或 Backspace"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            删除选中原子
+          </button>
         </div>
       )}
     </div>

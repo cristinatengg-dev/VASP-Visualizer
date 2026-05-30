@@ -947,21 +947,30 @@ export const Scene3D: React.FC = () => {
     molecularData, styleConfig, exportScale, showUnitCell, lightSettings, tidySurface, materialStyle, showBonds, isPerspective, triggerSquareExport, setTriggerSquareExport, volumetricData, isosurfaceLevel, isosurfaceMeshReady
   } = useStore();
   const undo = useStore(state => state.undo);
+  const selectedAtomIds = useStore(state => state.selectedAtomIds);
+  const deleteSelectedAtoms = useStore(state => state.deleteSelectedAtoms);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const key = String(e.key || '').toLowerCase();
-      if (key !== 'z') return;
-      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
       const el = document.activeElement as HTMLElement | null;
       const tag = el?.tagName?.toLowerCase();
       if (el && (tag === 'input' || tag === 'textarea' || (el as any).isContentEditable)) return;
-      e.preventDefault();
-      undo();
+
+      if (key === 'z' && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      if ((key === 'delete' || key === 'backspace') && selectedAtomIds.length > 0) {
+        e.preventDefault();
+        deleteSelectedAtoms();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [undo]);
+  }, [deleteSelectedAtoms, selectedAtomIds.length, undo]);
 
   const isVesta = materialStyle === 'vesta';
   const lightPosition = useMemo(() => {
