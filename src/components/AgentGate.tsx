@@ -3,7 +3,6 @@ import { Lock, Sparkles, Crown, Zap, ArrowRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { API_BASE_URL } from '../config';
 import { SubscriptionPanel } from './SubscriptionPanel';
-import { isLocalPreviewHost } from '../utils/isLocalPreview';
 
 interface AgentAccessResult {
   allowed: boolean;
@@ -33,15 +32,8 @@ export const AgentGate: React.FC<AgentGateProps> = ({ agent, label, children }) 
   const [access, setAccess] = useState<AgentAccessResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSubscription, setShowSubscription] = useState(false);
-  const allowLocalPreview = isLocalPreviewHost();
 
   useEffect(() => {
-    if (allowLocalPreview) {
-      setAccess({ allowed: true });
-      setLoading(false);
-      return;
-    }
-
     if (!user) {
       setAccess({ allowed: false, reason: 'login_required', message: '请先登录' });
       setLoading(false);
@@ -78,7 +70,7 @@ export const AgentGate: React.FC<AgentGateProps> = ({ agent, label, children }) 
     };
 
     checkAccess();
-  }, [user, agent, allowLocalPreview]);
+  }, [user, agent]);
 
   if (loading) {
     return (

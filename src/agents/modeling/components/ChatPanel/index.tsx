@@ -1,27 +1,19 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   MODELING_PROVIDER_OPTIONS,
-  ModelingBuildMeta,
   ModelingIntent,
   ModelingProviderName,
 } from '../../types/modeling';
 import { useModeling } from '../../hooks/useModeling';
 import { useStore } from '../../../../store/useStore';
 import { API_BASE_URL } from '../../../../config';
-import {
-  renderDataToMolecularStructure,
-  molecularStructureToRenderData,
-  type RenderData,
-} from '../../../../utils/catalystHelpers';
-
-interface ChatPanelProps {
+import { renderDataToMolecularStructure, molecularStructureToRenderData } from '../../../../utils/catalystHelpers';interface ChatPanelProps {
   onIntentChange: (intent: ModelingIntent) => void;
   currentIntent: ModelingIntent | null;
   prefillPrompt?: string | null;
-  onBuildMetaChange?: (meta: ModelingBuildMeta | null) => void;
 }
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, prefillPrompt, onBuildMetaChange }) => {
+const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, prefillPrompt }) => {
   const [input, setInput] = useState(prefillPrompt ?? '');
   const [providerOrderInput, setProviderOrderInput] = useState(MODELING_PROVIDER_OPTIONS.join(','));
   const [editMaterial, setEditMaterial] = useState('');
@@ -55,12 +47,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
       setInput(prefillPrompt);
     }
   }, [prefillPrompt]);
-
-  useEffect(() => {
-    if (onBuildMetaChange) {
-      onBuildMetaChange(latestBuildMeta);
-    }
-  }, [latestBuildMeta, onBuildMetaChange]);
 
   const normalizedProviders = useMemo(() => {
     const nextProviders: ModelingProviderName[] = [];
@@ -727,7 +713,7 @@ const CatalystToolkitPanel: React.FC = () => {
     }
   }, []);
 
-  const applyResult = useCallback((renderData: RenderData, filename: string, message: string) => {
+  const applyResult = useCallback((renderData: { atoms: any[]; latticeVectors: number[][] }, filename: string, message: string) => {
     const mol = renderDataToMolecularStructure(renderData, filename);
     setMolecularData(mol);
     setToolSuccess(message);
@@ -858,10 +844,7 @@ const CatalystToolkitPanel: React.FC = () => {
               structure: currentRenderData,
             });
             if (result) {
-              const groups = Array.isArray(result.groups)
-                ? result.groups as Array<{ element: string; wyckoff: string; multiplicity: number }>
-                : [];
-              setToolSuccess(`${result.spacegroup} (#${result.spacegroup_number}), ${result.n_groups} unique site group(s): ${groups.map((group) => `${group.element}@${group.wyckoff}(x${group.multiplicity})`).join(', ')}`);
+              setToolSuccess(`${result.spacegroup} (#${result.spacegroup_number}), ${result.n_groups} unique site group(s): ${result.groups?.map((g: any) => `${g.element}@${g.wyckoff}(x${g.multiplicity})`).join(', ')}`);
             }
           }}
           disabled={isLoading}

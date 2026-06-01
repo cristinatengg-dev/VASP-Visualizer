@@ -187,7 +187,7 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
     }
     if (entry.space_group) params.set('phase', entry.space_group);
     params.set('prompt', `${config.modelingPromptPrefix} ${entry.formula} (${entry.crystal_system}, ${entry.space_group || 'unknown SG'})`);
-    navigate(`/workspace?step=modeling&${params.toString()}`);
+    navigate(`/agent/modeling?${params.toString()}`);
   };
 
   const filtered = !results
