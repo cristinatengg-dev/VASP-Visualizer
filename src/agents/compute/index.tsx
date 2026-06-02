@@ -9,7 +9,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../../store/useStore';
 import {
   ComputeIntent, ServerComputeProfile, JobStatus, ComputeResult,
-  WorkflowType, QualityType, CompiledInputs
+  WorkflowType, QualityType, CompiledInputs,
+  RemoteComputeChannelInput, RemoteComputeChannelTestResult,
+  EngineType
 } from './types';
 import { Scene3D } from '../../components/Scene3D';
 import { API_BASE_URL } from '../../config';
@@ -22,9 +24,31 @@ const STEPS = [
   { id: 'monitor', label: 'Job Monitor', icon: History },
 ];
 
+const COMPUTE_ENGINES: Array<{ id: EngineType; label: string; summary: string }> = [
+  { id: 'vasp', label: 'VASP', summary: 'Periodic DFT for materials' },
+  { id: 'cp2k', label: 'CP2K', summary: 'DFT, MD, mixed Gaussian/plane-wave' },
+  { id: 'quantum_espresso', label: 'Quantum ESPRESSO', summary: 'Plane-wave DFT' },
+  { id: 'gaussian', label: 'Gaussian', summary: 'Quantum chemistry' },
+  { id: 'orca', label: 'ORCA', summary: 'Quantum chemistry' },
+  { id: 'lammps', label: 'LAMMPS', summary: 'Classical molecular dynamics' },
+  { id: 'gromacs', label: 'GROMACS', summary: 'Biomolecular / soft-matter MD' },
+  { id: 'namd', label: 'NAMD', summary: 'Large-scale molecular dynamics' },
+  { id: 'amber', label: 'AMBER', summary: 'Biomolecular MD suite' },
+  { id: 'openmm', label: 'OpenMM', summary: 'Python/GPU molecular simulation' },
+  { id: 'abinit', label: 'ABINIT', summary: 'DFT / many-body materials' },
+  { id: 'castep', label: 'CASTEP', summary: 'Plane-wave DFT' },
+  { id: 'siesta', label: 'SIESTA', summary: 'Localized-orbital DFT' },
+  { id: 'dftbplus', label: 'DFTB+', summary: 'Semi-empirical quantum methods' },
+  { id: 'xtb', label: 'xtb', summary: 'Fast semi-empirical chemistry' },
+  { id: 'nwchem', label: 'NWChem', summary: 'Quantum chemistry / materials' },
+  { id: 'qchem', label: 'Q-Chem', summary: 'Quantum chemistry' },
+];
+
+const COMPILE_READY_ENGINES = new Set<EngineType>(['vasp']);
+
 const ComputeAgent: React.FC = () => {
   const navigate = useNavigate();
-  const { molecularData, selectedAtomIds } = useStore();
+  const { molecularData, selectedAtomIds, user } = useStore();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
   // Step 1: Structure
@@ -47,6 +71,15 @@ const ComputeAgent: React.FC = () => {
   const [profiles, setProfiles] = useState<ServerComputeProfile[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [remoteChannel, setRemoteChannel] = useState<RemoteComputeChannelInput>({
+    host: '',
+    user: 'root',
+    port: '22',
+    password: '',
+  });
+  const [isTestingChannel, setIsTestingChannel] = useState(false);
+  const [channelTest, setChannelTest] = useState<RemoteComputeChannelTestResult | null>(null);
+  const [channelError, setChannelError] = useState<string | null>(null);
 
   // Step 4: Compile
   const [compiledInputs, setCompiledInputs] = useState<CompiledInputs | null>(null);
@@ -86,6 +119,47 @@ const ComputeAgent: React.FC = () => {
     fetchProfiles();
   }, []);
 
+  const updateRemoteChannel = (key: keyof RemoteComputeChannelInput, value: string) => {
+    setRemoteChannel(prev => ({ ...prev, [key]: value }));
+    setChannelTest(null);
+    setChannelError(null);
+  };
+
+  const handleTestRemoteChannel = async () => {
+    setIsTestingChannel(true);
+    setChannelTest(null);
+    setChannelError(null);
+
+    try {
+      const token = localStorage.getItem('vasp_token') || '';
+      const res = await fetch(`${API_BASE_URL}/compute/channel/test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          userId: user?.email,
+          channel: {
+            host: remoteChannel.host.trim(),
+            user: remoteChannel.user.trim(),
+            port: Number(remoteChannel.port) || 22,
+            password: remoteChannel.password,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Remote channel test failed');
+      }
+      setChannelTest(data);
+    } catch (err) {
+      setChannelError(err instanceof Error ? err.message : 'Remote channel test failed');
+    } finally {
+      setIsTestingChannel(false);
+    }
+  };
+
   // ── Compile inputs ──────────────────────────────────────────────────
   const handleCompile = useCallback(async () => {
     if (!molecularData) return;
@@ -94,6 +168,11 @@ const ComputeAgent: React.FC = () => {
     setCompiledInputs(null);
 
     try {
+      if (!COMPILE_READY_ENGINES.has(intent.engine)) {
+        const engineLabel = COMPUTE_ENGINES.find(engine => engine.id === intent.engine)?.label || intent.engine;
+        throw new Error(`${engineLabel} channel detection is supported, but its input compiler template is not configured yet.`);
+      }
+
       const structurePayload = {
         data: {
           atoms: molecularData.atoms.map(a => ({
@@ -115,6 +194,7 @@ const ComputeAgent: React.FC = () => {
         body: JSON.stringify({
           structure: structurePayload,
           intent: {
+            engine: intent.engine,
             workflow: intent.workflow,
             quality: intent.quality,
             vdw: intent.vdw,
@@ -398,6 +478,37 @@ const ComputeAgent: React.FC = () => {
               {/* ── Step 2: Intent ────────────────────────────────── */}
               {currentStep.id === 'intent' && (
                 <div className="p-8 space-y-8">
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Compute Engine</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {COMPUTE_ENGINES.map(engine => (
+                        <button
+                          key={engine.id}
+                          onClick={() => setIntent({ ...intent, engine: engine.id })}
+                          className={`p-4 rounded-[20px] border text-left transition-all ${
+                            intent.engine === engine.id
+                              ? 'bg-[#0A1128] border-[#0A1128] shadow-lg shadow-[#0A1128]/10'
+                              : 'bg-white border-gray-100 hover:border-[#2E4A8E]/30'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className={`text-sm font-bold ${intent.engine === engine.id ? 'text-white' : 'text-[#0A1128]'}`}>{engine.label}</p>
+                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
+                              intent.engine === engine.id
+                                ? 'bg-white/10 text-white/70'
+                                : COMPILE_READY_ENGINES.has(engine.id)
+                                  ? 'bg-green-50 text-green-600'
+                                  : 'bg-gray-50 text-gray-400'
+                            }`}>
+                              {COMPILE_READY_ENGINES.has(engine.id) ? 'compile' : 'detect'}
+                            </span>
+                          </div>
+                          <p className={`text-[10px] mt-1 leading-relaxed ${intent.engine === engine.id ? 'text-white/55' : 'text-gray-500'}`}>{engine.summary}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {(['relax', 'static', 'dos', 'band', 'adsorption'] as WorkflowType[]).map(wf => (
                       <button
@@ -457,6 +568,117 @@ const ComputeAgent: React.FC = () => {
               {/* ── Step 3: HPC Profile ──────────────────────────── */}
               {currentStep.id === 'hpc' && (
                 <div className="p-8 space-y-6">
+                  <div className="rounded-[24px] border border-[#2E4A8E]/15 bg-[#2E4A8E]/5 p-5">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <h3 className="text-xs font-bold text-[#2E4A8E] uppercase tracking-widest">Remote Channel</h3>
+                        <p className="mt-1 text-xs text-[#2E4A8E]/70">
+                          Enter an SSH channel and detect schedulers plus common compute engines on the machine.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleTestRemoteChannel}
+                        disabled={isTestingChannel || !remoteChannel.host.trim() || !remoteChannel.user.trim() || !remoteChannel.password}
+                        className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0A1128] px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-[#0A1128]/10 transition-all hover:bg-[#162044] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isTestingChannel ? <Loader2 size={14} className="animate-spin" /> : <Server size={14} />}
+                        {isTestingChannel ? 'Testing...' : 'Test Channel'}
+                      </button>
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-[1.5fr_1fr_0.6fr_1.3fr]">
+                      <div className="rounded-[18px] border border-white/70 bg-white px-4 py-3">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">Host / IP</label>
+                        <input
+                          value={remoteChannel.host}
+                          onChange={e => updateRemoteChannel('host', e.target.value)}
+                          placeholder="10.10.104.62"
+                          className="mt-1 w-full bg-transparent text-sm font-bold text-[#0A1128] outline-none"
+                        />
+                      </div>
+                      <div className="rounded-[18px] border border-white/70 bg-white px-4 py-3">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">User</label>
+                        <input
+                          value={remoteChannel.user}
+                          onChange={e => updateRemoteChannel('user', e.target.value)}
+                          placeholder="root"
+                          className="mt-1 w-full bg-transparent text-sm font-bold text-[#0A1128] outline-none"
+                        />
+                      </div>
+                      <div className="rounded-[18px] border border-white/70 bg-white px-4 py-3">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">Port</label>
+                        <input
+                          value={remoteChannel.port}
+                          onChange={e => updateRemoteChannel('port', e.target.value)}
+                          inputMode="numeric"
+                          placeholder="22"
+                          className="mt-1 w-full bg-transparent text-sm font-bold text-[#0A1128] outline-none"
+                        />
+                      </div>
+                      <div className="rounded-[18px] border border-white/70 bg-white px-4 py-3">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">Password</label>
+                        <input
+                          value={remoteChannel.password}
+                          onChange={e => updateRemoteChannel('password', e.target.value)}
+                          type="password"
+                          autoComplete="new-password"
+                          placeholder="SSH password"
+                          className="mt-1 w-full bg-transparent text-sm font-bold text-[#0A1128] outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {channelTest && (
+                      <div className="mt-4 rounded-[18px] border border-green-100 bg-green-50 px-4 py-3">
+                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                          <div className="flex items-center gap-2 text-green-700">
+                            <CheckCircle2 size={16} />
+                            <span className="text-xs font-bold">
+                              Connected as {channelTest.remote?.user || channelTest.target?.username || 'remote user'}
+                              {channelTest.remote?.hostname ? ` @ ${channelTest.remote.hostname}` : ''}
+                            </span>
+                          </div>
+                          <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase text-green-700">
+                            Scheduler: {channelTest.scheduler || 'none'}
+                          </span>
+                        </div>
+                        {channelTest.software && channelTest.software.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-green-700/70">Detected compute software</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {channelTest.software.map(item => (
+                                <span key={item.id} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-green-700">
+                                  {item.label}
+                                  <span className="ml-1 font-medium text-green-700/50">{item.category}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {channelTest.commands && Object.keys(channelTest.commands).length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {Object.entries(channelTest.commands).slice(0, 12).map(([name, command]) => (
+                              <span key={name} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-mono text-green-700">
+                                {name}: {command}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {channelError && (
+                      <div className="mt-4 flex items-start gap-2 rounded-[18px] border border-red-100 bg-red-50 px-4 py-3 text-red-700">
+                        <XCircle size={16} className="mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-xs font-bold">Channel test failed</p>
+                          <p className="mt-1 text-[11px]">{channelError}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {loadingProfiles ? (
                     <div className="flex items-center justify-center py-12 gap-3 text-gray-400">
                       <Loader2 size={20} className="animate-spin" />
@@ -518,7 +740,7 @@ const ComputeAgent: React.FC = () => {
               {currentStep.id === 'preview' && (
                 <div className="p-8 space-y-6">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Compiled VASP Inputs</h3>
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Compiled Compute Inputs</h3>
                     <div className="flex gap-2">
                       {isCompiling && <span className="flex items-center gap-1 text-[#2E4A8E] text-[10px] font-bold"><Loader2 size={12} className="animate-spin" /> COMPILING...</span>}
                       {compiledInputs && <span className="px-2 py-0.5 bg-green-50 text-green-600 text-[10px] font-bold rounded">COMPILED</span>}
@@ -542,7 +764,11 @@ const ComputeAgent: React.FC = () => {
                   {compiledInputs && (
                     <>
                       <div className="grid grid-cols-4 gap-3">
-                        {['INCAR', 'KPOINTS', 'POSCAR', 'POTCAR'].map(file => {
+                        {Object.keys(compiledInputs.files)
+                          .filter(file => file !== 'POTCAR.spec.json')
+                          .concat(compiledInputs.files['POTCAR.spec.json'] ? ['POTCAR'] : [])
+                          .slice(0, 8)
+                          .map(file => {
                           const isPotcar = file === 'POTCAR';
                           const fileKey = isPotcar ? 'POTCAR' : file;
                           return (
@@ -572,12 +798,12 @@ const ComputeAgent: React.FC = () => {
                           {selectedPreviewFile === 'POTCAR' ? (
                             <div className="space-y-4">
                               <p className="text-[11px] text-white/50 leading-relaxed">
-                                POTCAR files contain licensed VASP pseudopotentials and cannot be generated.
-                                When submitting to your HPC cluster, the server will automatically assemble
-                                POTCAR from your cluster's pseudopotential library.
+                                Some engines need licensed or cluster-local assets such as pseudopotentials,
+                                basis sets, force fields, topologies, or machine-specific runtime modules.
+                                The compiler records the required spec here instead of embedding private files.
                               </p>
                               <div className="mt-3 space-y-2">
-                                <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Required Pseudopotentials</p>
+                                <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Required Engine Assets</p>
                                 {(() => {
                                   try {
                                     const specRaw = compiledInputs.files['POTCAR.spec.json' as keyof typeof compiledInputs.files];
@@ -600,8 +826,8 @@ const ComputeAgent: React.FC = () => {
                               </div>
                               <div className="mt-3 p-3 bg-white/5 rounded-[16px] border border-white/10">
                                 <p className="text-[10px] text-white/50">
-                                  On job submission, the server runs <code className="text-white/70">materializeRemotePotcar()</code> via
-                                  SSH to concatenate the correct POTCAR from <code className="text-white/70">HPC_REMOTE_POTCAR_DIR</code> on your cluster.
+                                  On job submission, the runtime should resolve engine-specific assets on the
+                                  selected remote channel instead of storing them in the browser payload.
                                 </p>
                               </div>
                             </div>

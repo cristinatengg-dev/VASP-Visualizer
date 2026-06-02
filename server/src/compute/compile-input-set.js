@@ -2,11 +2,35 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { getDefaultComputePythonExecutable } = require('./python-runtime');
 
+const SUPPORTED_ENGINES = new Set([
+  'vasp',
+  'cp2k',
+  'quantum_espresso',
+  'gaussian',
+  'orca',
+  'nwchem',
+  'qchem',
+  'lammps',
+  'gromacs',
+  'namd',
+  'amber',
+  'openmm',
+  'abinit',
+  'castep',
+  'siesta',
+  'dftbplus',
+  'xtb',
+]);
+const COMPILE_READY_ENGINES = new Set(['vasp']);
 const SUPPORTED_WORKFLOWS = new Set(['relax', 'static']);
 const SUPPORTED_QUALITIES = new Set(['fast', 'standard', 'high']);
 const SUPPORTED_SPIN_MODES = new Set(['none', 'auto', 'polarized']);
 
 function normalizeComputeIntent(intent = {}, structurePreview = {}) {
+  const engine = SUPPORTED_ENGINES.has(String(intent.engine || '').trim().toLowerCase())
+    ? String(intent.engine).trim().toLowerCase()
+    : 'vasp';
+
   const workflow = SUPPORTED_WORKFLOWS.has(String(intent.workflow || '').trim().toLowerCase())
     ? String(intent.workflow).trim().toLowerCase()
     : 'relax';
@@ -20,6 +44,7 @@ function normalizeComputeIntent(intent = {}, structurePreview = {}) {
     : 'auto';
 
   return {
+    engine,
     workflow,
     quality,
     vdw: intent.vdw === true,
@@ -74,6 +99,9 @@ async function compileComputeInputSet({ structure, intent } = {}) {
   }
 
   const normalizedIntent = normalizeComputeIntent(intent, structure.meta || {});
+  if (!COMPILE_READY_ENGINES.has(normalizedIntent.engine)) {
+    throw new Error(`Input compilation for '${normalizedIntent.engine}' is not wired yet. The remote channel can detect this engine, but an engine-specific input template must be configured before submission.`);
+  }
   const compilerPath = path.join(__dirname, '../../agents/compute/compiler.py');
   const pythonExecutable = getDefaultComputePythonExecutable();
   const requestPayload = {

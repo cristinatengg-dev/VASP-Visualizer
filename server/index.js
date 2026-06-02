@@ -37,6 +37,7 @@ const { compileComputeInputSet } = require('./src/compute/compile-input-set');
 const { listComputeProfiles, getComputeProfile } = require('./src/compute/profiles');
 const { submitComputeJob } = require('./src/compute/submit-job');
 const { querySlurmJobStatus, queryPbsJobStatus, queryLocalJobStatus } = require('./src/compute/query-job');
+const { testRemoteComputeChannel } = require('./src/compute/ssh-channel');
 const { buildResultMetrics, collectWarnings } = require('./src/compute/parse-results');
 const { requireAgentAccess, recordAgentUsage, handleAgentAccessCheck } = require('./src/auth/agent-access');
 
@@ -340,6 +341,16 @@ app.get('/api/compute/profiles', async (_req, res) => {
         res.json({ success: true, profiles });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/compute/channel/test', authMiddleware, requireAgentAccess('compute'), async (req, res) => {
+    try {
+        const result = await testRemoteComputeChannel(req.body?.channel || req.body || {});
+        res.json({ success: true, ...result });
+    } catch (err) {
+        console.error('[compute/channel/test]', err.message);
+        res.status(400).json({ success: false, error: err.message });
     }
 });
 

@@ -1,6 +1,23 @@
 import { MolecularStructure } from '../../types';
 
-export type EngineType = 'vasp' | 'cp2k' | 'qe';
+export type EngineType =
+  | 'vasp'
+  | 'cp2k'
+  | 'quantum_espresso'
+  | 'gaussian'
+  | 'orca'
+  | 'nwchem'
+  | 'qchem'
+  | 'lammps'
+  | 'gromacs'
+  | 'namd'
+  | 'amber'
+  | 'openmm'
+  | 'abinit'
+  | 'castep'
+  | 'siesta'
+  | 'dftbplus'
+  | 'xtb';
 export type WorkflowType = 'relax' | 'static' | 'dos' | 'band' | 'adsorption' | 'neb';
 export type QualityType = 'fast' | 'standard' | 'high';
 export type SpinMode = 'auto' | 'none' | 'collinear' | 'non-collinear';
@@ -54,6 +71,43 @@ export interface ServerComputeProfile {
   };
 }
 
+export interface RemoteComputeChannelInput {
+  host: string;
+  user: string;
+  port: string;
+  password: string;
+}
+
+export interface RemoteComputeChannelTestResult {
+  ok: boolean;
+  target?: {
+    host: string;
+    port: number;
+    username: string;
+  };
+  remote?: {
+    hostname: string | null;
+    user: string | null;
+    pwd: string | null;
+    shell: string | null;
+  };
+  scheduler?: string;
+  schedulers?: Array<{
+    id: string;
+    label: string;
+    commands: Record<string, string>;
+  }>;
+  software?: Array<{
+    id: string;
+    label: string;
+    category: string;
+    commands: Record<string, string>;
+    pythonModules?: string[];
+  }>;
+  commands?: Record<string, string>;
+  pythonModules?: Record<string, boolean>;
+}
+
 // Legacy frontend-only type (kept for backward compat)
 export interface HPCProfile {
   id: string;
@@ -93,12 +147,7 @@ export interface JobStatus {
 
 // Compiled VASP input files from backend
 export interface CompiledInputs {
-  files: {
-    INCAR: string;
-    KPOINTS: string;
-    POSCAR: string;
-    'POTCAR.spec.json'?: string;
-  };
+  files: Record<string, string>;
   normalizedIntent?: Record<string, any>;
   success: boolean;
 }
