@@ -28,6 +28,7 @@ interface Paper {
   title: string; authors: string; year: string | number;
   doi: string | null; url: string | null; abstract: string | null;
   source: string; source_type: 'peer-reviewed' | 'preprint';
+  ablesci_url?: string;
 }
 
 interface Structure {
@@ -110,7 +111,20 @@ const SOURCE_COLOR: Record<string, string> = {
   OpenAlex: 'text-violet-600',
   arXiv: 'text-rose-600',
   CORE: 'text-teal-600',
+  'Semantic Scholar': 'text-amber-600',
+  'Europe PMC': 'text-cyan-600',
+  PubMed: 'text-emerald-600',
 };
+
+const LITERATURE_STAGE_SOURCES = [
+  { key: 'lit_crossref', label: 'CrossRef' },
+  { key: 'lit_openalex', label: 'OpenAlex' },
+  { key: 'lit_arxiv', label: 'arXiv' },
+  { key: 'lit_core', label: 'CORE' },
+  { key: 'lit_semantic_scholar', label: 'Semantic Scholar' },
+  { key: 'lit_europe_pmc', label: 'Europe PMC' },
+  { key: 'lit_pubmed', label: 'PubMed' },
+];
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Stage timeline entry
@@ -354,11 +368,21 @@ const PaperCard: React.FC<{ paper: Paper }> = ({ paper }) => (
     {paper.abstract && (
       <p className="mt-1.5 text-[10px] text-gray-500 leading-relaxed line-clamp-2">{paper.abstract}</p>
     )}
-    {paper.url && (
-      <a href={paper.url} target="_blank" rel="noopener noreferrer"
-        className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-indigo-500 hover:text-indigo-700 font-mono">
-        {paper.doi || paper.url.slice(0, 40)} <ExternalLink size={9} />
-      </a>
+    {(paper.url || paper.ablesci_url) && (
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        {paper.url && (
+          <a href={paper.url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[10px] text-indigo-500 hover:text-indigo-700 font-mono">
+            {paper.doi || paper.url.slice(0, 40)} <ExternalLink size={9} />
+          </a>
+        )}
+        {paper.ablesci_url && (
+          <a href={paper.ablesci_url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-full border border-gray-100 bg-gray-50 px-2 py-0.5 text-[9px] font-semibold text-gray-500 hover:border-indigo-100 hover:bg-indigo-50 hover:text-indigo-600">
+            科研通检索 <ExternalLink size={8} />
+          </a>
+        )}
+      </div>
     )}
   </div>
 );
@@ -486,7 +510,7 @@ const IdeaAgent: React.FC = () => {
 
   const hasResult = result !== null;
   const doneStages = stages.filter((s) => s.status === 'done').length;
-  const totalStages = 10; // goal, translate, 4x lit, structure(MP), oqmd, aflow, ideas
+  const totalStages = 13; // goal, 7x literature, structure(MP), oqmd, aflow, ideas
   const activeStage = stages.find((s) => s.status === 'active');
 
   return (
@@ -617,12 +641,7 @@ const IdeaAgent: React.FC = () => {
             <div className="space-y-3">
               {/* Live source status tracker */}
               <div className="grid grid-cols-2 gap-1.5">
-                {[
-                  { key: 'lit_crossref', label: 'CrossRef' },
-                  { key: 'lit_openalex', label: 'OpenAlex' },
-                  { key: 'lit_arxiv', label: 'arXiv' },
-                  { key: 'lit_core', label: 'CORE' },
-                ].map(src => {
+                {LITERATURE_STAGE_SOURCES.map(src => {
                   const stage = stages.find(s => s.stage === src.key);
                   const isDone = stage?.status === 'done';
                   const isActive = stage?.status === 'active';

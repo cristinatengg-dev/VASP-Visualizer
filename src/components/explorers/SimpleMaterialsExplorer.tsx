@@ -2,10 +2,7 @@ import React, { useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
-  Atom,
-  Beaker,
   Database,
-  ExternalLink,
   Loader2,
   Search,
   Zap,
@@ -25,51 +22,40 @@ interface MaterialEntry {
   band_gap?: string | null;
   theoretical?: boolean | null;
   source?: string;
+  source_url?: string;
   selection_reason: string;
 }
+
+type SourceKey = 'mp' | 'oqmd' | 'aflow' | 'jarvis' | 'nomad';
 
 interface SearchResults {
   mp: MaterialEntry[];
   oqmd: MaterialEntry[];
   aflow: MaterialEntry[];
+  jarvis?: MaterialEntry[];
+  nomad?: MaterialEntry[];
+  [key: string]: MaterialEntry[] | undefined;
 }
 
-type ResultsTab = 'all' | 'mp' | 'oqmd' | 'aflow';
+const SOURCE_ORDER: SourceKey[] = ['mp', 'oqmd', 'aflow', 'jarvis', 'nomad'];
 
-const DB_META: Record<'mp' | 'oqmd' | 'aflow', { label: string; color: string; bg: string; border: string; icon: React.ReactNode; url: string }> = {
-  mp: {
-    label: 'Materials Project',
-    color: 'text-emerald-700',
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    icon: <Database size={14} />,
-    url: 'https://materialsproject.org',
-  },
-  oqmd: {
-    label: 'OQMD',
-    color: 'text-violet-700',
-    bg: 'bg-violet-50',
-    border: 'border-violet-200',
-    icon: <Beaker size={14} />,
-    url: 'https://oqmd.org',
-  },
-  aflow: {
-    label: 'AFLOW',
-    color: 'text-sky-700',
-    bg: 'bg-sky-50',
-    border: 'border-sky-200',
-    icon: <Atom size={14} />,
-    url: 'https://aflowlib.org',
-  },
+const describeResult = (entry: MaterialEntry) => {
+  if (entry.energy_above_hull !== 'N/A') {
+    return `${entry.energy_above_hull} eV/atom above hull`;
+  }
+  if (entry.formation_energy) {
+    return `Formation energy ${entry.formation_energy} eV/atom`;
+  }
+  if (entry.band_gap) {
+    return `Band gap ${entry.band_gap} eV`;
+  }
+  return 'Structure metadata returned from connected sources.';
 };
 
 const MaterialCard: React.FC<{
   entry: MaterialEntry;
-  dbKey: 'mp' | 'oqmd' | 'aflow';
   onViewStructure: (entry: MaterialEntry) => void;
-}> = ({ entry, dbKey, onViewStructure }) => {
-  const meta = DB_META[dbKey];
-
+}> = ({ entry, onViewStructure }) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -80,11 +66,10 @@ const MaterialCard: React.FC<{
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="font-mono text-base font-bold text-[#0A1128]">{entry.formula}</span>
-          <span className={`rounded-full border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest ${meta.bg} ${meta.color} ${meta.border}`}>
-            {meta.label}
+          <span className="rounded-full border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-emerald-700">
+            Verified
           </span>
         </div>
-        <span className="shrink-0 text-[10px] font-mono text-gray-400">{entry.material_id}</span>
       </div>
 
       <div className="mb-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -120,7 +105,7 @@ const MaterialCard: React.FC<{
         )}
       </div>
 
-      <p className="mb-3 text-[10px] leading-relaxed text-gray-400">{entry.selection_reason}</p>
+      <p className="mb-3 text-[10px] leading-relaxed text-gray-400">{describeResult(entry)}</p>
 
       <div className="flex items-center gap-2">
         <button
@@ -130,16 +115,6 @@ const MaterialCard: React.FC<{
           <Zap size={10} />
           Send to Modeling
         </button>
-        {dbKey === 'mp' && entry.material_id && (
-          <a
-            href={`https://materialsproject.org/materials/${entry.material_id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 font-mono text-[10px] text-indigo-500 hover:text-indigo-700"
-          >
-            View on MP <ExternalLink size={9} />
-          </a>
-        )}
       </div>
     </motion.div>
   );
@@ -151,7 +126,6 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResults | null>(null);
   const [searchedFormula, setSearchedFormula] = useState('');
-  const [activeTab, setActiveTab] = useState<ResultsTab>('all');
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = async (formula?: string) => {
@@ -168,7 +142,6 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
       const data = await res.json();
       if (data.success) {
         setResults(data.results);
-        setActiveTab('all');
       } else {
         setError(data.error || 'Search failed');
       }
@@ -182,7 +155,7 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
   const handleViewStructure = (entry: MaterialEntry) => {
     const params = new URLSearchParams();
     params.set('material', entry.formula);
-    if (entry.material_id && !entry.material_id.startsWith('oqmd-') && !entry.material_id.startsWith('aflow:')) {
+    if (entry.material_id && (entry.source === 'Materials Project' || entry.material_id.startsWith('mp-'))) {
       params.set('mpid', entry.material_id);
     }
     if (entry.space_group) params.set('phase', entry.space_group);
@@ -192,15 +165,9 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
 
   const filtered = !results
     ? []
-    : activeTab === 'all'
-      ? [
-        ...results.mp.map((entry) => ({ entry, dbKey: 'mp' as const })),
-        ...results.oqmd.map((entry) => ({ entry, dbKey: 'oqmd' as const })),
-        ...results.aflow.map((entry) => ({ entry, dbKey: 'aflow' as const })),
-      ]
-      : results[activeTab].map((entry) => ({ entry, dbKey: activeTab }));
+    : SOURCE_ORDER.flatMap((key) => results[key] || []);
 
-  const totalCount = results ? results.mp.length + results.oqmd.length + results.aflow.length : 0;
+  const totalCount = filtered.length;
 
   return (
     <div className="min-h-screen bg-[#F5F5F0] px-4 py-8">
@@ -273,28 +240,7 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
                 <h2 className="text-sm font-black text-[#0A1128]">
                   Results for <span className="font-mono text-indigo-600">{searchedFormula}</span>
                 </h2>
-                <span className="font-mono text-[10px] text-gray-400">{totalCount} entries across 3 databases</span>
-              </div>
-
-              <div className="flex gap-1.5">
-                {[
-                  { key: 'all' as const, label: 'All', count: totalCount },
-                  { key: 'mp' as const, label: 'Materials Project', count: results.mp.length },
-                  { key: 'oqmd' as const, label: 'OQMD', count: results.oqmd.length },
-                  { key: 'aflow' as const, label: 'AFLOW', count: results.aflow.length },
-                ].map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all ${
-                      activeTab === tab.key
-                        ? 'bg-[#0A1128] text-white'
-                        : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
-                    }`}
-                  >
-                    {tab.label} <span className="ml-0.5 font-mono">{tab.count}</span>
-                  </button>
-                ))}
+                <span className="font-mono text-[10px] text-gray-400">{totalCount} verified entries</span>
               </div>
             </div>
 
@@ -307,30 +253,14 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
                     <p className="mt-1 text-xs text-gray-400">Try a different formula</p>
                   </div>
                 )}
-                {filtered.map(({ entry, dbKey }, index) => (
+                {filtered.map((entry, index) => (
                   <MaterialCard
-                    key={`${dbKey}-${entry.material_id}-${index}`}
+                    key={`${entry.material_id}-${index}`}
                     entry={entry}
-                    dbKey={dbKey}
                     onViewStructure={handleViewStructure}
                   />
                 ))}
               </AnimatePresence>
-            </div>
-
-            <div className="flex items-center gap-4 border-t border-gray-100 bg-gray-50/50 px-6 py-3">
-              <span className="text-[10px] text-gray-400">Data sources:</span>
-              {Object.entries(DB_META).map(([key, meta]) => (
-                <a
-                  key={key}
-                  href={meta.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex items-center gap-1 text-[10px] font-medium ${meta.color} hover:underline`}
-                >
-                  {meta.icon} {meta.label} <ExternalLink size={8} />
-                </a>
-              ))}
             </div>
           </div>
         )}
@@ -359,7 +289,7 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
         {isSearching && (
           <div className="rounded-[24px] bg-white p-12 text-center shadow-[0_4px_30px_rgba(0,0,0,0.05)] ring-1 ring-black/5">
             <Loader2 size={32} className="mx-auto mb-4 animate-spin text-indigo-500" />
-            <p className="text-sm font-bold text-[#0A1128]">Searching 3 databases...</p>
+            <p className="text-sm font-bold text-[#0A1128]">Searching connected sources...</p>
           </div>
         )}
       </div>

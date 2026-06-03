@@ -7,38 +7,78 @@ const { proxyAgent } = require('../proxy-agent');
 
 // ─── HTTP helpers ────────────────────────────────────────────────────────────
 
-function httpGet(url, headers = {}) {
+function httpGet(url, headers = {}, requestOptions = {}) {
   return new Promise((resolve) => {
     const parsed = new URL(url);
     const lib = parsed.protocol === 'https:' ? https : http;
-    const options = {
+    const redirectsRemaining = requestOptions.redirects ?? 3;
+    const useProxy = Boolean(proxyAgent && parsed.protocol === 'https:' && requestOptions.proxy !== false);
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+
+      if (
+        result?.status === 0 &&
+        useProxy &&
+        !requestOptions.directRetry
+      ) {
+        resolve(httpGet(url, headers, {
+          ...requestOptions,
+          proxy: false,
+          directRetry: true,
+        }));
+        return;
+      }
+
+      resolve(result);
+    };
+
+    const httpOptions = {
       hostname: parsed.hostname,
       port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
       path: parsed.pathname + parsed.search,
       method: 'GET',
       headers: { 'User-Agent': 'VASP-IdeaAgent/1.0', ...headers },
     };
-    if (proxyAgent && parsed.protocol === 'https:') options.agent = proxyAgent;
+    if (useProxy) {
+      httpOptions.agent = proxyAgent;
+    }
 
-    const req = lib.request(options, (res) => {
+    const req = lib.request(httpOptions, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
-        resolve({
-          ok: Boolean(res.statusCode) && res.statusCode < 400,
-          status: res.statusCode || 0,
+        const status = res.statusCode || 0;
+        if (
+          [301, 302, 303, 307, 308].includes(status) &&
+          res.headers.location &&
+          redirectsRemaining > 0
+        ) {
+          const redirectUrl = new URL(res.headers.location, url).toString();
+          if (settled) return;
+          settled = true;
+          resolve(httpGet(redirectUrl, headers, {
+            ...requestOptions,
+            redirects: redirectsRemaining - 1,
+          }));
+          return;
+        }
+        finish({
+          ok: Boolean(status) && status < 400,
+          status,
           body: data,
         });
       });
     });
 
     req.on('error', (error) => {
-      resolve({ ok: false, status: 0, body: '', error: error.message });
+      finish({ ok: false, status: 0, body: '', error: error.message });
     });
 
-    req.setTimeout(15000, () => {
+    req.setTimeout(requestOptions.timeoutMs || 15000, () => {
       req.destroy();
-      resolve({ ok: false, status: 0, body: '', error: 'timeout' });
+      finish({ ok: false, status: 0, body: '', error: 'timeout' });
     });
 
     req.end();
@@ -62,23 +102,42 @@ function truncate(str, limit = 300) {
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
 }
 
+function compactAuthors(authors, pickName) {
+  const items = Array.isArray(authors) ? authors : [];
+  const names = items
+    .slice(0, 3)
+    .map((item) => pickName(item))
+    .filter(Boolean);
+  return names.join(', ') + (items.length > 3 ? ' et al.' : '');
+}
+
+function buildAbleSciLookupUrl(paper) {
+  const query = paper?.doi || paper?.title || '';
+  return query
+    ? `https://www.ablesci.com/so?q=${encodeURIComponent(query)}`
+    : 'https://www.ablesci.com/so';
+}
+
+function withLiteratureLookup(paper) {
+  return {
+    ...paper,
+    ablesci_url: buildAbleSciLookupUrl(paper),
+  };
+}
+
 // ─── Literature sources ──────────────────────────────────────────────────────
 
 async function searchCrossRef(query, rows = 4) {
   const url = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&select=DOI,title,author,published,abstract&rows=${rows}`;
-  const res = await httpGet(url);
+  const res = await httpGet(url, {}, { timeoutMs: 8000 });
   if (!res.ok) return [];
 
   const data = safeJson(res.body);
   const items = data?.message?.items || [];
 
-  return items.map((item) => ({
+  return items.map((item) => withLiteratureLookup({
     title: item.title?.[0] || 'Untitled',
-    authors: (item.author || [])
-      .map((a) => a.family)
-      .filter(Boolean)
-      .slice(0, 3)
-      .join(', ') + ((item.author || []).length > 3 ? ' et al.' : ''),
+    authors: compactAuthors(item.author, (a) => a.family || a.given || ''),
     year: item.published?.['date-parts']?.[0]?.[0] || 'n.d.',
     doi: item.DOI || null,
     url: item.DOI ? `https://doi.org/${item.DOI}` : null,
@@ -90,7 +149,7 @@ async function searchCrossRef(query, rows = 4) {
 
 async function searchOpenAlex(query, perPage = 4) {
   const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per-page=${perPage}&select=title,authorships,publication_year,doi,abstract_inverted_index`;
-  const res = await httpGet(url, { Accept: 'application/json' });
+  const res = await httpGet(url, { Accept: 'application/json' }, { timeoutMs: 8000 });
   if (!res.ok) return [];
 
   const data = safeJson(res.body);
@@ -114,13 +173,9 @@ async function searchOpenAlex(query, perPage = 4) {
       }
     }
 
-    const authors = (work.authorships || [])
-      .slice(0, 3)
-      .map((entry) => entry.author?.display_name?.split(' ').pop())
-      .filter(Boolean)
-      .join(', ') + ((work.authorships || []).length > 3 ? ' et al.' : '');
+    const authors = compactAuthors(work.authorships, (entry) => entry.author?.display_name || '');
 
-    return {
+    return withLiteratureLookup({
       title: work.title || 'Untitled',
       authors,
       year: work.publication_year || 'n.d.',
@@ -129,13 +184,13 @@ async function searchOpenAlex(query, perPage = 4) {
       abstract,
       source: 'OpenAlex',
       source_type: 'peer-reviewed',
-    };
+    });
   });
 }
 
 async function searchArxiv(query, maxResults = 3) {
   const url = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&max_results=${maxResults}&sortBy=relevance`;
-  const res = await httpGet(url);
+  const res = await httpGet(url, {}, { timeoutMs: 8000 });
   if (!res.ok) return [];
 
   const entries = [];
@@ -159,7 +214,7 @@ async function searchArxiv(query, maxResults = 3) {
       .filter(Boolean)
       .join(', ') + (authorMatches.length > 3 ? ' et al.' : '');
 
-    entries.push({
+    entries.push(withLiteratureLookup({
       title,
       authors,
       year,
@@ -168,7 +223,7 @@ async function searchArxiv(query, maxResults = 3) {
       abstract,
       source: 'arXiv',
       source_type: 'preprint',
-    });
+    }));
   }
 
   return entries;
@@ -178,19 +233,15 @@ async function searchCORE(query, limit = 3) {
   const apiKey = process.env.CORE_API_KEY || '';
   const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
   const url = `https://api.core.ac.uk/v3/search/works?q=${encodeURIComponent(query)}&limit=${limit}`;
-  const res = await httpGet(url, headers);
+  const res = await httpGet(url, headers, { timeoutMs: 8000 });
   if (!res.ok) return [];
 
   const data = safeJson(res.body);
   const results = data?.results || [];
 
-  return results.map((work) => ({
+  return results.map((work) => withLiteratureLookup({
     title: work.title || 'Untitled',
-    authors: (work.authors || [])
-      .slice(0, 3)
-      .map((author) => (author.name || '').split(' ').pop())
-      .filter(Boolean)
-      .join(', ') + ((work.authors || []).length > 3 ? ' et al.' : ''),
+    authors: compactAuthors(work.authors, (author) => author.name || ''),
     year: work.publishedDate ? new Date(work.publishedDate).getFullYear() : (work.yearPublished || 'n.d.'),
     doi: work.doi || null,
     url: work.downloadUrl || (work.doi ? `https://doi.org/${work.doi}` : null),
@@ -200,12 +251,109 @@ async function searchCORE(query, limit = 3) {
   }));
 }
 
+async function searchSemanticScholar(query, limit = 4) {
+  const fields = [
+    'title',
+    'authors',
+    'year',
+    'abstract',
+    'externalIds',
+    'url',
+    'publicationTypes',
+    'venue',
+    'citationCount',
+  ].join(',');
+  const url = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=${limit}&fields=${encodeURIComponent(fields)}`;
+  const apiKey = process.env.SEMANTIC_SCHOLAR_API_KEY || process.env.S2_API_KEY || '';
+  const headers = apiKey ? { 'x-api-key': apiKey } : {};
+  const res = await httpGet(url, headers, { timeoutMs: 8000 });
+  if (!res.ok) return [];
+
+  const parsed = safeJson(res.body);
+  const docs = parsed?.data || [];
+  if (!Array.isArray(docs)) return [];
+
+  return docs.map((paper) => withLiteratureLookup({
+    title: paper.title || 'Untitled',
+    authors: compactAuthors(paper.authors, (author) => author.name || ''),
+    year: paper.year || 'n.d.',
+    doi: paper.externalIds?.DOI || null,
+    url: paper.url || (paper.externalIds?.DOI ? `https://doi.org/${paper.externalIds.DOI}` : null),
+    abstract: paper.abstract ? truncate(stripHtml(paper.abstract), 300) : null,
+    source: 'Semantic Scholar',
+    source_type: Array.isArray(paper.publicationTypes) && paper.publicationTypes.includes('Review')
+      ? 'peer-reviewed'
+      : 'peer-reviewed',
+  }));
+}
+
+async function searchEuropePMC(query, limit = 4) {
+  const url = `https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=${encodeURIComponent(query)}&format=json&pageSize=${limit}`;
+  const res = await httpGet(url, { Accept: 'application/json' }, { timeoutMs: 8000 });
+  if (!res.ok) return [];
+
+  const parsed = safeJson(res.body);
+  const docs = parsed?.resultList?.result || [];
+  if (!Array.isArray(docs)) return [];
+
+  return docs.map((paper) => withLiteratureLookup({
+    title: paper.title || 'Untitled',
+    authors: paper.authorString || '',
+    year: paper.pubYear || (paper.firstPublicationDate ? new Date(paper.firstPublicationDate).getFullYear() : 'n.d.'),
+    doi: paper.doi || null,
+    url: paper.doi
+      ? `https://doi.org/${paper.doi}`
+      : (paper.pmid ? `https://europepmc.org/article/MED/${paper.pmid}` : null),
+    abstract: paper.abstractText ? truncate(stripHtml(paper.abstractText), 300) : null,
+    source: 'Europe PMC',
+    source_type: paper.source === 'PPR' ? 'preprint' : 'peer-reviewed',
+  }));
+}
+
+async function searchPubMed(query, limit = 4) {
+  const apiKey = process.env.NCBI_API_KEY ? `&api_key=${encodeURIComponent(process.env.NCBI_API_KEY)}` : '';
+  const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmode=json&retmax=${limit}&sort=relevance${apiKey}`;
+  const searchRes = await httpGet(searchUrl, { Accept: 'application/json' }, { timeoutMs: 8000 });
+  if (!searchRes.ok) return [];
+
+  const searchParsed = safeJson(searchRes.body);
+  const ids = searchParsed?.esearchresult?.idlist || [];
+  if (!Array.isArray(ids) || ids.length === 0) return [];
+
+  const summaryUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${ids.join(',')}&retmode=json${apiKey}`;
+  const summaryRes = await httpGet(summaryUrl, { Accept: 'application/json' }, { timeoutMs: 8000 });
+  if (!summaryRes.ok) return [];
+
+  const summaryParsed = safeJson(summaryRes.body);
+  const result = summaryParsed?.result || {};
+
+  return ids
+    .map((id) => result[id])
+    .filter(Boolean)
+    .map((paper) => {
+      const doi = (paper.articleids || []).find((item) => item.idtype === 'doi')?.value || null;
+      return withLiteratureLookup({
+        title: paper.title || 'Untitled',
+        authors: compactAuthors(paper.authors, (author) => author.name || ''),
+        year: paper.pubdate ? String(paper.pubdate).slice(0, 4) : 'n.d.',
+        doi,
+        url: `https://pubmed.ncbi.nlm.nih.gov/${paper.uid}/`,
+        abstract: null,
+        source: 'PubMed',
+        source_type: 'peer-reviewed',
+      });
+    });
+}
+
 async function searchAllLiterature(query) {
-  const [crossref, openalex, arxiv, core] = await Promise.allSettled([
+  const [crossref, openalex, arxiv, core, semanticScholar, europePmc, pubmed] = await Promise.allSettled([
     searchCrossRef(query, 4),
     searchOpenAlex(query, 4),
     searchArxiv(query, 3),
     searchCORE(query, 3),
+    searchSemanticScholar(query, 4),
+    searchEuropePMC(query, 4),
+    searchPubMed(query, 4),
   ]);
 
   const gather = (result) => (result.status === 'fulfilled' ? result.value : []);
@@ -214,6 +362,9 @@ async function searchAllLiterature(query) {
     ...gather(openalex),
     ...gather(arxiv),
     ...gather(core),
+    ...gather(semanticScholar),
+    ...gather(europePmc),
+    ...gather(pubmed),
   ];
 
   const seen = new Set();
@@ -236,7 +387,7 @@ async function searchMaterialsProject(formula) {
   if (!apiKey) return { success: false, error: 'MP_API_KEY not configured.' };
 
   const url = `https://api.materialsproject.org/materials/summary/?formula=${encodeURIComponent(formula)}&_fields=material_id,formula_pretty,symmetry,energy_above_hull,theoretical`;
-  const res = await httpGet(url, { 'X-API-KEY': apiKey, Accept: 'application/json' });
+  const res = await httpGet(url, { 'X-API-KEY': apiKey, Accept: 'application/json' }, { timeoutMs: 8000 });
   if (!res.ok) return { success: false, error: `MP API ${res.status}` };
 
   const parsed = safeJson(res.body);
@@ -267,7 +418,7 @@ async function searchMaterialsProject(formula) {
 
 async function searchOQMD(formula, limit = 4) {
   const url = `https://oqmd.org/oqmdapi/formationenergy?composition=${encodeURIComponent(formula)}&fields=name,entry_id,spacegroup,delta_e,stability,band_gap&limit=${limit}`;
-  const res = await httpGet(url);
+  const res = await httpGet(url, {}, { timeoutMs: 8000 });
   if (!res.ok) return { success: false, error: `OQMD API ${res.status}` };
 
   const parsed = safeJson(res.body);
@@ -312,7 +463,7 @@ async function searchAFLOW(formula, limit = 4) {
 
   const speciesStr = species.join(',');
   const url = `https://aflow.org/API/aflux/?species(${speciesStr}),nspecies(${species.length}),paging(1),format(json)`;
-  const res = await httpGet(url);
+  const res = await httpGet(url, {}, { timeoutMs: 8000 });
   if (!res.ok) return { success: false, error: `AFLOW API ${res.status}` };
 
   const parsed = safeJson(res.body);
@@ -343,6 +494,131 @@ async function searchAFLOW(formula, limit = 4) {
       selection_reason: `AFLOW entry — spacegroup ${entry.spacegroup_relax || '?'}, Pearson ${entry.Pearson_symbol_relax || '?'}`,
     })),
   };
+}
+
+// ─── OPTIMADE structure sources ──────────────────────────────────────────────
+
+function gcd(left, right) {
+  let a = Math.abs(Number(left) || 0);
+  let b = Math.abs(Number(right) || 0);
+  while (b) {
+    const next = a % b;
+    a = b;
+    b = next;
+  }
+  return a || 1;
+}
+
+function formulaToOptimadeReduced(formula) {
+  const text = String(formula || '').replace(/\s+/g, '');
+  const matches = [...text.matchAll(/([A-Z][a-z]?)(\d*)/g)];
+  if (matches.length === 0) return null;
+
+  const counts = new Map();
+  for (const match of matches) {
+    const element = match[1];
+    const count = match[2] ? Number(match[2]) : 1;
+    if (!Number.isFinite(count) || count <= 0) return null;
+    counts.set(element, (counts.get(element) || 0) + count);
+  }
+
+  const divisor = [...counts.values()].reduce((acc, count) => gcd(acc, count), 0) || 1;
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([element, count]) => {
+      const reduced = count / divisor;
+      return `${element}${reduced === 1 ? '' : reduced}`;
+    })
+    .join('');
+}
+
+function formatOptionalNumber(value, digits = 3) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(digits) : 'N/A';
+}
+
+function buildOptimadeUrl(baseUrl, formula, limit) {
+  const reduced = formulaToOptimadeReduced(formula);
+  if (!reduced) return null;
+  const filter = `chemical_formula_reduced=${encodeURIComponent(`"${reduced}"`)}`;
+  return `${baseUrl}?filter=${filter}&page_limit=${limit}`;
+}
+
+function mapOptimadeStructure(doc, source, fallbackFormula) {
+  const attrs = doc?.attributes || {};
+  const jarvisId = attrs._jarvis_jid || (doc?.id || '').replace(/^dft_3d_/, '');
+  const formula =
+    fallbackFormula ||
+    attrs.chemical_formula_reduced ||
+    attrs.chemical_formula_descriptive ||
+    attrs.chemical_formula_hill ||
+    'OPTIMADE structure';
+  const crystalSystem =
+    attrs._jarvis_crys ||
+    attrs.crystal_system ||
+    (attrs.nperiodic_dimensions ? `${attrs.nperiodic_dimensions}D periodic` : 'Structure');
+  const spaceGroup =
+    attrs._jarvis_spg ||
+    attrs.space_group_symbol ||
+    attrs.space_group_it_number ||
+    null;
+  const hullEnergy = attrs._jarvis_ehull !== undefined
+    ? formatOptionalNumber(attrs._jarvis_ehull, 3)
+    : 'N/A';
+
+  return {
+    material_id: source.key === 'jarvis' ? jarvisId : doc.id,
+    formula,
+    crystal_system: crystalSystem,
+    space_group: spaceGroup ? String(spaceGroup) : null,
+    energy_above_hull: hullEnergy,
+    theoretical: null,
+    source: source.label,
+    source_url: source.homepage,
+    selection_reason: source.key === 'jarvis'
+      ? `JARVIS OPTIMADE entry${hullEnergy !== 'N/A' ? ` — ${hullEnergy} eV/atom above hull` : ''}`
+      : `${source.label} OPTIMADE entry with provenance-backed structure metadata`,
+  };
+}
+
+async function searchOptimadeStructures(source, formula, limit = 4) {
+  const url = buildOptimadeUrl(source.endpoint, formula, limit);
+  if (!url) return { success: false, error: 'Could not normalize formula for OPTIMADE.' };
+
+  let res = await httpGet(url, { Accept: 'application/json' }, { proxy: false, timeoutMs: 8000 });
+  if (!res.ok && proxyAgent) {
+    res = await httpGet(url, { Accept: 'application/json' }, { timeoutMs: 8000 });
+  }
+  if (!res.ok) return { success: false, error: `${source.label} OPTIMADE API ${res.status}` };
+
+  const parsed = safeJson(res.body);
+  const docs = parsed?.data || [];
+  if (!Array.isArray(docs) || docs.length === 0) {
+    return { success: true, results: [] };
+  }
+
+  return {
+    success: true,
+    results: docs.slice(0, limit).map((doc) => mapOptimadeStructure(doc, source, formula)),
+  };
+}
+
+async function searchJARVIS(formula, limit = 4) {
+  return searchOptimadeStructures({
+    key: 'jarvis',
+    label: 'JARVIS',
+    endpoint: 'https://jarvis.nist.gov/optimade/jarvisdft/v1/structures',
+    homepage: 'https://jarvis.nist.gov/',
+  }, formula, limit);
+}
+
+async function searchNOMAD(formula, limit = 4) {
+  return searchOptimadeStructures({
+    key: 'nomad',
+    label: 'NOMAD',
+    endpoint: 'https://nomad-lab.eu/prod/v1/optimade/v1/structures',
+    homepage: 'https://nomad-lab.eu/nomad-lab/',
+  }, formula, limit);
 }
 
 // ─── LLM helpers ─────────────────────────────────────────────────────────────
@@ -595,7 +871,7 @@ JSON schema:
   "interpreted_goal": "one sentence in the SAME language as the user's input: what research outcome they need",
   "user_profile": "theory-starter | experimental-needs-theory | general",
   "depth": "starter | paper-support | advanced",
-  "literature_query": "best 4-6 ENGLISH keyword string to search academic databases (CrossRef, arXiv, OpenAlex). MUST be English even if input is Chinese.",
+  "literature_query": "best 4-6 ENGLISH keyword string to search academic databases. MUST be English even if input is Chinese.",
   "candidate_formulas": ["formula1", "formula2"],
   "research_type": "bulk_stability | voltage | diffusion | doping | surface | general"
 }
@@ -615,32 +891,36 @@ User prompt: "${userPrompt}"`,
     });
 
     // Start literature search immediately with heuristic query (don't wait for LLM)
-    emit({ type: 'stage', stage: 'lit_crossref', title: 'Searching CrossRef…', status: 'active' });
-    emit({ type: 'stage', stage: 'lit_openalex', title: 'Searching OpenAlex…', status: 'active' });
-    emit({ type: 'stage', stage: 'lit_arxiv', title: 'Searching arXiv…', status: 'active' });
-    emit({ type: 'stage', stage: 'lit_core', title: 'Searching CORE…', status: 'active' });
+    const literatureSources = [
+      { stage: 'lit_crossref', label: 'CrossRef', kind: 'papers', search: () => searchCrossRef(heuristicQuery, 4) },
+      { stage: 'lit_openalex', label: 'OpenAlex', kind: 'papers', search: () => searchOpenAlex(heuristicQuery, 4) },
+      { stage: 'lit_arxiv', label: 'arXiv', kind: 'preprints', search: () => searchArxiv(heuristicQuery, 3) },
+      { stage: 'lit_core', label: 'CORE', kind: 'papers', search: () => searchCORE(heuristicQuery, 3) },
+      { stage: 'lit_semantic_scholar', label: 'Semantic Scholar', kind: 'papers', search: () => searchSemanticScholar(heuristicQuery, 4) },
+      { stage: 'lit_europe_pmc', label: 'Europe PMC', kind: 'papers', search: () => searchEuropePMC(heuristicQuery, 4) },
+      { stage: 'lit_pubmed', label: 'PubMed', kind: 'papers', search: () => searchPubMed(heuristicQuery, 4) },
+    ];
 
-    const litSearchPromise = Promise.all([
-      searchCrossRef(heuristicQuery, 4).then((r) => {
-        emit({ type: 'stage', stage: 'lit_crossref', title: `CrossRef — ${r.length} papers`, status: 'done', content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results', papers: r });
-        return r;
-      }).catch(() => { emit({ type: 'stage', stage: 'lit_crossref', title: 'CrossRef — unavailable', status: 'done' }); return []; }),
+    for (const source of literatureSources) {
+      emit({ type: 'stage', stage: source.stage, title: `Searching ${source.label}…`, status: 'active' });
+    }
 
-      searchOpenAlex(heuristicQuery, 4).then((r) => {
-        emit({ type: 'stage', stage: 'lit_openalex', title: `OpenAlex — ${r.length} papers`, status: 'done', content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results', papers: r });
+    const litSearchPromise = Promise.all(literatureSources.map((source) => (
+      source.search().then((r) => {
+        emit({
+          type: 'stage',
+          stage: source.stage,
+          title: `${source.label} — ${r.length} ${source.kind}`,
+          status: 'done',
+          content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results',
+          papers: r,
+        });
         return r;
-      }).catch(() => { emit({ type: 'stage', stage: 'lit_openalex', title: 'OpenAlex — unavailable', status: 'done' }); return []; }),
-
-      searchArxiv(heuristicQuery, 3).then((r) => {
-        emit({ type: 'stage', stage: 'lit_arxiv', title: `arXiv — ${r.length} preprints`, status: 'done', content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results', papers: r });
-        return r;
-      }).catch(() => { emit({ type: 'stage', stage: 'lit_arxiv', title: 'arXiv — unavailable', status: 'done' }); return []; }),
-
-      searchCORE(heuristicQuery, 3).then((r) => {
-        emit({ type: 'stage', stage: 'lit_core', title: `CORE — ${r.length} papers`, status: 'done', content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results', papers: r });
-        return r;
-      }).catch(() => { emit({ type: 'stage', stage: 'lit_core', title: 'CORE — unavailable', status: 'done' }); return []; }),
-    ]);
+      }).catch(() => {
+        emit({ type: 'stage', stage: source.stage, title: `${source.label} — unavailable`, status: 'done' });
+        return [];
+      })
+    )));
 
     // Start structure database lookups in parallel (MP + OQMD + AFLOW)
     const mpFormulas = heuristicFormula ? [heuristicFormula] : [];
@@ -749,11 +1029,8 @@ User prompt: "${userPrompt}"`,
     // If LLM gave us a better literature query and we got few results, do a supplementary search
     const llmQuery = intent.literature_query || '';
     if (llmQuery && llmQuery !== heuristicQuery && papers.length < 3) {
-      const extraResults = await Promise.all([
-        searchCrossRef(llmQuery, 3).catch(() => []),
-        searchArxiv(llmQuery, 2).catch(() => []),
-      ]);
-      for (const paper of extraResults.flat()) {
+      const extraResults = await searchAllLiterature(llmQuery).catch(() => []);
+      for (const paper of extraResults) {
         const key = paper.doi || paper.title.slice(0, 80).toLowerCase();
         if (!seen.has(key)) {
           seen.add(key);
@@ -789,7 +1066,7 @@ User research goal: "${intent.interpreted_goal}"
 User profile: ${intent.user_profile} (depth: ${intent.depth})
 Research type hinted: ${intent.research_type}
 
-Literature evidence (from CrossRef/OpenAlex/arXiv/CORE):
+Literature evidence (from connected scholarly indexes):
 ${paperSummary}
 
 Materials database structures (Materials Project + OQMD + AFLOW):
@@ -936,4 +1213,16 @@ Return ONLY a JSON object — no markdown, no prose:
   }
 }
 
-module.exports = { runRetrievalAgentStream, searchMaterialsProject, searchOQMD, searchAFLOW };
+module.exports = {
+  runRetrievalAgentStream,
+  searchMaterialsProject,
+  searchOQMD,
+  searchAFLOW,
+  searchJARVIS,
+  searchNOMAD,
+  searchSemanticScholar,
+  searchEuropePMC,
+  searchPubMed,
+  searchAllLiterature,
+  formulaToOptimadeReduced,
+};

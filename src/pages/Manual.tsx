@@ -74,7 +74,7 @@ const Manual: React.FC = () => {
             <h3 className="text-xl font-bold mb-2">2.2 使用步骤</h3>
             <ol className="list-decimal pl-5 space-y-2 mb-4">
               <li><strong>输入研究需求</strong>：在左栏底部的输入框中，用自然语言描述你的研究目标。支持中英文（中文查询会自动翻译为英文进行文献检索）。</li>
-              <li><strong>观察推理过程</strong>：左栏时间线实时展示各阶段进度——意图理解、查询翻译、CrossRef/OpenAlex/arXiv/CORE 文献搜索、Materials Project 结构查询、方案生成。</li>
+              <li><strong>观察推理过程</strong>：左栏时间线实时展示各阶段进度——意图理解、查询翻译、多源文献搜索、Materials Project 结构查询、方案生成。</li>
               <li><strong>浏览研究方案</strong>：中栏显示生成的 Idea 卡片，每张标注了难度等级（Starter / Intermediate / Advanced）、模型类型和目标性质。带 "Recommended" 标签的是系统推荐的最佳方案。</li>
               <li><strong>查看建模蓝图</strong>：点击某张 Idea 卡片，右栏展示详细蓝图：为什么选这个方向、可以计算什么性质、结构来源（含 Materials Project ID）、建模配方（起始结构、超胞大小、缺陷/掺杂等）、文献依据和注意事项。</li>
               <li><strong>发送到 Modeling Agent</strong>：点击蓝图底部的 "Send to Modeling Agent" 按钮，自动将建模参数传递到 Modeling Agent，开始实际建模工作。</li>
@@ -88,6 +88,10 @@ const Manual: React.FC = () => {
               <li><strong>OpenAlex</strong>：开放学术图谱</li>
               <li><strong>arXiv</strong>：预印本论文</li>
               <li><strong>CORE</strong>：开放获取论文聚合</li>
+              <li><strong>Semantic Scholar</strong>：学术图谱、引用与跨学科论文搜索</li>
+              <li><strong>Europe PMC</strong>：生命科学、医学及开放全文论文聚合</li>
+              <li><strong>PubMed</strong>：NCBI 生物医学文献索引</li>
+              <li><strong>科研通</strong>：作为文献卡片的外部检索入口，不自动抓取或提交文献互助请求</li>
               <li><strong>Materials Project</strong>：材料结构数据库（返回化学式、晶系、空间群、能量高于凸包值等信息）</li>
             </ul>
           </div>

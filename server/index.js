@@ -31,7 +31,14 @@ const { generateRenderingImages } = require('./src/rendering/generate-image');
 const { profileFigureData } = require('./src/rendering/profile-figure-data');
 const { compileFigureContract } = require('./src/rendering/compile-figure');
 const { runFigureRender } = require('./src/rendering/run-figure');
-const { runRetrievalAgentStream, searchMaterialsProject, searchOQMD, searchAFLOW } = require('./src/retrieval/agent');
+const {
+    runRetrievalAgentStream,
+    searchMaterialsProject,
+    searchOQMD,
+    searchAFLOW,
+    searchJARVIS,
+    searchNOMAD,
+} = require('./src/retrieval/agent');
 const { createCatalystRouter } = require('./src/catalyst/router');
 const { compileComputeInputSet } = require('./src/compute/compile-input-set');
 const { listComputeProfiles, getComputeProfile } = require('./src/compute/profiles');
@@ -2100,17 +2107,21 @@ app.get('/api/materials/search', async (req, res) => {
     const { formula } = req.query;
     if (!formula) return res.status(400).json({ error: 'formula query parameter is required' });
 
-    const results = { mp: [], oqmd: [], aflow: [] };
+    const results = { mp: [], oqmd: [], aflow: [], jarvis: [], nomad: [] };
 
-    const [mpRes, oqmdRes, aflowRes] = await Promise.allSettled([
+    const [mpRes, oqmdRes, aflowRes, jarvisRes, nomadRes] = await Promise.allSettled([
         searchMaterialsProject(formula),
         searchOQMD(formula, 6),
         searchAFLOW(formula, 6),
+        searchJARVIS(formula, 6),
+        searchNOMAD(formula, 6),
     ]);
 
     if (mpRes.status === 'fulfilled' && mpRes.value.success) results.mp = mpRes.value.results;
     if (oqmdRes.status === 'fulfilled' && oqmdRes.value.success) results.oqmd = oqmdRes.value.results;
     if (aflowRes.status === 'fulfilled' && aflowRes.value.success) results.aflow = aflowRes.value.results;
+    if (jarvisRes.status === 'fulfilled' && jarvisRes.value.success) results.jarvis = jarvisRes.value.results;
+    if (nomadRes.status === 'fulfilled' && nomadRes.value.success) results.nomad = nomadRes.value.results;
 
     res.json({ success: true, formula, results });
 });
