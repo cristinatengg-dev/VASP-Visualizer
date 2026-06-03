@@ -61,6 +61,43 @@ const BULK_TASK_RE = /(bulk|crystal|晶体|体相)/i;
 const MOLECULE_TASK_RE = /(molecule|分子)/i;
 const FORMULA_RE = /\b(?:[A-Z][a-z]?\d*)+\b/g;
 const SITE_RE = /\b(top|bridge|hollow)\b/i;
+const ELEMENT_SYMBOLS = new Set([
+  'H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',
+  'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar',
+  'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
+  'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr',
+  'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd',
+  'In', 'Sn', 'Sb', 'Te', 'I', 'Xe',
+  'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy',
+  'Ho', 'Er', 'Tm', 'Yb', 'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt',
+  'Au', 'Hg', 'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn',
+  'Fr', 'Ra', 'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf',
+  'Es', 'Fm', 'Md', 'No', 'Lr',
+]);
+const MATERIAL_ALIASES = new Map([
+  ['lfp', 'LiFePO4'],
+  ['lco', 'LiCoO2'],
+  ['lmo', 'LiMn2O4'],
+  ['nmc', 'LiNiO2'],
+  ['nca', 'LiNiO2'],
+  ['nasicon', 'Na3V2P3O12'],
+  ['llzo', 'Li7La3Zr2O12'],
+  ['graphene', 'Graphene'],
+  ['graphite', 'Graphite'],
+  ['perovskite', 'SrTiO3'],
+  ['rutile', 'TiO2'],
+  ['rocksalt', 'NaCl'],
+  ['sodium cathode', 'NaCoO2'],
+  ['na cathode', 'NaCoO2'],
+  ['candidate battery material', 'NaCoO2'],
+  ['battery material', 'LiCoO2'],
+]);
+const MATERIAL_STOPWORDS = new Set([
+  'build', 'bulk', 'starter', 'model', 'structure', 'crystal', 'slab', 'surface',
+  'parent', 'rather', 'than', 'alone', 'using', 'use', 'materials', 'project',
+  'entry', 'candidate', 'battery', 'material', 'doped', 'dopant', 'effect',
+  'comparison', 'ready', 'fallback', 'heuristic', 'formula', 'reduced',
+]);
 const COMMON_ADSORBATES = new Set([
   'CO2',
   'CO',
@@ -113,8 +150,18 @@ function normalizeModelingIntent(intent, providerPreferences) {
     nextIntent.task_type = nextIntent?.substrate?.surface ? 'slab' : 'crystal';
   }
 
+  if (!nextIntent.substrate || typeof nextIntent.substrate !== 'object' || Array.isArray(nextIntent.substrate)) {
+    nextIntent.substrate = {};
+  }
+
   if (nextIntent.substrate && typeof nextIntent.substrate === 'object' && !Array.isArray(nextIntent.substrate)) {
     nextIntent.substrate = { ...nextIntent.substrate };
+    const canonicalMaterial = canonicalizeMaterialName(nextIntent.substrate.material);
+    if (canonicalMaterial) {
+      nextIntent.substrate.material = canonicalMaterial;
+    } else if (nextIntent.task_type === 'slab' || nextIntent.task_type === 'crystal') {
+      nextIntent.substrate.material = nextIntent.task_type === 'slab' ? 'Cu' : 'Si';
+    }
 
     if (!Array.isArray(nextIntent.substrate.supercell)) {
       nextIntent.substrate.supercell = [1, 1, 1];
@@ -136,6 +183,15 @@ function normalizeModelingIntent(intent, providerPreferences) {
     if (nextIntent.substrate.vacuum == null) {
       nextIntent.substrate.vacuum = 15.0;
     }
+  }
+
+  if (nextIntent.task_type === 'molecule') {
+    const molecule = nextIntent.molecule && typeof nextIntent.molecule === 'object' && !Array.isArray(nextIntent.molecule)
+      ? { ...nextIntent.molecule }
+      : {};
+    const rawMolecule = molecule.name_or_smiles || molecule.formula || nextIntent.substrate?.material || '';
+    molecule.name_or_smiles = canonicalizeMaterialName(rawMolecule) || String(rawMolecule || '').trim() || 'H2O';
+    nextIntent.molecule = molecule;
   }
 
   const siteAliases = {
@@ -243,9 +299,81 @@ function normalizeSurfaceLabel(value) {
   return normalized.startsWith('(') ? normalized : `(${normalized})`;
 }
 
+function isValidChemicalFormula(value) {
+  const raw = String(value || '').trim();
+  if (!raw || MATERIAL_STOPWORDS.has(raw.toLowerCase())) {
+    return false;
+  }
+  if (!/^([A-Z][a-z]?\d*)+$/.test(raw)) {
+    return false;
+  }
+
+  const parts = [...raw.matchAll(/([A-Z][a-z]?)(\d*)/g)];
+  if (parts.length === 0) {
+    return false;
+  }
+  return parts.every((match) => ELEMENT_SYMBOLS.has(match[1]));
+}
+
+function canonicalizeMaterialName(value) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  const aliasKey = raw
+    .replace(/[()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (MATERIAL_ALIASES.has(aliasKey)) {
+    return MATERIAL_ALIASES.get(aliasKey);
+  }
+
+  const compact = raw.replace(/[^A-Za-z0-9]/g, '');
+  const compactAlias = compact.toLowerCase();
+  if (MATERIAL_ALIASES.has(compactAlias)) {
+    return MATERIAL_ALIASES.get(compactAlias);
+  }
+  if (isValidChemicalFormula(compact)) {
+    return compact;
+  }
+
+  return '';
+}
+
+function inferSafeDefaultMaterial(prompt, taskType) {
+  const text = String(prompt || '').toLowerCase();
+  if (/(na\+?|sodium|钠|脱钠|储钠)/i.test(text) && /(cathode|positive|正极|电极|battery|电池|倍率)/i.test(text)) {
+    return 'NaCoO2';
+  }
+  if (/(li\+?|lithium|锂|脱锂|储锂|lfp|磷酸铁锂)/i.test(text) && /(cathode|positive|正极|电极|battery|电池|倍率)/i.test(text)) {
+    return /lfp|磷酸铁锂/i.test(text) ? 'LiFePO4' : 'LiCoO2';
+  }
+  if (/(battery|电池|正极|负极|电极|cathode|anode)/i.test(text)) {
+    return 'LiCoO2';
+  }
+  return taskType === 'slab' ? 'Cu' : 'Si';
+}
+
+function refineBatteryIonMaterial(prompt, material) {
+  const canonical = canonicalizeMaterialName(material);
+  const text = String(prompt || '').toLowerCase();
+  const batteryElectrodeContext = /(cathode|positive|正极|电极|battery|电池|倍率)/i.test(text);
+  if (batteryElectrodeContext && canonical === 'Na') {
+    return 'NaCoO2';
+  }
+  if (batteryElectrodeContext && canonical === 'Li') {
+    return /lfp|磷酸铁锂/i.test(text) ? 'LiFePO4' : 'LiCoO2';
+  }
+  return canonical;
+}
+
 function collectFormulaCandidates(prompt) {
   const matches = String(prompt || '').match(FORMULA_RE) || [];
-  return matches.filter(Boolean);
+  return matches
+    .map(canonicalizeMaterialName)
+    .filter(Boolean);
 }
 
 function inferTaskType(prompt) {
@@ -269,18 +397,24 @@ function inferSubstrate(prompt, taskType) {
   let surface;
 
   if (surfaceMatch) {
-    material = surfaceMatch[1];
+    material = canonicalizeMaterialName(surfaceMatch[1]);
     surface = normalizeSurfaceLabel(surfaceMatch[2]);
   } else {
     const cnSurfaceMatch = String(prompt || '').match(/([A-Za-z0-9]+)\s*表面/);
     const bulkMatch = String(prompt || '').match(/(?:bulk|crystal|晶体|体相)(?:\s+(?:starter|structure|model|parent))?\s+(?:(?:structure|model|for)\s+)*([A-Z][a-z]?(?:\d*[A-Z][a-z]?\d*)*)/i);
-    material = cnSurfaceMatch?.[1] || bulkMatch?.[1] || '';
+    material = canonicalizeMaterialName(cnSurfaceMatch?.[1])
+      || canonicalizeMaterialName(bulkMatch?.[1])
+      || '';
   }
 
   if (!material) {
     const firstNonAdsorbate = formulas.find((value) => !COMMON_ADSORBATES.has(value));
     material = firstNonAdsorbate || formulas[0] || '';
   }
+  if (!material) {
+    material = inferSafeDefaultMaterial(prompt, taskType);
+  }
+  material = refineBatteryIonMaterial(prompt, material) || inferSafeDefaultMaterial(prompt, taskType);
 
   const layersMatch = String(prompt || '').match(/(\d+)\s*(?:层|layers?)/i);
   const supercellMatch = String(prompt || '').match(/(\d+)\s*[x×X]\s*(\d+)(?:\s*[x×X]\s*(\d+))?/);
@@ -398,6 +532,9 @@ function parseModelingIntentHeuristically({ prompt, providerPreferences } = {}) 
     {
       task_type: taskType,
       substrate,
+      ...(taskType === 'molecule'
+        ? { molecule: { name_or_smiles: adsorbates[0]?.formula || collectFormulaCandidates(normalizedPrompt)[0] || 'H2O' } }
+        : {}),
       adsorbates,
       doping,
       defect,

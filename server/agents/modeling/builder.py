@@ -87,6 +87,38 @@ PROVIDER_ALIASES = {
     'local_fallback': 'fallback',
 }
 
+MATERIAL_ALIASES = {
+    'graphene': 'Graphene',
+    'graphite': 'Graphite',
+    'lfp': 'LiFePO4',
+    'lco': 'LiCoO2',
+    'lmo': 'LiMn2O4',
+    'nmc': 'LiNiO2',
+    'nca': 'LiNiO2',
+    'nasicon': 'Na3V2P3O12',
+    'llzo': 'Li7La3Zr2O12',
+    'perovskite': 'SrTiO3',
+    'rutile': 'TiO2',
+    'rocksalt': 'NaCl',
+    'candidatebatterymaterial': 'NaCoO2',
+    'batterymaterial': 'LiCoO2',
+}
+
+INVALID_MATERIAL_WORDS = {
+    '',
+    'rather',
+    'than',
+    'candidate',
+    'battery',
+    'material',
+    'structure',
+    'model',
+    'starter',
+    'parent',
+    'formula',
+    'reduced',
+}
+
 def first_env(*keys: str) -> Optional[str]:
     for key in keys:
         val = os.environ.get(key)
@@ -169,6 +201,21 @@ def resolve_provider_preferences(intent: Dict[str, Any]) -> List[str]:
             normalized.append(provider)
 
     return normalized
+
+def sanitize_material_query(value: Any, default: str) -> str:
+    query = str(value or '').strip()
+    compact_key = re.sub(r'[^A-Za-z0-9]+', '', query).lower()
+    if compact_key in MATERIAL_ALIASES:
+        return MATERIAL_ALIASES[compact_key]
+    if compact_key in INVALID_MATERIAL_WORDS:
+        return default
+    if re.match(r'^(mp|mvc)-\d+$', query, re.I):
+        return query
+    try:
+        Composition(query)
+        return query
+    except Exception:
+        return default
 
 def create_rocksalt_structure(a: float, species_a: str, species_b: str) -> Structure:
     """Create a rocksalt (Fm-3m) structure."""
@@ -847,6 +894,19 @@ def build_molecule(formula: str) -> Molecule:
 
     return Molecule(spec["species"], spec["coords"])
 
+def molecule_to_boxed_structure(molecule: Molecule, padding: float = 8.0) -> Structure:
+    coords = np.array([site.coords for site in molecule.sites], dtype=float)
+    if coords.size == 0:
+        raise ValueError("Molecule has no sites")
+
+    min_corner = coords.min(axis=0)
+    max_corner = coords.max(axis=0)
+    span = max_corner - min_corner
+    box_length = max(float(span.max()) + padding, 8.0)
+    shifted = coords - min_corner + (box_length - span) / 2.0
+    species = [site.specie.symbol for site in molecule.sites]
+    return Structure(Lattice.cubic(box_length), species, shifted.tolist(), coords_are_cartesian=True)
+
 def get_adsorbate_spec(formula: str) -> Dict[str, Any]:
     raw_formula = str(formula or '').strip()
     alias = raw_formula.replace(' ', '').lower()
@@ -976,7 +1036,16 @@ def apply_substitutional_doping(
         if site.specie.symbol == host_element
     ]
     if not host_indices:
-        raise ValueError(f"Could not find host element '{host_element}' in the current structure.")
+        return structure, {
+            'hostElement': host_element,
+            'dopantElement': dopant_element,
+            'requestedCount': 0,
+            'replacedCount': 0,
+            'availableHostCount': 0,
+            'surfacePreferred': bool(prefer_surface),
+            'skipped': True,
+            'reason': f"Host element '{host_element}' was not present in the generated parent structure.",
+        }
 
     requested_count = doping.get('count')
     try:
@@ -1056,7 +1125,16 @@ def apply_vacancy_defect(
         if site.specie.symbol == element
     ]
     if not all_element_indices:
-        raise ValueError(f"Could not find element '{element}' in the current structure for vacancy creation.")
+        return structure, {
+            'type': 'vacancy',
+            'element': element,
+            'requestedCount': 0,
+            'removedCount': 0,
+            'availableElementCount': 0,
+            'surfacePreferred': bool(prefer_surface),
+            'skipped': True,
+            'reason': f"Element '{element}' was not present in the generated parent structure.",
+        }
 
     candidate_indices = list(all_element_indices)
 
@@ -1116,8 +1194,19 @@ def place_adsorbates_on_slab(
         if not formula_raw:
             continue
 
-        spec = get_adsorbate_spec(formula_raw)
-        molecule = build_molecule(spec['formula'])
+        try:
+            spec = get_adsorbate_spec(formula_raw)
+            molecule = build_molecule(spec['formula'])
+        except Exception as err:
+            placements.append({
+                'formula': formula_raw,
+                'initialSite': str(adsorbate.get('initial_site') or 'top').strip().lower() or 'top',
+                'count': 0,
+                'placedCount': 0,
+                'skipped': True,
+                'reason': str(err),
+            })
+            continue
         count = adsorbate.get('count', 1)
         try:
             count = int(count)
@@ -1251,7 +1340,7 @@ def process_request(intent: dict) -> dict:
     
     if task_type == 'slab':
         sub = intent.get('substrate', {})
-        material = sub.get('material', 'Cu')
+        material = sanitize_material_query(sub.get('material', 'Cu'), 'Cu')
         hkl_raw = sub.get('surface', '(111)')
         
         # New parameters with defaults
@@ -1340,7 +1429,7 @@ def process_request(intent: dict) -> dict:
         }
         
     elif task_type == 'bulk':
-        material = intent.get('material') or intent.get('substrate', {}).get('material', 'Si')
+        material = sanitize_material_query(intent.get('material') or intent.get('substrate', {}).get('material', 'Si'), 'Si')
         if initial_structure is not None:
             bulk = initial_structure.copy()
             formula = upstream_meta.get('formula') or bulk.composition.reduced_formula
@@ -1395,8 +1484,48 @@ def process_request(intent: dict) -> dict:
             }
         }
 
+    elif task_type == 'molecule':
+        molecule_spec = intent.get('molecule', {}) if isinstance(intent.get('molecule'), dict) else {}
+        formula = (
+            molecule_spec.get('name_or_smiles')
+            or molecule_spec.get('formula')
+            or intent.get('formula')
+            or intent.get('substrate', {}).get('material')
+            or 'H2O'
+        )
+        try:
+            molecule = build_molecule(str(formula))
+        except Exception:
+            formula = 'H2O'
+            molecule = build_molecule(formula)
+
+        boxed = molecule_to_boxed_structure(molecule)
+        render_data = structure_to_render_data(boxed)
+        exports = generate_exports(boxed)
+        return {
+            "success": True,
+            "data": render_data,
+            "exports": exports,
+            "meta": {
+                "formula": render_data.get("formula") or formula,
+                "system": "molecule",
+                "databaseSource": "fallback",
+                "databaseSourceLabel": "Fallback",
+                "providersTried": ["fallback"],
+                "providerPreferences": provider_preferences,
+            }
+        }
+
     else:
-        raise ValueError(f"Unsupported task_type: {task_type}")
+        fallback_intent = {
+            **intent,
+            "task_type": "bulk",
+            "substrate": {
+                **intent.get("substrate", {}),
+                "material": sanitize_material_query(intent.get("substrate", {}).get("material"), "Si"),
+            },
+        }
+        return process_request(fallback_intent)
 
 if __name__ == "__main__":
     try:

@@ -658,8 +658,19 @@ function inferResearchType(prompt) {
 
 function inferFallbackFormula(prompt) {
   const text = String(prompt || '');
+  const lower = text.toLowerCase();
   const patterns = ['NaCoO2', 'LiFePO4', 'LiCoO2', 'NaMnO2', 'LiMn2O4', 'NMC', 'LFP', 'LCO'];
-  return patterns.find((item) => new RegExp(item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(text)) || null;
+  const matched = patterns.find((item) => new RegExp(item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(text));
+  if (matched === 'NMC') return 'LiNiO2';
+  if (matched === 'LFP') return 'LiFePO4';
+  if (matched === 'LCO') return 'LiCoO2';
+  if (matched) return matched;
+
+  const electrodeContext = /(cathode|positive|正极|电极|battery|电池|倍率)/i.test(text);
+  if (electrodeContext && /(na\+?|sodium|钠|脱钠|储钠)/i.test(lower)) return 'NaCoO2';
+  if (electrodeContext && /(li\+?|lithium|锂|脱锂|储锂)/i.test(lower)) return 'LiCoO2';
+  if (electrodeContext) return 'LiCoO2';
+  return null;
 }
 
 function chooseBestStructure(structures) {
@@ -717,12 +728,28 @@ function fallbackRecipeForType(researchType, formula, bestStructure) {
   return base;
 }
 
+function extractSupercellSpec(value) {
+  const match = String(value || '').match(/(\d+)\s*[x×X]\s*(\d+)(?:\s*[x×X]\s*(\d+))?/);
+  if (!match) return '2x2x1';
+  return `${match[1]}x${match[2]}x${match[3] || 1}`;
+}
+
+function buildSafeHandoffPrompt({ formula, modelType, recipe, bestStructure }) {
+  const safeFormula = formula && formula !== 'candidate battery material' ? formula : 'LiCoO2';
+  const supercell = extractSupercellSpec(recipe?.supercell);
+  if (modelType === 'slab') {
+    return `Build a ${safeFormula}(001) slab with a ${supercell} supercell and 15 A vacuum`;
+  }
+  return `Build a bulk ${safeFormula} crystal${bestStructure?.material_id ? ` using Materials Project entry ${bestStructure.material_id}` : ''} with a ${supercell} supercell`;
+}
+
 function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
   const bestStructure = chooseBestStructure(structures);
-  const formula = bestStructure?.formula || intent.candidate_formulas?.[0] || inferFallbackFormula(userPrompt) || 'candidate battery material';
+  const formula = bestStructure?.formula || intent.candidate_formulas?.[0] || inferFallbackFormula(userPrompt) || 'LiCoO2';
   const researchType = intent.research_type || inferResearchType(userPrompt);
   const recipe = fallbackRecipeForType(researchType, formula, bestStructure);
   const modelType = recipe.starting_point === 'diffusion' ? 'diffusion' : recipe.starting_point;
+  const handoffModelType = modelType === 'slab' ? 'slab' : 'bulk';
 
   const titleMap = {
     diffusion: `${formula} diffusion starter model`,
@@ -775,7 +802,12 @@ function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
         : researchType === 'surface'
           ? 'Next, decide the slab orientation and construct a low-index surface from the relaxed parent bulk.'
           : 'Next, refine the model based on the exact property and literature phase you want to discuss.',
-    handoff_prompt: `Build a ${modelType} starter model for ${formula}${bestStructure?.material_id ? ` using Materials Project entry ${bestStructure.material_id}` : ''}. ${recipe.cell_choice} ${recipe.supercell}`,
+    handoff_prompt: buildSafeHandoffPrompt({
+      formula,
+      modelType: handoffModelType,
+      recipe,
+      bestStructure,
+    }),
   };
 
   const ideaCard = {

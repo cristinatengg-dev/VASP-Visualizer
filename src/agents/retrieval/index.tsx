@@ -505,6 +505,12 @@ const IdeaAgent: React.FC = () => {
     if (card.blueprint?.structure_source?.phase_or_polymorph) {
       params.set('phase', card.blueprint.structure_source.phase_or_polymorph);
     }
+    if (card.blueprint?.modeling_recipe?.starting_point) {
+      params.set('model_type', card.blueprint.modeling_recipe.starting_point);
+    }
+    if (card.blueprint?.modeling_recipe?.supercell) {
+      params.set('supercell', card.blueprint.modeling_recipe.supercell);
+    }
     navigate(`/agent/modeling?${params.toString()}`);
   };
 

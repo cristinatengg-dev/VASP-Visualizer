@@ -4,6 +4,38 @@ import ChatPanel from './components/ChatPanel';
 import CanvasPanel from './components/CanvasPanel';
 import { ModelingIntent } from './types/modeling';
 
+const extractSupercell = (value: string | null) => {
+  const match = String(value || '').match(/(\d+)\s*[x×X]\s*(\d+)(?:\s*[x×X]\s*(\d+))?/);
+  if (!match) {
+    return null;
+  }
+  return `${match[1]}x${match[2]}x${match[3] || 1}`;
+};
+
+const buildStructuredHandoffPrompt = ({
+  material,
+  mpid,
+  modelType,
+  supercell,
+}: {
+  material: string | null;
+  mpid: string | null;
+  modelType: string | null;
+  supercell: string | null;
+}) => {
+  if (!material) {
+    return null;
+  }
+
+  const sc = extractSupercell(supercell) || '1x1x1';
+  const normalizedModelType = String(modelType || '').toLowerCase();
+  if (normalizedModelType === 'slab' || normalizedModelType === 'surface') {
+    return `Build a ${material}(001) slab with a ${sc} supercell and 15 A vacuum`;
+  }
+
+  return `Build a bulk ${material} crystal${mpid ? ` using Materials Project entry ${mpid}` : ''} with a ${sc} supercell`;
+};
+
 const ModelingAgent: React.FC = () => {
   const [intent, setIntent] = useState<ModelingIntent | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -13,12 +45,15 @@ const ModelingAgent: React.FC = () => {
   const handoffPrompt = searchParams.get('prompt');
   const handoffMaterial = searchParams.get('material');
   const handoffMpid = searchParams.get('mpid');
-  const handoffPhase = searchParams.get('phase');
+  const handoffModelType = searchParams.get('model_type');
+  const handoffSupercell = searchParams.get('supercell');
 
-  const prefillPrompt = handoffPrompt
-    || (handoffMaterial
-      ? `Build a bulk ${handoffMaterial} crystal${handoffPhase ? ` (${handoffPhase})` : ''}${handoffMpid ? ` using Materials Project entry ${handoffMpid}` : ''}`
-      : null);
+  const prefillPrompt = buildStructuredHandoffPrompt({
+    material: handoffMaterial,
+    mpid: handoffMpid,
+    modelType: handoffModelType,
+    supercell: handoffSupercell,
+  }) || handoffPrompt || null;
 
   // Clear handoff params from URL after reading them once
   useEffect(() => {
