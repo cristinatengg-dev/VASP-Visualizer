@@ -415,16 +415,16 @@ const RenderingAgent: React.FC = () => {
     const raw = String(message || '').trim();
 
     if (
-      /Gemini API error\s*401/i.test(raw)
+      /(Text LLM|Gemini) API error\s*401/i.test(raw)
       || /invalid token/i.test(raw)
       || /无效的令牌/i.test(raw)
       || /new_api_error/i.test(raw)
     ) {
-      return 'Gemini 图像服务鉴权失败，请联系管理员检查上游令牌或网关配置。';
+      return '图像服务鉴权失败，请联系管理员检查上游令牌或网关配置。';
     }
 
-    if (/GEMINI_API_KEY is not configured/i.test(raw)) {
-      return 'Gemini 图像服务尚未配置，请联系管理员补充可用凭据。';
+    if (/(TEXT_LLM_API_KEY|GEMINI_API_KEY).*not configured/i.test(raw)) {
+      return '图像服务尚未配置，请联系管理员补充可用凭据。';
     }
 
     return raw || '图像分析暂时不可用，请稍后再试。';

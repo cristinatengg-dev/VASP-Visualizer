@@ -22,12 +22,12 @@ const humanizeModelingError = (message: string) => {
     return '建模请求暂时失败，请稍后再试。';
   }
 
-  if (/GEMINI_API_KEY is not configured/i.test(raw)) {
+  if (/(TEXT_LLM_API_KEY|GEMINI_API_KEY).*not configured/i.test(raw)) {
     return '智能解析暂时不可用，请直接调整下方参数或稍后再试。';
   }
 
   if (
-    /Gemini API error\s+(400|401|403|429)/i.test(raw)
+    /(Text LLM|Gemini) API error\s+(400|401|403|429)/i.test(raw)
     || /API key expired/i.test(raw)
     || /invalid token/i.test(raw)
     || /quota exceeded/i.test(raw)

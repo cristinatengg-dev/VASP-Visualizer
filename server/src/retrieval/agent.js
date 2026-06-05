@@ -854,12 +854,12 @@ function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
 
 function humanizeIdeaAgentError(error) {
   const message = String(error?.message || error || 'Idea Agent failed').trim();
-  if (/GEMINI_API_KEY is not configured/i.test(message)) return 'Idea Agent 文本模型未配置：缺少 GEMINI_API_KEY。';
+  if (/(TEXT_LLM_API_KEY|GEMINI_API_KEY).*not configured/i.test(message)) return 'Idea Agent 文本模型未配置：缺少 TEXT_LLM_API_KEY 或 GEMINI_API_KEY。';
   if (/timeout/i.test(message) || /aborted/i.test(message)) return 'Idea Agent 文本模型请求超时，请检查中转站连通性或稍后再试。';
-  if (/Gemini API error 401/i.test(message) || /Gemini API error 403/i.test(message)) return 'Idea Agent 文本模型鉴权失败，请检查 GEMINI_API_KEY。';
-  if (/Gemini API error 404/i.test(message)) return 'Idea Agent 文本模型或接口地址不存在，请检查 GEMINI_BASE_URL / GEMINI_TEXT_MODEL。';
-  if (/Gemini API error 429/i.test(message)) return 'Idea Agent 文本模型请求过多，请稍后再试。';
-  if (/Gemini API error 5\d\d/i.test(message)) return 'Idea Agent 文本模型服务暂时不可用，请稍后再试。';
+  if (/(Text LLM|Gemini) API error 401/i.test(message) || /(Text LLM|Gemini) API error 403/i.test(message)) return 'Idea Agent 文本模型鉴权失败，请检查 TEXT_LLM_API_KEY。';
+  if (/(Text LLM|Gemini) API error 404/i.test(message)) return 'Idea Agent 文本模型或接口地址不存在，请检查 TEXT_LLM_BASE_URL / TEXT_LLM_MODEL。';
+  if (/(Text LLM|Gemini) API error 429/i.test(message)) return 'Idea Agent 文本模型请求过多，请稍后再试。';
+  if (/(Text LLM|Gemini) API error 5\d\d/i.test(message)) return 'Idea Agent 文本模型服务暂时不可用，请稍后再试。';
   return message;
 }
 

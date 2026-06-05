@@ -1,4 +1,4 @@
-const { geminiChat } = require('./parse-science');
+const { geminiChat, isTextChatConfigured } = require('./parse-science');
 
 const SUPPORTED_CHART_TYPES = new Set(['grouped_bar', 'line', 'scatter', 'heatmap', 'multi_panel']);
 
@@ -275,7 +275,7 @@ async function compileFigureContract({
   let contract = fallbackContract;
 
   try {
-    if (process.env.GEMINI_API_KEY) {
+    if (isTextChatConfigured()) {
       const content = await geminiChat(
         buildFigureContractPrompt({
           profile,

@@ -308,20 +308,20 @@ const humanizeRenderingApiError = (message: string, fallback: string) => {
     return fallback;
   }
 
-  if (/GEMINI_API_KEY is not configured/i.test(raw)) {
-    return '图像分析服务尚未配置，请联系管理员补充 Gemini 凭据。';
+  if (/(TEXT_LLM_API_KEY|GEMINI_API_KEY).*not configured/i.test(raw)) {
+    return '图像分析服务尚未配置，请联系管理员补充文本模型凭据。';
   }
 
   if (
-    /Gemini API error\s*401/i.test(raw)
+    /(Text LLM|Gemini) API error\s*401/i.test(raw)
     || /invalid token/i.test(raw)
     || /无效的令牌/i.test(raw)
     || /new_api_error/i.test(raw)
   ) {
-    return 'Gemini 图像网关鉴权失败，请联系管理员更新令牌或上游网关配置。';
+    return '图像分析网关鉴权失败，请联系管理员更新令牌或上游网关配置。';
   }
 
-  if (/Gemini API error\s*429/i.test(raw) || /quota exceeded/i.test(raw) || /resource_exhausted/i.test(raw)) {
+  if (/(Text LLM|Gemini) API error\s*429/i.test(raw) || /quota exceeded/i.test(raw) || /resource_exhausted/i.test(raw)) {
     return '图像分析服务当前繁忙，请稍后再试。';
   }
 

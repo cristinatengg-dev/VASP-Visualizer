@@ -25,7 +25,7 @@ const { buildModelingStructure } = require('./src/modeling/build-structure');
 const { buildModelingProviderAvailability, normalizeModelingProviderPreferences } = require('./src/modeling/provider-registry');
 const { getModelingRuntimeDiagnostics } = require('./src/modeling/health');
 const { parseSciencePdfFile } = require('./src/rendering/parse-pdf');
-const { parseScienceText } = require('./src/rendering/parse-science');
+const { parseScienceText, geminiChat } = require('./src/rendering/parse-science');
 const { validateRenderingImage } = require('./src/rendering/validate-image');
 const { generateRenderingImages } = require('./src/rendering/generate-image');
 const { profileFigureData } = require('./src/rendering/profile-figure-data');
@@ -1778,102 +1778,6 @@ app.post('/api/deploy-static', deployUpload.single('dist'), async (req, res) => 
 // ─────────────────────────────────────────────────────────────────────────────
 // Scientific Cover Agent — AI API Routes
 // ─────────────────────────────────────────────────────────────────────────────
-
-const GEMINI_BASE_URL   = process.env.GEMINI_BASE_URL   || 'https://api.aipaibox.com/v1';
-const GEMINI_API_KEY    = process.env.GEMINI_API_KEY    || '';
-const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash';
-
-const { proxyAgent: _proxyAgent } = require('./src/proxy-agent');
-
-const fetchWithTimeout = async (url, init, timeoutMs) => {
-    return new Promise((resolve, reject) => {
-        const parsed = new URL(url);
-        const options = {
-            hostname: parsed.hostname,
-            port: parsed.port || 443,
-            path: parsed.pathname + parsed.search,
-            method: init.method || 'GET',
-            headers: init.headers || {},
-        };
-        if (_proxyAgent) options.agent = _proxyAgent;
-
-        const timeoutId = setTimeout(() => {
-            req.destroy();
-            reject(new Error('Request timeout'));
-        }, timeoutMs);
-
-        const req = require('https').request(options, (res) => {
-            let data = '';
-            res.on('data', (chunk) => { data += chunk; });
-            res.on('end', () => {
-                clearTimeout(timeoutId);
-                resolve({
-                    ok: res.statusCode >= 200 && res.statusCode < 400,
-                    status: res.statusCode,
-                    text: () => Promise.resolve(data),
-                    json: () => Promise.resolve(JSON.parse(data)),
-                });
-            });
-        });
-
-        req.on('error', (error) => {
-            clearTimeout(timeoutId);
-            reject(error);
-        });
-
-        if (init.body) req.write(init.body);
-        req.end();
-    });
-};
-
-// Helper: OpenAI-compatible chat completion (used for Gemini text model)
-async function geminiChat(messages, jsonMode = false) {
-    const body = {
-        model: GEMINI_TEXT_MODEL,
-        messages,
-        temperature: 0.2,
-    };
-    if (jsonMode) {
-        body.response_format = { type: 'json_object' };
-    }
-
-    let lastError = null;
-    const MAX_RETRIES = 3;
-    
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            const resp = await fetchWithTimeout(`${GEMINI_BASE_URL}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${GEMINI_API_KEY}`,
-                },
-                body: JSON.stringify(body),
-            }, 120000); // Increased timeout to 120s
-
-            if (!resp.ok) {
-                const errText = await resp.text();
-                throw new Error(`Gemini API error ${resp.status}: ${errText}`);
-            }
-
-            const data = await resp.json();
-            return data.choices?.[0]?.message?.content || '';
-            
-        } catch (e) {
-            console.warn(`Gemini API attempt ${attempt}/${MAX_RETRIES} failed: ${e.message}`);
-            lastError = e;
-            if (e && (e.name === 'AbortError' || String(e).includes('aborted'))) {
-                lastError = new Error('Gemini request timeout');
-            }
-            // Wait briefly before retry (1s, 2s, etc.)
-            if (attempt < MAX_RETRIES) {
-                await new Promise(r => setTimeout(r, attempt * 1000));
-            }
-        }
-    }
-    
-    throw lastError || new Error('Gemini API failed after retries');
-}
 
 function safeJsonParse(s) {
     try {
