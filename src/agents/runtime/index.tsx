@@ -613,7 +613,7 @@ const RuntimeInspector: React.FC = () => {
   const [parseScienceTextInput, setParseScienceTextInput] = useState('');
   const [modelingPromptInput, setModelingPromptInput] = useState('');
   const [modelingProvidersInput, setModelingProvidersInput] = useState('materials_project,atomly,csd,icsd,optimade,fallback');
-  const [computeWorkflowInput, setComputeWorkflowInput] = useState<'relax' | 'static'>('relax');
+  const [computeWorkflowInput, setComputeWorkflowInput] = useState<'relax' | 'static' | 'irradiation_creep'>('relax');
   const [computeQualityInput, setComputeQualityInput] = useState<'fast' | 'standard' | 'high'>('standard');
   const [computeProfiles, setComputeProfiles] = useState<ComputeProfile[]>([]);
   const [computeProfilesError, setComputeProfilesError] = useState<string | null>(null);
@@ -1814,12 +1814,13 @@ const RuntimeInspector: React.FC = () => {
                   <div className="grid gap-3 sm:grid-cols-3">
                     <select
                       value={computeWorkflowInput}
-                      onChange={(event) => setComputeWorkflowInput(event.target.value as 'relax' | 'static')}
+                      onChange={(event) => setComputeWorkflowInput(event.target.value as 'relax' | 'static' | 'irradiation_creep')}
                       disabled={!sessionData?.session?._id}
                       className="rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#224A91] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <option value="relax">workflow: relax</option>
                       <option value="static">workflow: static</option>
+                      <option value="irradiation_creep">workflow: irradiation creep</option>
                     </select>
                     <select
                       value={computeQualityInput}

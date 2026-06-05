@@ -192,7 +192,7 @@ const BUILTIN_RUNTIME_SKILLS = [
     inputSchemaRef: 'compute.intent.compile_input_set.v1',
     steps: [
       {
-        id: 'compile-vasp-input-set',
+        id: 'compile-engine-input-set',
         toolName: 'compute.compile_input_set',
         inputBindings: { structureArtifact: '$artifact.structure', intent: '$intent' },
         effectType: 'artifact_write',
@@ -209,8 +209,8 @@ const BUILTIN_RUNTIME_SKILLS = [
     status: 'active',
     display: {
       domain: 'compute',
-      summary: 'Compile a VASP-ready input set from a structure artifact, including INCAR, KPOINTS, POSCAR, and POTCAR symbol spec.',
-      tags: ['compute', 'vasp', 'input-set'],
+      summary: 'Compile an engine-ready input set from a structure artifact, including VASP inputs or LAMMPS graphite irradiation-creep templates.',
+      tags: ['compute', 'vasp', 'lammps', 'input-set'],
     },
   },
   {

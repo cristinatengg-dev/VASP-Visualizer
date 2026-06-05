@@ -729,6 +729,11 @@ function createRuntimeDemoRouter() {
         spin_mode: String(req.body?.intent?.spin_mode || req.body.spinMode || 'auto').trim().toLowerCase() || 'auto',
         custom_params: req.body?.intent?.custom_params || req.body.customParams || {},
       };
+      computeIntent.engine = String(
+        req.body?.intent?.engine
+        || req.body.engine
+        || (computeIntent.workflow === 'irradiation_creep' ? 'lammps' : 'vasp')
+      ).trim().toLowerCase() || 'vasp';
 
       const firstStep = {
         stepId: sanitizeStepId(req.body.stepId || `compute-compile-${Date.now()}`),
@@ -1009,6 +1014,7 @@ function createRuntimeDemoRouter() {
         taskRun: compileTaskRun,
         structureArtifact: modelingResult.finalStructureArtifact,
         intent: {
+          engine: workflow === 'irradiation_creep' ? 'lammps' : 'vasp',
           workflow,
           quality,
           vdw: false,

@@ -18,7 +18,7 @@ export type EngineType =
   | 'siesta'
   | 'dftbplus'
   | 'xtb';
-export type WorkflowType = 'relax' | 'static' | 'dos' | 'band' | 'adsorption' | 'neb';
+export type WorkflowType = 'relax' | 'static' | 'dos' | 'band' | 'adsorption' | 'neb' | 'irradiation_creep';
 export type QualityType = 'fast' | 'standard' | 'high';
 export type SpinMode = 'auto' | 'none' | 'collinear' | 'non-collinear';
 
@@ -145,7 +145,7 @@ export interface JobStatus {
   submissionMode?: string;
 }
 
-// Compiled VASP input files from backend
+// Compiled engine input files from backend
 export interface CompiledInputs {
   files: Record<string, string>;
   normalizedIntent?: Record<string, any>;

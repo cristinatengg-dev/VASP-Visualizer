@@ -419,7 +419,13 @@ app.post('/api/compute/submit', async (req, res) => {
 
         const submission = await submitComputeJob({
             profile,
-            computeInputSetArtifact: { preview: { formula: structure?.meta?.formula || 'vasp_job' } },
+            computeInputSetArtifact: {
+                preview: {
+                    formula: structure?.meta?.formula || (intent?.engine === 'lammps' ? 'graphite' : 'vasp_job'),
+                    engine: intent?.engine || 'vasp',
+                    workflow: intent?.workflow || 'relax',
+                },
+            },
             computeInputPayload: { files, intent, meta: structure?.meta },
             workDir,
             executionDir,

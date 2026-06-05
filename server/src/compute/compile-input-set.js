@@ -21,8 +21,8 @@ const SUPPORTED_ENGINES = new Set([
   'dftbplus',
   'xtb',
 ]);
-const COMPILE_READY_ENGINES = new Set(['vasp']);
-const SUPPORTED_WORKFLOWS = new Set(['relax', 'static']);
+const COMPILE_READY_ENGINES = new Set(['vasp', 'lammps']);
+const SUPPORTED_WORKFLOWS = new Set(['relax', 'static', 'irradiation_creep']);
 const SUPPORTED_QUALITIES = new Set(['fast', 'standard', 'high']);
 const SUPPORTED_SPIN_MODES = new Set(['none', 'auto', 'polarized']);
 
@@ -31,9 +31,10 @@ function normalizeComputeIntent(intent = {}, structurePreview = {}) {
     ? String(intent.engine).trim().toLowerCase()
     : 'vasp';
 
-  const workflow = SUPPORTED_WORKFLOWS.has(String(intent.workflow || '').trim().toLowerCase())
-    ? String(intent.workflow).trim().toLowerCase()
-    : 'relax';
+  const requestedWorkflow = String(intent.workflow || '').trim().toLowerCase();
+  const workflow = SUPPORTED_WORKFLOWS.has(requestedWorkflow)
+    ? requestedWorkflow
+    : (engine === 'lammps' ? 'irradiation_creep' : 'relax');
 
   const quality = SUPPORTED_QUALITIES.has(String(intent.quality || '').trim().toLowerCase())
     ? String(intent.quality).trim().toLowerCase()

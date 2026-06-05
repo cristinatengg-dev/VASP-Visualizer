@@ -1,10 +1,11 @@
 const { compileComputeInputSet } = require('../../../compute/compile-input-set');
 
 function buildComputeInputSetSummary(result) {
+  const engine = String(result?.meta?.engine || result?.normalizedIntent?.engine || 'vasp').toUpperCase();
   const workflow = result?.meta?.workflow || result?.normalizedIntent?.workflow || 'relax';
   const formula = result?.meta?.formula || 'Unknown structure';
   const quality = result?.meta?.quality || result?.normalizedIntent?.quality || 'standard';
-  return `VASP ${workflow} input set for ${formula} (${quality})`;
+  return `${engine} ${workflow} input set for ${formula} (${quality})`;
 }
 
 async function runCompileInputSetTask({
@@ -171,6 +172,7 @@ async function runCompileInputSetTask({
             artifactType: 'compute_input_set',
             sourceStructureArtifactId: structureArtifact._id,
             formula: compileResult?.meta?.formula || null,
+            engine: compileResult?.meta?.engine || compileResult?.normalizedIntent?.engine || null,
             workflow: compileResult?.meta?.workflow || null,
             quality: compileResult?.meta?.quality || null,
             isSlab: Boolean(compileResult?.meta?.isSlab),

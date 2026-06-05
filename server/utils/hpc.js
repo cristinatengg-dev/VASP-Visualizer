@@ -9,10 +9,19 @@ const path = require('path');
 
 const generateJobScript = (request) => {
     const { structure, hpc, intent } = request;
-    const jobName = structure.data.filename || 'vasp_job';
+    const engine = String(intent?.engine || 'vasp').trim().toLowerCase() || 'vasp';
+    const jobName = structure.data.filename || `${engine}_job`;
+    const isLammps = engine === 'lammps';
+    const stdoutFile = isLammps ? 'lammps.out' : 'vasp.out';
+    const stderrFile = isLammps ? 'lammps.err' : 'vasp.err';
+    const runCommand = isLammps
+        ? `${hpc.executable} -in in.graphite_irradiation_creep`
+        : `${hpc.executable}`;
     
     // HPC Profile specific configurations (can be extended to a profile library)
-    const defaultModuleLoad = hpc.id === 'server-b' ? 'module load vasp/6.3.0-gpu' : 'module load vasp/6.3.0-std';
+    const defaultModuleLoad = isLammps
+        ? 'module load lammps'
+        : (hpc.id === 'server-b' ? 'module load vasp/6.3.0-gpu' : 'module load vasp/6.3.0-std');
     const prelude = String(hpc.ssh?.prelude || hpc.moduleLoad || '').trim() || defaultModuleLoad;
 
     if (hpc.system === 'pbs') {
@@ -32,7 +41,7 @@ ${prelude}
 if [ "${request.runtime_policy.use_custodian}" = "true" ]; then
     python3 run_custodian.py
 else
-    mpirun -np $NP -machinefile $PBS_NODEFILE ${hpc.executable} >> output 2>&1
+    mpirun -np $NP -machinefile $PBS_NODEFILE ${runCommand} >> ${stdoutFile} 2>&1
 fi
 `;
     }
@@ -43,8 +52,8 @@ fi
 #SBATCH -N ${hpc.nodes}
 #SBATCH --ntasks-per-node=${hpc.ntasks_per_node}
 #SBATCH -t ${hpc.walltime}
-#SBATCH -o vasp.out
-#SBATCH -e vasp.err
+#SBATCH -o ${stdoutFile}
+#SBATCH -e ${stderrFile}
 
 ${prelude}
 
@@ -52,7 +61,7 @@ ${prelude}
 if [ "${request.runtime_policy.use_custodian}" = "true" ]; then
     python3 run_custodian.py
 else
-    srun ${hpc.executable} > vasp.out
+    srun ${runCommand} > ${stdoutFile}
 fi
 `;
 };

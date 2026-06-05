@@ -44,7 +44,16 @@ const COMPUTE_ENGINES: Array<{ id: EngineType; label: string; summary: string }>
   { id: 'qchem', label: 'Q-Chem', summary: 'Quantum chemistry' },
 ];
 
-const COMPILE_READY_ENGINES = new Set<EngineType>(['vasp']);
+const COMPILE_READY_ENGINES = new Set<EngineType>(['vasp', 'lammps']);
+
+const WORKFLOW_OPTIONS: Array<{ id: WorkflowType; label: string }> = [
+  { id: 'relax', label: 'Relax' },
+  { id: 'static', label: 'Static' },
+  { id: 'dos', label: 'DOS' },
+  { id: 'band', label: 'Band' },
+  { id: 'adsorption', label: 'Adsorption' },
+  { id: 'irradiation_creep', label: 'Irradiation creep' },
+];
 
 const ComputeAgent: React.FC = () => {
   const navigate = useNavigate();
@@ -97,6 +106,16 @@ const ComputeAgent: React.FC = () => {
 
   const currentStep = STEPS[currentStepIndex];
   const selectedProfile = profiles.find(p => p.id === selectedProfileId) || null;
+
+  const selectComputeEngine = (engineId: EngineType) => {
+    setIntent(prev => ({
+      ...prev,
+      engine: engineId,
+      workflow: engineId === 'lammps'
+        ? 'irradiation_creep'
+        : (prev.workflow === 'irradiation_creep' ? 'relax' : prev.workflow),
+    }));
+  };
 
   // ── Fetch HPC profiles ──────────────────────────────────────────────
   useEffect(() => {
@@ -205,6 +224,9 @@ const ComputeAgent: React.FC = () => {
       });
       const data = await res.json();
       if (data.success && data.files) {
+        const fileNames = Object.keys(data.files as Record<string, string>);
+        const preferredPreview = fileNames.find(name => name.startsWith('in.')) || fileNames[0] || 'INCAR';
+        setSelectedPreviewFile(preferredPreview);
         setCompiledInputs({ files: data.files, normalizedIntent: data.normalizedIntent, success: true });
       } else {
         setCompileError(data.error || 'Compilation failed');
@@ -484,7 +506,7 @@ const ComputeAgent: React.FC = () => {
                       {COMPUTE_ENGINES.map(engine => (
                         <button
                           key={engine.id}
-                          onClick={() => setIntent({ ...intent, engine: engine.id })}
+                          onClick={() => selectComputeEngine(engine.id)}
                           className={`p-4 rounded-[20px] border text-left transition-all ${
                             intent.engine === engine.id
                               ? 'bg-[#0A1128] border-[#0A1128] shadow-lg shadow-[#0A1128]/10'
@@ -510,18 +532,18 @@ const ComputeAgent: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {(['relax', 'static', 'dos', 'band', 'adsorption'] as WorkflowType[]).map(wf => (
+                    {WORKFLOW_OPTIONS.map(workflow => (
                       <button
-                        key={wf}
-                        onClick={() => setIntent({ ...intent, workflow: wf })}
+                        key={workflow.id}
+                        onClick={() => setIntent({ ...intent, workflow: workflow.id })}
                         className={`p-4 rounded-[20px] border text-left transition-all ${
-                          intent.workflow === wf
+                          intent.workflow === workflow.id
                             ? 'bg-[#0A1128] border-[#0A1128] shadow-lg shadow-[#0A1128]/10'
                             : 'bg-white border-gray-100 hover:border-[#2E4A8E]/30'
                         }`}
                       >
-                        <p className={`text-[10px] font-bold uppercase tracking-widest ${intent.workflow === wf ? 'text-white/60' : 'text-gray-400'}`}>Workflow</p>
-                        <p className={`text-sm font-bold mt-1 capitalize ${intent.workflow === wf ? 'text-white' : 'text-[#0A1128]'}`}>{wf}</p>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${intent.workflow === workflow.id ? 'text-white/60' : 'text-gray-400'}`}>Workflow</p>
+                        <p className={`text-sm font-bold mt-1 ${intent.workflow === workflow.id ? 'text-white' : 'text-[#0A1128]'}`}>{workflow.label}</p>
                       </button>
                     ))}
                   </div>
