@@ -21,8 +21,16 @@ const SUPPORTED_ENGINES = new Set([
   'dftbplus',
   'xtb',
 ]);
-const COMPILE_READY_ENGINES = new Set(['vasp', 'lammps']);
-const SUPPORTED_WORKFLOWS = new Set(['relax', 'static', 'irradiation_creep']);
+const COMPILE_READY_ENGINES = new Set(SUPPORTED_ENGINES);
+const SUPPORTED_WORKFLOWS = new Set([
+  'relax',
+  'static',
+  'dos',
+  'band',
+  'adsorption',
+  'neb',
+  'irradiation_creep',
+]);
 const SUPPORTED_QUALITIES = new Set(['fast', 'standard', 'high']);
 const SUPPORTED_SPIN_MODES = new Set(['none', 'auto', 'polarized']);
 

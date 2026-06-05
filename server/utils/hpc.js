@@ -7,21 +7,65 @@ const path = require('path');
  * Handles job script generation and sbatch submission
  */
 
+const buildEngineRunCommand = (engine, executable) => {
+    const exe = String(executable || '').trim();
+    switch (engine) {
+        case 'abinit':
+            return `${exe || 'abinit'} < abinit.files`;
+        case 'amber':
+            return `tleap -f tleap.in && ${exe || 'sander'} -O -i mdin -p system.prmtop -c system.inpcrd -o amber.out -r restrt`;
+        case 'castep':
+            return `${exe || 'castep'} scivis`;
+        case 'cp2k':
+            return `${exe || 'cp2k'} -i input.inp -o cp2k.out`;
+        case 'dftbplus':
+            return `${exe || 'dftb+'}`;
+        case 'gaussian':
+            return `${exe || 'g16'} gaussian.gjf`;
+        case 'gromacs':
+            return `${exe || 'gmx'} grompp -f md.mdp -c conf.gro -p topol.top -o topol.tpr && ${exe || 'gmx'} mdrun -deffnm run`;
+        case 'lammps':
+            return `${exe || 'lmp'} -in in.graphite_irradiation_creep`;
+        case 'namd':
+            return `${exe || 'namd2'} namd.conf`;
+        case 'nwchem':
+            return `${exe || 'nwchem'} nwchem.nw`;
+        case 'openmm':
+            return `${exe || 'python3'} run_openmm.py`;
+        case 'orca':
+            return `${exe || 'orca'} orca.inp`;
+        case 'qchem':
+            return `${exe || 'qchem'} qchem.in qchem.out`;
+        case 'quantum_espresso':
+            return `${exe || 'pw.x'} -in pw.in`;
+        case 'siesta':
+            return `${exe || 'siesta'} < siesta.fdf`;
+        case 'xtb':
+            return `sh run_xtb.sh`;
+        case 'vasp':
+        default:
+            return exe || 'vasp_std';
+    }
+};
+
+const defaultModuleForEngine = (engine, hpc) => {
+    if (engine === 'vasp') {
+        return hpc.id === 'server-b' ? 'module load vasp/6.3.0-gpu' : 'module load vasp/6.3.0-std';
+    }
+    return `module load ${engine}`;
+};
+
 const generateJobScript = (request) => {
     const { structure, hpc, intent } = request;
     const engine = String(intent?.engine || 'vasp').trim().toLowerCase() || 'vasp';
     const jobName = structure.data.filename || `${engine}_job`;
     const isLammps = engine === 'lammps';
-    const stdoutFile = isLammps ? 'lammps.out' : 'vasp.out';
-    const stderrFile = isLammps ? 'lammps.err' : 'vasp.err';
-    const runCommand = isLammps
-        ? `${hpc.executable} -in in.graphite_irradiation_creep`
-        : `${hpc.executable}`;
+    const stdoutFile = engine === 'vasp' ? 'vasp.out' : `${engine}.out`;
+    const stderrFile = engine === 'vasp' ? 'vasp.err' : `${engine}.err`;
+    const runCommand = buildEngineRunCommand(engine, hpc.executable);
     
     // HPC Profile specific configurations (can be extended to a profile library)
-    const defaultModuleLoad = isLammps
-        ? 'module load lammps'
-        : (hpc.id === 'server-b' ? 'module load vasp/6.3.0-gpu' : 'module load vasp/6.3.0-std');
+    const defaultModuleLoad = defaultModuleForEngine(engine, hpc);
     const prelude = String(hpc.ssh?.prelude || hpc.moduleLoad || '').trim() || defaultModuleLoad;
 
     if (hpc.system === 'pbs') {
@@ -41,7 +85,11 @@ ${prelude}
 if [ "${request.runtime_policy.use_custodian}" = "true" ]; then
     python3 run_custodian.py
 else
-    mpirun -np $NP -machinefile $PBS_NODEFILE ${runCommand} >> ${stdoutFile} 2>&1
+    if [ "${engine}" = "vasp" ] || [ "${isLammps ? 'true' : 'false'}" = "true" ]; then
+        mpirun -np $NP -machinefile $PBS_NODEFILE ${runCommand} >> ${stdoutFile} 2>&1
+    else
+        ${runCommand} >> ${stdoutFile} 2>&1
+    fi
 fi
 `;
     }
@@ -61,7 +109,11 @@ ${prelude}
 if [ "${request.runtime_policy.use_custodian}" = "true" ]; then
     python3 run_custodian.py
 else
-    srun ${runCommand} > ${stdoutFile}
+    if [ "${engine}" = "vasp" ] || [ "${isLammps ? 'true' : 'false'}" = "true" ]; then
+        srun ${runCommand} > ${stdoutFile}
+    else
+        ${runCommand} > ${stdoutFile} 2> ${stderrFile}
+    fi
 fi
 `;
 };

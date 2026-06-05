@@ -209,8 +209,8 @@ const BUILTIN_RUNTIME_SKILLS = [
     status: 'active',
     display: {
       domain: 'compute',
-      summary: 'Compile an engine-ready input set from a structure artifact, including VASP inputs or LAMMPS graphite irradiation-creep templates.',
-      tags: ['compute', 'vasp', 'lammps', 'input-set'],
+      summary: 'Compile an engine-ready input package from a structure artifact across DFT, quantum chemistry, molecular dynamics, and semi-empirical engines.',
+      tags: ['compute', 'multi-engine', 'input-package'],
     },
   },
   {

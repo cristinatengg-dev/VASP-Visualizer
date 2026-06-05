@@ -44,7 +44,7 @@ const COMPUTE_ENGINES: Array<{ id: EngineType; label: string; summary: string }>
   { id: 'qchem', label: 'Q-Chem', summary: 'Quantum chemistry' },
 ];
 
-const COMPILE_READY_ENGINES = new Set<EngineType>(['vasp', 'lammps']);
+const COMPILE_READY_ENGINES = new Set<EngineType>(COMPUTE_ENGINES.map(engine => engine.id));
 
 const WORKFLOW_OPTIONS: Array<{ id: WorkflowType; label: string }> = [
   { id: 'relax', label: 'Relax' },

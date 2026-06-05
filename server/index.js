@@ -421,7 +421,7 @@ app.post('/api/compute/submit', async (req, res) => {
             profile,
             computeInputSetArtifact: {
                 preview: {
-                    formula: structure?.meta?.formula || (intent?.engine === 'lammps' ? 'graphite' : 'vasp_job'),
+                    formula: structure?.meta?.formula || `${intent?.engine || 'vasp'}_job`,
                     engine: intent?.engine || 'vasp',
                     workflow: intent?.workflow || 'relax',
                 },

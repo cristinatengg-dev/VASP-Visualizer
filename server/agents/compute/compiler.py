@@ -76,14 +76,14 @@ def build_incar_settings(intent: Dict[str, Any], is_slab: bool) -> Dict[str, Any
         "LREAL": "Auto",
     }
 
-    if workflow == "relax":
+    if workflow in {"relax", "adsorption"}:
         incar.update({
             "IBRION": 2,
             "ISIF": 2 if is_slab else 3,
             "NSW": 200,
             "EDIFFG": -0.03,
         })
-    elif workflow == "static":
+    elif workflow in {"static", "dos", "band"}:
         incar.update({
             "IBRION": -1,
             "ISIF": 2,
@@ -91,8 +91,27 @@ def build_incar_settings(intent: Dict[str, Any], is_slab: bool) -> Dict[str, Any
             "LCHARG": True,
             "LWAVE": False,
         })
+        if workflow == "dos":
+            incar.update({
+                "LORBIT": 11,
+                "NEDOS": 2000,
+            })
+        elif workflow == "band":
+            incar.update({
+                "LCHARG": False,
+                "LWAVE": True,
+            })
+    elif workflow == "neb":
+        incar.update({
+            "IBRION": 3,
+            "POTIM": 0,
+            "NSW": 100,
+            "SPRING": -5,
+            "LCLIMB": True,
+            "IMAGES": safe_int(custom_params.get("IMAGES"), 3, minimum=1),
+        })
     else:
-        raise ValueError(f"Unsupported workflow '{workflow}'. Supported workflows: relax, static")
+        raise ValueError(f"Unsupported workflow '{workflow}'. Supported workflows: relax, static, dos, band, adsorption, neb")
 
     if quality == "fast":
         incar.update({
@@ -285,6 +304,338 @@ def summarize_render_formula(render_data: Dict[str, Any]) -> str | None:
         count = counts[element]
         formula += element if count == 1 else f"{element}{count}"
     return formula
+
+
+PERIODIC_SYMBOLS = """
+H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn
+Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La
+Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi
+Po At Rn Fr Ra Ac Th Pa U Np Pu
+""".split()
+
+ATOMIC_NUMBERS = {symbol: index + 1 for index, symbol in enumerate(PERIODIC_SYMBOLS)}
+
+ATOMIC_MASSES = {
+    "H": 1.008,
+    "He": 4.0026,
+    "Li": 6.94,
+    "Be": 9.0122,
+    "B": 10.81,
+    "C": 12.011,
+    "N": 14.007,
+    "O": 15.999,
+    "F": 18.998,
+    "Ne": 20.180,
+    "Na": 22.990,
+    "Mg": 24.305,
+    "Al": 26.982,
+    "Si": 28.085,
+    "P": 30.974,
+    "S": 32.06,
+    "Cl": 35.45,
+    "K": 39.098,
+    "Ca": 40.078,
+    "Ti": 47.867,
+    "V": 50.942,
+    "Cr": 51.996,
+    "Mn": 54.938,
+    "Fe": 55.845,
+    "Co": 58.933,
+    "Ni": 58.693,
+    "Cu": 63.546,
+    "Zn": 65.38,
+    "Ga": 69.723,
+    "Ge": 72.630,
+    "As": 74.922,
+    "Se": 78.971,
+    "Br": 79.904,
+    "Ag": 107.868,
+    "Cd": 112.414,
+    "Sn": 118.710,
+    "I": 126.904,
+    "Ba": 137.327,
+    "Pt": 195.084,
+    "Au": 196.967,
+    "Hg": 200.592,
+    "Pb": 207.2,
+    "U": 238.029,
+}
+
+ENGINE_LABELS = {
+    "abinit": "ABINIT",
+    "amber": "AMBER",
+    "castep": "CASTEP",
+    "cp2k": "CP2K",
+    "dftbplus": "DFTB+",
+    "gaussian": "Gaussian",
+    "gromacs": "GROMACS",
+    "lammps": "LAMMPS",
+    "namd": "NAMD",
+    "nwchem": "NWChem",
+    "openmm": "OpenMM",
+    "orca": "ORCA",
+    "qchem": "Q-Chem",
+    "quantum_espresso": "Quantum ESPRESSO",
+    "siesta": "SIESTA",
+    "xtb": "xtb",
+}
+
+
+def atomic_number(symbol: str) -> int:
+    return ATOMIC_NUMBERS.get(str(symbol).strip(), 0)
+
+
+def atomic_mass(symbol: str) -> float:
+    symbol = str(symbol).strip()
+    return ATOMIC_MASSES.get(symbol, max(1.0, float(atomic_number(symbol) or 6) * 2.0))
+
+
+def normalize_element_symbol(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "X"
+    letters = "".join(ch for ch in raw if ch.isalpha())
+    if not letters:
+        return "X"
+    return letters[:1].upper() + letters[1:2].lower()
+
+
+def extract_render_structure(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure_payload = request_data.get("structure") or {}
+    structure_data = structure_payload.get("data") or {}
+    structure_meta = structure_payload.get("meta") or {}
+    atoms_raw = structure_data.get("atoms")
+    lattice_raw = structure_data.get("latticeVectors")
+
+    atoms: List[Dict[str, Any]] = []
+    if isinstance(atoms_raw, list):
+        for index, atom in enumerate(atoms_raw, start=1):
+            if not isinstance(atom, dict):
+                continue
+            position = atom.get("position") or {}
+            try:
+                x = float(position.get("x"))
+                y = float(position.get("y"))
+                z = float(position.get("z"))
+            except (TypeError, ValueError):
+                continue
+            element = normalize_element_symbol(atom.get("element") or atom.get("symbol"))
+            atoms.append({
+                "id": index,
+                "element": element,
+                "x": x,
+                "y": y,
+                "z": z,
+            })
+
+    if not atoms:
+        raise ValueError("structure.data does not contain any valid atoms")
+
+    if isinstance(lattice_raw, list) and len(lattice_raw) == 3:
+        try:
+            lattice = [[float(component) for component in vector[:3]] for vector in lattice_raw]
+        except (TypeError, ValueError):
+            lattice = []
+    else:
+        lattice = []
+
+    if len(lattice) != 3 or any(len(vector) != 3 for vector in lattice):
+        lattice = infer_lattice_from_atoms(atoms)
+
+    formula = structure_meta.get("formula") or summarize_render_formula(structure_data) or formula_from_atoms(atoms)
+    return {
+        "atoms": atoms,
+        "lattice": lattice,
+        "formula": str(formula or "structure").strip() or "structure",
+        "meta": structure_meta,
+    }
+
+
+def infer_lattice_from_atoms(atoms: List[Dict[str, Any]]) -> List[List[float]]:
+    xs = [float(atom["x"]) for atom in atoms]
+    ys = [float(atom["y"]) for atom in atoms]
+    zs = [float(atom["z"]) for atom in atoms]
+    lengths = [
+        max(max(xs) - min(xs) + 12.0, 15.0),
+        max(max(ys) - min(ys) + 12.0, 15.0),
+        max(max(zs) - min(zs) + 12.0, 15.0),
+    ]
+    return [
+        [lengths[0], 0.0, 0.0],
+        [0.0, lengths[1], 0.0],
+        [0.0, 0.0, lengths[2]],
+    ]
+
+
+def formula_from_atoms(atoms: List[Dict[str, Any]]) -> str:
+    counts = Counter(atom["element"] for atom in atoms)
+    parts = []
+    for element in sorted(counts, key=lambda item: (item != "C", item != "H", item)):
+        count = counts[element]
+        parts.append(element if count == 1 else f"{element}{count}")
+    return "".join(parts) or "structure"
+
+
+def unique_elements(atoms: List[Dict[str, Any]]) -> List[str]:
+    return sorted(set(atom["element"] for atom in atoms), key=lambda symbol: (atomic_number(symbol) or 999, symbol))
+
+
+def vector_length(vector: List[float]) -> float:
+    return math.sqrt(sum(float(component) ** 2 for component in vector))
+
+
+def lattice_lengths(lattice: List[List[float]]) -> List[float]:
+    return [vector_length(vector) for vector in lattice]
+
+
+def qchem_charge_and_multiplicity(intent: Dict[str, Any]) -> Tuple[int, int]:
+    custom_params = intent.get("custom_params") if isinstance(intent.get("custom_params"), dict) else {}
+    charge = safe_int(custom_params.get("charge"), 0)
+    multiplicity = safe_int(custom_params.get("multiplicity"), 1, minimum=1)
+    return charge, multiplicity
+
+
+def workflow_is_optimization(workflow: str) -> bool:
+    return workflow in {"relax", "adsorption", "neb"}
+
+
+def workflow_job_name(workflow: str) -> str:
+    return {
+        "relax": "geometry optimization",
+        "static": "single point",
+        "dos": "density of states",
+        "band": "band structure",
+        "adsorption": "adsorption relaxation",
+        "neb": "NEB starter",
+        "irradiation_creep": "irradiation creep",
+    }.get(workflow, workflow)
+
+
+def quality_settings(quality: str) -> Dict[str, Any]:
+    return {
+        "fast": {
+            "ecut_ry": 35,
+            "cp2k_cutoff": 350,
+            "basis": "def2-SVP",
+            "cp2k_basis": "DZVP-MOLOPT-SR-GTH",
+            "steps": 2500,
+        },
+        "standard": {
+            "ecut_ry": 50,
+            "cp2k_cutoff": 500,
+            "basis": "def2-SVP",
+            "cp2k_basis": "DZVP-MOLOPT-SR-GTH",
+            "steps": 5000,
+        },
+        "high": {
+            "ecut_ry": 75,
+            "cp2k_cutoff": 750,
+            "basis": "def2-TZVP",
+            "cp2k_basis": "TZVP-MOLOPT-GTH",
+            "steps": 10000,
+        },
+    }.get(quality, {
+        "ecut_ry": 50,
+        "cp2k_cutoff": 500,
+        "basis": "def2-SVP",
+        "cp2k_basis": "DZVP-MOLOPT-SR-GTH",
+        "steps": 5000,
+    })
+
+
+def format_xyz(atoms: List[Dict[str, Any]], title: str) -> str:
+    lines = [str(len(atoms)), title]
+    for atom in atoms:
+        lines.append(f"{atom['element']} {atom['x']:.8f} {atom['y']:.8f} {atom['z']:.8f}")
+    return "\n".join(lines) + "\n"
+
+
+def format_pdb(atoms: List[Dict[str, Any]], lattice: List[List[float]], title: str = "SciVisualizer structure") -> str:
+    a, b, c = lattice_lengths(lattice)
+    lines = [
+        f"REMARK {title}",
+        f"CRYST1{a:9.3f}{b:9.3f}{c:9.3f}{90.0:7.2f}{90.0:7.2f}{90.0:7.2f} P 1           1",
+    ]
+    for atom in atoms:
+        element = atom["element"]
+        atom_name = f"{element}{atom['id'] % 1000:03d}"[:4]
+        lines.append(
+            f"ATOM  {atom['id']:5d} {atom_name:<4} MOL A   1    "
+            f"{atom['x']:8.3f}{atom['y']:8.3f}{atom['z']:8.3f}  1.00  0.00          {element:>2}"
+        )
+    lines.extend(["TER", "END"])
+    return "\n".join(lines) + "\n"
+
+
+def engine_asset_spec(engine: str, required_files: List[Dict[str, str]] | None = None, notes: List[str] | None = None) -> str:
+    payload = {
+        "engine": engine,
+        "requiredFiles": required_files or [],
+        "notes": notes or [],
+    }
+    return json.dumps(payload, indent=2)
+
+
+def build_readme(engine: str, formula: str, workflow: str, files: List[str], notes: List[str] | None = None) -> str:
+    label = ENGINE_LABELS.get(engine, engine)
+    lines = [
+        f"# {label} Input Package",
+        "",
+        f"- Formula: {formula}",
+        f"- Workflow: {workflow_job_name(workflow)}",
+        f"- Engine: {label}",
+        "",
+        "## Files",
+        "",
+    ]
+    for file_name in files:
+        lines.append(f"- `{file_name}`")
+    if notes:
+        lines.extend(["", "## Notes", ""])
+        lines.extend(f"- {note}" for note in notes)
+    return "\n".join(lines) + "\n"
+
+
+def build_generic_result(
+    engine: str,
+    request_data: Dict[str, Any],
+    files: Dict[str, str],
+    primary_file: str,
+    meta_extra: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
+    generated_files = list(files.keys())
+    label = ENGINE_LABELS.get(engine, engine)
+    meta_extra = meta_extra or {}
+    return {
+        "success": True,
+        "summary": f"Compiled {label} {workflow} input package for {structure['formula']}",
+        "files": files,
+        "preview": {
+            "artifactType": "compute_input_set",
+            "engine": engine,
+            "formula": structure["formula"],
+            "workflow": workflow,
+            "quality": quality,
+            "generatedFiles": generated_files,
+            "primaryFile": primary_file,
+            **meta_extra,
+        },
+        "meta": {
+            "engine": engine,
+            "formula": structure["formula"],
+            "workflow": workflow,
+            "quality": quality,
+            "generatedFiles": generated_files,
+            "primaryFile": primary_file,
+            "atomCount": len(structure["atoms"]),
+            "elements": unique_elements(structure["atoms"]),
+            **meta_extra,
+        },
+    }
 
 
 def graphite_quality_defaults(quality: str) -> Dict[str, int]:
@@ -656,10 +1007,8 @@ def compile_lammps_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
     workflow = str(intent.get("workflow") or "irradiation_creep").strip().lower() or "irradiation_creep"
     quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
 
-    if workflow in {"relax", "static"}:
-        workflow = "irradiation_creep"
     if workflow != "irradiation_creep":
-        raise ValueError("LAMMPS compiler currently supports the graphite irradiation_creep workflow")
+        workflow = "irradiation_creep"
 
     params = build_graphite_parameters(intent)
     graphite_data, graphite_meta = generate_graphite_lammps_data(params)
@@ -739,6 +1088,757 @@ def compile_lammps_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def compile_cp2k_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
+    settings = quality_settings(quality)
+    run_type = "GEO_OPT" if workflow_is_optimization(workflow) else "ENERGY"
+    elements = unique_elements(structure["atoms"])
+
+    coord_lines = [f"      {atom['element']} {atom['x']:.8f} {atom['y']:.8f} {atom['z']:.8f}" for atom in structure["atoms"]]
+    kind_lines = []
+    for element in elements:
+        kind_lines.extend([
+            f"    &KIND {element}",
+            f"      BASIS_SET {settings['cp2k_basis']}",
+            "      POTENTIAL GTH-PBE",
+            "    &END KIND",
+        ])
+
+    a_vec, b_vec, c_vec = structure["lattice"]
+    input_text = f"""&GLOBAL
+  PROJECT scivis
+  RUN_TYPE {run_type}
+  PRINT_LEVEL MEDIUM
+&END GLOBAL
+
+&FORCE_EVAL
+  METHOD Quickstep
+  &DFT
+    BASIS_SET_FILE_NAME BASIS_MOLOPT
+    POTENTIAL_FILE_NAME POTENTIAL
+    CHARGE {qchem_charge_and_multiplicity(intent)[0]}
+    MULTIPLICITY {qchem_charge_and_multiplicity(intent)[1]}
+    &MGRID
+      CUTOFF {settings['cp2k_cutoff']}
+      REL_CUTOFF 60
+    &END MGRID
+    &SCF
+      EPS_SCF 1.0E-6
+      MAX_SCF 100
+      &OT
+        PRECONDITIONER FULL_SINGLE_INVERSE
+      &END OT
+      &OUTER_SCF
+        MAX_SCF 10
+      &END OUTER_SCF
+    &END SCF
+    &XC
+      &XC_FUNCTIONAL PBE
+      &END XC_FUNCTIONAL
+    &END XC
+  &END DFT
+  &SUBSYS
+    &CELL
+      A {a_vec[0]:.8f} {a_vec[1]:.8f} {a_vec[2]:.8f}
+      B {b_vec[0]:.8f} {b_vec[1]:.8f} {b_vec[2]:.8f}
+      C {c_vec[0]:.8f} {c_vec[1]:.8f} {c_vec[2]:.8f}
+      PERIODIC XYZ
+    &END CELL
+    &COORD
+{chr(10).join(coord_lines)}
+    &END COORD
+{chr(10).join(kind_lines)}
+  &END SUBSYS
+&END FORCE_EVAL
+"""
+    if run_type == "GEO_OPT":
+        input_text += """
+&MOTION
+  &GEO_OPT
+    MAX_ITER 200
+    OPTIMIZER BFGS
+  &END GEO_OPT
+&END MOTION
+"""
+
+    files = {
+        "input.inp": input_text,
+        "structure.xyz": format_xyz(structure["atoms"], structure["formula"]),
+        "ENGINE_ASSETS.spec.json": engine_asset_spec("cp2k", [
+            {"name": "BASIS_MOLOPT", "kind": "basis_library"},
+            {"name": "POTENTIAL", "kind": "gth_potential_library"},
+        ]),
+    }
+    files["README_cp2k.md"] = build_readme("cp2k", structure["formula"], workflow, list(files.keys()))
+    return build_generic_result("cp2k", request_data, files, "input.inp")
+
+
+def compile_quantum_espresso_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
+    settings = quality_settings(quality)
+    calculation = "relax" if workflow_is_optimization(workflow) else "scf"
+    elements = unique_elements(structure["atoms"])
+    species_lines = [f"  {element} {atomic_mass(element):.6f} {element}.upf" for element in elements]
+    pos_lines = [f"  {atom['element']} {atom['x']:.8f} {atom['y']:.8f} {atom['z']:.8f}" for atom in structure["atoms"]]
+    cell_lines = ["  " + " ".join(f"{component:.8f}" for component in vector) for vector in structure["lattice"]]
+    input_text = f"""&CONTROL
+  calculation = '{calculation}'
+  prefix = 'scivis'
+  pseudo_dir = './pseudo'
+  outdir = './tmp'
+/
+&SYSTEM
+  ibrav = 0
+  nat = {len(structure['atoms'])}
+  ntyp = {len(elements)}
+  ecutwfc = {settings['ecut_ry']}
+  occupations = 'smearing'
+  smearing = 'mp'
+  degauss = 0.01
+/
+&ELECTRONS
+  conv_thr = 1.0d-8
+  mixing_beta = 0.3
+/
+&IONS
+  ion_dynamics = 'bfgs'
+/
+ATOMIC_SPECIES
+{chr(10).join(species_lines)}
+CELL_PARAMETERS angstrom
+{chr(10).join(cell_lines)}
+ATOMIC_POSITIONS angstrom
+{chr(10).join(pos_lines)}
+K_POINTS gamma
+"""
+    files = {
+        "pw.in": input_text,
+        "structure.xyz": format_xyz(structure["atoms"], structure["formula"]),
+        "ENGINE_ASSETS.spec.json": engine_asset_spec("quantum_espresso", [
+            {"name": f"pseudo/{element}.upf", "kind": "pseudopotential"} for element in elements
+        ]),
+    }
+    files["README_quantum_espresso.md"] = build_readme("quantum_espresso", structure["formula"], workflow, list(files.keys()))
+    return build_generic_result("quantum_espresso", request_data, files, "pw.in", {"pseudoSymbols": elements})
+
+
+def compile_gaussian_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
+    settings = quality_settings(quality)
+    charge, multiplicity = qchem_charge_and_multiplicity(intent)
+    keyword = "Opt" if workflow_is_optimization(workflow) else "SP"
+    if workflow == "dos":
+        keyword = "SP Pop=Full"
+    elif workflow == "neb":
+        keyword = "Opt=(QST2,CalcFC)"
+    coords = "\n".join(f"{atom['element']:<2} {atom['x']:>14.8f} {atom['y']:>14.8f} {atom['z']:>14.8f}" for atom in structure["atoms"])
+    gjf = f"""%chk=scivis.chk
+%mem=4GB
+%nprocshared=8
+#p PBE1PBE/{settings['basis']} {keyword} EmpiricalDispersion=GD3BJ
+
+SciVisualizer {workflow_job_name(workflow)} for {structure['formula']}
+
+{charge} {multiplicity}
+{coords}
+
+"""
+    files = {
+        "gaussian.gjf": gjf,
+        "structure.xyz": format_xyz(structure["atoms"], structure["formula"]),
+        "README_gaussian.md": build_readme("gaussian", structure["formula"], workflow, ["gaussian.gjf", "structure.xyz"]),
+    }
+    return build_generic_result("gaussian", request_data, files, "gaussian.gjf")
+
+
+def compile_orca_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
+    settings = quality_settings(quality)
+    charge, multiplicity = qchem_charge_and_multiplicity(intent)
+    job = "Opt" if workflow_is_optimization(workflow) else "SP"
+    coords = "\n".join(f"  {atom['element']:<2} {atom['x']:>14.8f} {atom['y']:>14.8f} {atom['z']:>14.8f}" for atom in structure["atoms"])
+    inp = f"""! PBE {settings['basis']} D3BJ TightSCF {job}
+%pal nprocs 8 end
+%maxcore 2000
+
+* xyz {charge} {multiplicity}
+{coords}
+*
+"""
+    files = {
+        "orca.inp": inp,
+        "structure.xyz": format_xyz(structure["atoms"], structure["formula"]),
+        "README_orca.md": build_readme("orca", structure["formula"], workflow, ["orca.inp", "structure.xyz"]),
+    }
+    return build_generic_result("orca", request_data, files, "orca.inp")
+
+
+def compile_nwchem_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
+    settings = quality_settings(quality)
+    charge, _multiplicity = qchem_charge_and_multiplicity(intent)
+    coords = "\n".join(f"  {atom['element']} {atom['x']:.8f} {atom['y']:.8f} {atom['z']:.8f}" for atom in structure["atoms"])
+    task = "optimize" if workflow_is_optimization(workflow) else "energy"
+    nw = f"""start scivis
+charge {charge}
+
+geometry units angstrom noautoz
+{coords}
+end
+
+basis
+  * library {settings['basis']}
+end
+
+dft
+  xc pbe0
+  iterations 100
+end
+
+task dft {task}
+"""
+    files = {
+        "nwchem.nw": nw,
+        "structure.xyz": format_xyz(structure["atoms"], structure["formula"]),
+        "README_nwchem.md": build_readme("nwchem", structure["formula"], workflow, ["nwchem.nw", "structure.xyz"]),
+    }
+    return build_generic_result("nwchem", request_data, files, "nwchem.nw")
+
+
+def compile_qchem_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
+    settings = quality_settings(quality)
+    charge, multiplicity = qchem_charge_and_multiplicity(intent)
+    jobtype = "opt" if workflow_is_optimization(workflow) else "sp"
+    coords = "\n".join(f"{atom['element']} {atom['x']:.8f} {atom['y']:.8f} {atom['z']:.8f}" for atom in structure["atoms"])
+    qcin = f"""$molecule
+{charge} {multiplicity}
+{coords}
+$end
+
+$rem
+jobtype {jobtype}
+method pbe0
+basis {settings['basis']}
+dft_d d3_bj
+scf_algorithm diis
+max_scf_cycles 100
+$end
+"""
+    files = {
+        "qchem.in": qcin,
+        "structure.xyz": format_xyz(structure["atoms"], structure["formula"]),
+        "README_qchem.md": build_readme("qchem", structure["formula"], workflow, ["qchem.in", "structure.xyz"]),
+    }
+    return build_generic_result("qchem", request_data, files, "qchem.in")
+
+
+def compile_abinit_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
+    settings = quality_settings(quality)
+    elements = unique_elements(structure["atoms"])
+    typat_map = {element: index + 1 for index, element in enumerate(elements)}
+    typat = " ".join(str(typat_map[atom["element"]]) for atom in structure["atoms"])
+    znucl = " ".join(str(atomic_number(element) or 6) for element in elements)
+    xcart = "\n".join(f"  {atom['x']:.8f} {atom['y']:.8f} {atom['z']:.8f}" for atom in structure["atoms"])
+    rprim = "\n".join("  " + " ".join(f"{component:.8f}" for component in vector) for vector in structure["lattice"])
+    ion_block = "ionmov 2\nntime 100\ntoldff 5.0d-5" if workflow_is_optimization(workflow) else "ionmov 0\nnstep 80\ntolvrs 1.0d-10"
+    abi = f"""# SciVisualizer ABINIT input
+ndtset 1
+natom {len(structure['atoms'])}
+ntypat {len(elements)}
+typat {typat}
+znucl {znucl}
+
+acell 1.0 1.0 1.0 angstrom
+rprim
+{rprim}
+
+xcart angstrom
+{xcart}
+
+ecut {settings['ecut_ry']} Ry
+kptopt 0
+nkpt 1
+kpt 0.0 0.0 0.0
+{ion_block}
+"""
+    files = {
+        "scivis.abi": abi,
+        "abinit.files": "scivis.abi\nscivis.abo\nscivis_i\nscivis_o\nscivis_tmp\n" + "\n".join(f"pseudo/{element}.psp8" for element in elements) + "\n",
+        "structure.xyz": format_xyz(structure["atoms"], structure["formula"]),
+        "ENGINE_ASSETS.spec.json": engine_asset_spec("abinit", [
+            {"name": f"pseudo/{element}.psp8", "kind": "pseudopotential"} for element in elements
+        ]),
+    }
+    files["README_abinit.md"] = build_readme("abinit", structure["formula"], workflow, list(files.keys()))
+    return build_generic_result("abinit", request_data, files, "scivis.abi", {"pseudoSymbols": elements})
+
+
+def compile_castep_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
+    settings = quality_settings(quality)
+    lattice = "\n".join("  " + " ".join(f"{component:.8f}" for component in vector) for vector in structure["lattice"])
+    positions = "\n".join(f"  {atom['element']} {atom['x']:.8f} {atom['y']:.8f} {atom['z']:.8f}" for atom in structure["atoms"])
+    task = "GeometryOptimization" if workflow_is_optimization(workflow) else "SinglePoint"
+    cell = f"""%BLOCK LATTICE_CART
+ang
+{lattice}
+%ENDBLOCK LATTICE_CART
+
+%BLOCK POSITIONS_ABS
+ang
+{positions}
+%ENDBLOCK POSITIONS_ABS
+
+KPOINT_MP_GRID 1 1 1
+"""
+    param = f"""task : {task}
+xc_functional : PBE
+cut_off_energy : {settings['ecut_ry'] * 13.605693:.1f} eV
+spin_polarized : false
+max_scf_cycles : 100
+"""
+    if workflow_is_optimization(workflow):
+        param += "geom_max_iter : 200\n"
+    files = {
+        "scivis.cell": cell,
+        "scivis.param": param,
+        "structure.xyz": format_xyz(structure["atoms"], structure["formula"]),
+        "ENGINE_ASSETS.spec.json": engine_asset_spec("castep", notes=["CASTEP resolves pseudopotentials from the cluster installation or .usp files."]),
+    }
+    files["README_castep.md"] = build_readme("castep", structure["formula"], workflow, list(files.keys()))
+    return build_generic_result("castep", request_data, files, "scivis.cell")
+
+
+def compile_siesta_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    elements = unique_elements(structure["atoms"])
+    species_lines = [f"  {index + 1} {atomic_number(element) or 6} {element}" for index, element in enumerate(elements)]
+    type_map = {element: index + 1 for index, element in enumerate(elements)}
+    coord_lines = [
+        f"  {atom['x']:.8f} {atom['y']:.8f} {atom['z']:.8f} {type_map[atom['element']]}"
+        for atom in structure["atoms"]
+    ]
+    lattice = "\n".join("  " + " ".join(f"{component:.8f}" for component in vector) for vector in structure["lattice"])
+    run_type = "CG" if workflow_is_optimization(workflow) else "FC"
+    fdf = f"""SystemName scivis
+SystemLabel scivis
+NumberOfAtoms {len(structure['atoms'])}
+NumberOfSpecies {len(elements)}
+
+%block ChemicalSpeciesLabel
+{chr(10).join(species_lines)}
+%endblock ChemicalSpeciesLabel
+
+LatticeConstant 1.0 Ang
+%block LatticeVectors
+{lattice}
+%endblock LatticeVectors
+
+AtomicCoordinatesFormat Ang
+%block AtomicCoordinatesAndAtomicSpecies
+{chr(10).join(coord_lines)}
+%endblock AtomicCoordinatesAndAtomicSpecies
+
+MeshCutoff 250 Ry
+PAO.BasisSize DZP
+XC.functional GGA
+XC.authors PBE
+MD.TypeOfRun {run_type}
+MD.NumCGsteps 200
+"""
+    files = {
+        "siesta.fdf": fdf,
+        "structure.xyz": format_xyz(structure["atoms"], structure["formula"]),
+        "ENGINE_ASSETS.spec.json": engine_asset_spec("siesta", [
+            {"name": f"{element}.psf", "kind": "pseudopotential"} for element in elements
+        ]),
+    }
+    files["README_siesta.md"] = build_readme("siesta", structure["formula"], workflow, list(files.keys()))
+    return build_generic_result("siesta", request_data, files, "siesta.fdf", {"pseudoSymbols": elements})
+
+
+def compile_dftbplus_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    elements = unique_elements(structure["atoms"])
+    type_map = {element: index + 1 for index, element in enumerate(elements)}
+    atom_lines = [
+        f"{atom['id']} {type_map[atom['element']]} {atom['x']:.8f} {atom['y']:.8f} {atom['z']:.8f}"
+        for atom in structure["atoms"]
+    ]
+    gen = "\n".join([
+        f"{len(structure['atoms'])} S",
+        " ".join(elements),
+        *atom_lines,
+        "0.0 0.0 0.0",
+        *(" ".join(f"{component:.8f}" for component in vector) for vector in structure["lattice"]),
+    ]) + "\n"
+    max_angular = []
+    for element in elements:
+        angular = "s" if element == "H" else ("d" if atomic_number(element) > 20 else "p")
+        max_angular.append(f"    {element} = \"{angular}\"")
+    driver = "ConjugateGradient { MaxSteps = 200 }" if workflow_is_optimization(workflow) else "{}"
+    hsd = f"""Geometry = GenFormat {{
+  <<< "geo.gen"
+}}
+
+Driver = {driver}
+
+Hamiltonian = DFTB {{
+  SCC = Yes
+  MaxSCCIterations = 100
+  SlaterKosterFiles = Type2FileNames {{
+    Prefix = "./slakos/"
+    Separator = "-"
+    Suffix = ".skf"
+  }}
+  MaxAngularMomentum = {{
+{chr(10).join(max_angular)}
+  }}
+}}
+
+Options {{
+  WriteResultsTag = Yes
+}}
+"""
+    files = {
+        "dftb_in.hsd": hsd,
+        "geo.gen": gen,
+        "structure.xyz": format_xyz(structure["atoms"], structure["formula"]),
+        "ENGINE_ASSETS.spec.json": engine_asset_spec("dftbplus", [
+            {"name": "slakos/*.skf", "kind": "slater_koster_library"},
+        ]),
+    }
+    files["README_dftbplus.md"] = build_readme("dftbplus", structure["formula"], workflow, list(files.keys()))
+    return build_generic_result("dftbplus", request_data, files, "dftb_in.hsd")
+
+
+def compile_xtb_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    charge, _multiplicity = qchem_charge_and_multiplicity(intent)
+    inp = """$opt
+  maxcycle=200
+$end
+$scc
+  temp=300
+$end
+"""
+    run_sh = "#!/bin/sh\nset -eu\n"
+    if workflow_is_optimization(workflow):
+        run_sh += f"xtb structure.xyz --input xtb.inp --chrg {charge} --opt > xtb.out\n"
+    else:
+        run_sh += f"xtb structure.xyz --input xtb.inp --chrg {charge} > xtb.out\n"
+    files = {
+        "structure.xyz": format_xyz(structure["atoms"], structure["formula"]),
+        "xtb.inp": inp,
+        "run_xtb.sh": run_sh,
+        "README_xtb.md": build_readme("xtb", structure["formula"], workflow, ["structure.xyz", "xtb.inp", "run_xtb.sh"]),
+    }
+    return build_generic_result("xtb", request_data, files, "xtb.inp")
+
+
+def lj_parameters(element: str) -> Tuple[float, float]:
+    z = atomic_number(element) or 6
+    sigma_nm = 0.22 + min(0.20, z * 0.0025)
+    epsilon_kj = 0.10 + min(0.50, z * 0.006)
+    return sigma_nm, epsilon_kj
+
+
+def compile_gromacs_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
+    settings = quality_settings(quality)
+    elements = unique_elements(structure["atoms"])
+    gro_lines = ["SciVisualizer generated structure", f"{len(structure['atoms']):5d}"]
+    for atom in structure["atoms"]:
+        gro_lines.append(
+            f"{1:5d}{'MOL':<5}{atom['element'][:2]:>5}{atom['id'] % 100000:5d}"
+            f"{atom['x'] / 10.0:8.3f}{atom['y'] / 10.0:8.3f}{atom['z'] / 10.0:8.3f}"
+        )
+    lengths_nm = [length / 10.0 for length in lattice_lengths(structure["lattice"])]
+    gro_lines.append("".join(f"{length:10.5f}" for length in lengths_nm))
+    atomtypes = []
+    for element in elements:
+        sigma, epsilon = lj_parameters(element)
+        atomtypes.append(f"{element:<6} {atomic_number(element) or 0:3d} {atomic_mass(element):10.5f} 0.000 A {sigma:10.5f} {epsilon:10.5f}")
+    atom_lines = [
+        f"{atom['id']:5d} {atom['element']:<6} 1 MOL {atom['element']:<6} {atom['id']:5d} 0.000 {atomic_mass(atom['element']):10.5f}"
+        for atom in structure["atoms"]
+    ]
+    top = f"""; SciVisualizer generic GROMACS topology
+[ defaults ]
+; nbfunc comb-rule gen-pairs fudgeLJ fudgeQQ
+1 2 yes 0.5 0.8333
+
+[ atomtypes ]
+; name atomic_number mass charge ptype sigma epsilon
+{chr(10).join(atomtypes)}
+
+[ moleculetype ]
+MOL 3
+
+[ atoms ]
+; nr type resnr residue atom cgnr charge mass
+{chr(10).join(atom_lines)}
+
+[ system ]
+{structure['formula']}
+
+[ molecules ]
+MOL 1
+"""
+    integrator = "steep" if workflow_is_optimization(workflow) else "md"
+    mdp = f"""integrator = {integrator}
+nsteps = {settings['steps']}
+dt = 0.001
+emtol = 100.0
+cutoff-scheme = Verlet
+nstlist = 10
+rvdw = 1.0
+rcoulomb = 1.0
+coulombtype = Cut-off
+pbc = xyz
+"""
+    files = {
+        "conf.gro": "\n".join(gro_lines) + "\n",
+        "topol.top": top,
+        "md.mdp": mdp,
+        "run_gromacs.sh": "gmx grompp -f md.mdp -c conf.gro -p topol.top -o topol.tpr\ngmx mdrun -deffnm run\n",
+        "README_gromacs.md": build_readme("gromacs", structure["formula"], workflow, ["conf.gro", "topol.top", "md.mdp", "run_gromacs.sh"], [
+            "Generic nonbonded atom types are provided so grompp can build a starter TPR. Replace with validated force-field parameters before production science.",
+        ]),
+    }
+    return build_generic_result("gromacs", request_data, files, "md.mdp")
+
+
+def compile_namd_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    elements = unique_elements(structure["atoms"])
+    psf_atoms = []
+    for atom in structure["atoms"]:
+        psf_atoms.append(
+            f"{atom['id']:8d} SEG  1    MOL  {atom['element']:<4} {atom['element']:<4} "
+            f"{0.0:10.6f} {atomic_mass(atom['element']):13.4f}           0"
+        )
+    psf = "\n".join([
+        "PSF",
+        "",
+        "       1 !NTITLE",
+        " REMARKS SciVisualizer generated PSF",
+        "",
+        f"{len(structure['atoms']):8d} !NATOM",
+        *psf_atoms,
+        "",
+        "       0 !NBOND: bonds",
+        "",
+    ]) + "\n"
+    masses = [f"MASS {index + 1:3d} {element:<4} {atomic_mass(element):10.5f} {element}" for index, element in enumerate(elements)]
+    nonbonded = []
+    for element in elements:
+        sigma, epsilon = lj_parameters(element)
+        rmin2 = sigma * 10.0 / 2.0
+        nonbonded.append(f"{element:<4} 0.0000 {-epsilon / 4.184:.6f} {rmin2:.6f}")
+    prm = "\n".join([
+        "* SciVisualizer generic NAMD parameter starter",
+        "*",
+        *masses,
+        "",
+        "NONBONDED nbxmod 5 atom cdiel shift vatom vdistance vswitch -",
+        "cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5",
+        *nonbonded,
+        "",
+        "END",
+    ]) + "\n"
+    lengths = lattice_lengths(structure["lattice"])
+    minimization = "minimize 2000" if workflow_is_optimization(workflow) else "run 1000"
+    conf = f"""structure structure.psf
+coordinates structure.pdb
+parameters parameters.prm
+paraTypeCharmm on
+temperature 300
+exclude scaled1-4
+1-4scaling 1.0
+switching on
+switchdist 10
+cutoff 12
+pairlistdist 14
+cellBasisVector1 {lengths[0]:.4f} 0 0
+cellBasisVector2 0 {lengths[1]:.4f} 0
+cellBasisVector3 0 0 {lengths[2]:.4f}
+cellOrigin 0 0 0
+timestep 1.0
+outputName scivis
+{minimization}
+"""
+    files = {
+        "namd.conf": conf,
+        "structure.pdb": format_pdb(structure["atoms"], structure["lattice"]),
+        "structure.psf": psf,
+        "parameters.prm": prm,
+        "README_namd.md": build_readme("namd", structure["formula"], workflow, ["namd.conf", "structure.pdb", "structure.psf", "parameters.prm"], [
+            "Generic nonbonded parameters are included for input compilation. Replace with a validated force field before production MD.",
+        ]),
+    }
+    return build_generic_result("namd", request_data, files, "namd.conf")
+
+
+def compile_amber_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    elements = unique_elements(structure["atoms"])
+    frcmod_lines = ["MASS"]
+    frcmod_lines.extend(f"{element:<2} {atomic_mass(element):10.5f}" for element in elements)
+    frcmod_lines.extend(["", "NONBON"])
+    for element in elements:
+        sigma, epsilon = lj_parameters(element)
+        rstar = sigma * 10.0 / 2.0
+        frcmod_lines.append(f"{element:<2} {rstar:10.5f} {epsilon / 4.184:10.5f}")
+    tleap = """source leaprc.gaff2
+loadAmberParams frcmod.generic
+mol = loadpdb system.pdb
+saveamberparm mol system.prmtop system.inpcrd
+savepdb mol system_prepared.pdb
+quit
+"""
+    imin = 1 if workflow_is_optimization(workflow) else 0
+    mdin = f"""SciVisualizer AMBER starter
+&cntrl
+  imin={imin},
+  maxcyc=2000,
+  ncyc=1000,
+  ntb=1,
+  cut=10.0,
+  nstlim=5000,
+  dt=0.001,
+/
+"""
+    files = {
+        "system.pdb": format_pdb(structure["atoms"], structure["lattice"]),
+        "tleap.in": tleap,
+        "frcmod.generic": "\n".join(frcmod_lines) + "\n",
+        "mdin": mdin,
+        "run_amber.sh": "tleap -f tleap.in\nsander -O -i mdin -p system.prmtop -c system.inpcrd -o amber.out -r restrt\n",
+        "README_amber.md": build_readme("amber", structure["formula"], workflow, ["system.pdb", "tleap.in", "frcmod.generic", "mdin", "run_amber.sh"], [
+            "AmberTools/GAFF typing may need manual atom-type review for inorganic solids and unusual elements.",
+        ]),
+    }
+    return build_generic_result("amber", request_data, files, "tleap.in")
+
+
+def compile_openmm_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
+    structure = extract_render_structure(request_data)
+    intent = request_data.get("intent") or {}
+    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+    elements = unique_elements(structure["atoms"])
+    params = {element: lj_parameters(element) for element in elements}
+    param_json = json.dumps({
+        element: {
+            "mass_amu": atomic_mass(element),
+            "sigma_nm": values[0],
+            "epsilon_kj_mol": values[1],
+        }
+        for element, values in params.items()
+    }, indent=2)
+    steps = 0 if workflow_is_optimization(workflow) else 5000
+    script = f'''#!/usr/bin/env python3
+import json
+from openmm import CustomNonbondedForce, LangevinMiddleIntegrator, LocalEnergyMinimizer, Platform, System, Vec3, unit
+from openmm.app import PDBFile, Simulation
+
+pdb = PDBFile("system.pdb")
+params = json.load(open("openmm_params.json"))
+system = System()
+for atom in pdb.topology.atoms():
+    system.addParticle(params[atom.element.symbol]["mass_amu"] * unit.dalton)
+
+force = CustomNonbondedForce("4*epsilon*((sigma/r)^12-(sigma/r)^6); sigma=0.5*(sigma1+sigma2); epsilon=sqrt(epsilon1*epsilon2)")
+force.addPerParticleParameter("sigma")
+force.addPerParticleParameter("epsilon")
+for atom in pdb.topology.atoms():
+    item = params[atom.element.symbol]
+    force.addParticle([item["sigma_nm"], item["epsilon_kj_mol"]])
+force.setNonbondedMethod(CustomNonbondedForce.CutoffPeriodic)
+force.setCutoffDistance(1.0 * unit.nanometer)
+system.addForce(force)
+
+topology = pdb.topology
+integrator = LangevinMiddleIntegrator(300 * unit.kelvin, 1 / unit.picosecond, 0.001 * unit.picoseconds)
+simulation = Simulation(topology, system, integrator)
+simulation.context.setPositions(pdb.positions)
+LocalEnergyMinimizer.minimize(simulation.context, maxIterations=500)
+if {steps} > 0:
+    simulation.step({steps})
+state = simulation.context.getState(getPositions=True, getEnergy=True)
+print("Potential energy:", state.getPotentialEnergy())
+with open("final.pdb", "w") as handle:
+    PDBFile.writeFile(topology, state.getPositions(), handle)
+'''
+    files = {
+        "run_openmm.py": script,
+        "system.pdb": format_pdb(structure["atoms"], structure["lattice"]),
+        "openmm_params.json": param_json,
+        "README_openmm.md": build_readme("openmm", structure["formula"], workflow, ["run_openmm.py", "system.pdb", "openmm_params.json"], [
+            "The generated OpenMM system uses generic Lennard-Jones parameters so the package is runnable without external force-field files.",
+        ]),
+    }
+    return build_generic_result("openmm", request_data, files, "run_openmm.py")
+
+
+GENERIC_COMPILERS = {
+    "abinit": compile_abinit_inputs,
+    "amber": compile_amber_inputs,
+    "castep": compile_castep_inputs,
+    "cp2k": compile_cp2k_inputs,
+    "dftbplus": compile_dftbplus_inputs,
+    "gaussian": compile_gaussian_inputs,
+    "gromacs": compile_gromacs_inputs,
+    "namd": compile_namd_inputs,
+    "nwchem": compile_nwchem_inputs,
+    "openmm": compile_openmm_inputs,
+    "orca": compile_orca_inputs,
+    "qchem": compile_qchem_inputs,
+    "quantum_espresso": compile_quantum_espresso_inputs,
+    "siesta": compile_siesta_inputs,
+    "xtb": compile_xtb_inputs,
+}
+
+
 def process_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
     intent = request_data.get("intent") or {}
     engine = str(intent.get("engine") or "vasp").strip().lower() or "vasp"
@@ -746,6 +1846,8 @@ def process_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
         return compile_lammps_inputs(request_data)
     if engine == "vasp":
         return compile_vasp_inputs(request_data)
+    if engine in GENERIC_COMPILERS:
+        return GENERIC_COMPILERS[engine](request_data)
     raise ValueError(f"Unsupported compile engine '{engine}'")
 
 
