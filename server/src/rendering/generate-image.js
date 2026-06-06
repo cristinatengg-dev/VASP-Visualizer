@@ -87,6 +87,15 @@ function buildImageHeaders(config) {
     'Content-Type': 'application/json',
   };
 
+  return {
+    ...headers,
+    ...buildImageAuthHeaders(config),
+  };
+}
+
+function buildImageAuthHeaders(config) {
+  const headers = {};
+
   if (!config.apiKey) {
     return headers;
   }
@@ -268,6 +277,27 @@ function toDataUrl(b64, mimeType) {
   return `data:${mime};base64,${clean}`;
 }
 
+function parseImageDataUrl(imageDataUrl) {
+  const raw = String(imageDataUrl || '').trim();
+  const match = raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/);
+  const mimeType = match?.[1] || guessMimeFromBase64(raw);
+  const b64 = normalizeBase64(match?.[2] || raw);
+  if (!b64) {
+    return null;
+  }
+  return {
+    buffer: Buffer.from(b64, 'base64'),
+    mimeType,
+  };
+}
+
+function fileNameForMime(mimeType) {
+  const value = String(mimeType || '').toLowerCase();
+  if (value.includes('jpeg') || value.includes('jpg')) return 'source.jpg';
+  if (value.includes('webp')) return 'source.webp';
+  return 'source.png';
+}
+
 function extractImageFromGeminiResponse(data) {
   if (!data?.candidates) {
     return null;
@@ -375,6 +405,31 @@ ${speciesConstraints.length ? speciesConstraints.map((line) => `- ${line}`).join
 ${String(prompt || '').slice(0, 3500)}`;
 }
 
+function buildImageEditPrompt({ prompt, aspectRatio, requiredSpecies }) {
+  const speciesConstraints = Array.isArray(requiredSpecies)
+    ? requiredSpecies
+      .map((species) => speciesToConstraint(species))
+      .filter(Boolean)
+    : [];
+
+  return `Edit the provided scientific journal cover image according to this instruction:
+"${String(prompt || '').slice(0, 1200)}"
+
+Keep the existing composition, camera angle, main scientific objects, color palette, and publication-grade rendering unless the instruction explicitly changes them. Preserve the clean HD journal-cover look. Aspect ratio MUST remain ${String(aspectRatio || '9:16')}.
+
+CRITICAL: ABSOLUTELY NO TEXT OR GLYPHS of any kind.
+- No English letters, no Chinese characters, no numbers, no punctuation.
+- No watermarks, no captions, no labels, no legends, no annotations.
+- No axis ticks, no scale bars, no arrows, no UI text.
+- Do NOT print element symbols on atoms.
+- Do NOT print chemical formulas anywhere.
+
+CRITICAL: Preserve chemical correctness. Do not add/remove required atoms or change bond connectivity unless the edit instruction explicitly requests a scientifically valid change.
+
+Required molecular structures that must remain correct:
+${speciesConstraints.length ? speciesConstraints.map((line) => `- ${line}`).join('\n') : '- preserve all molecular structures already present in the source image'}`;
+}
+
 async function validateGeneratedImage({
   dataUrl,
   requiredSpecies,
@@ -392,7 +447,7 @@ async function validateGeneratedImage({
   });
 }
 
-async function tryFetchExternalImage(url) {
+async function tryFetchExternalImage(url, useProxy = true) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const options = {
@@ -401,7 +456,7 @@ async function tryFetchExternalImage(url) {
       path: parsed.pathname + parsed.search,
       method: 'GET',
     };
-    if (proxyAgent) options.agent = proxyAgent;
+    if (useProxy !== false && proxyAgent) options.agent = proxyAgent;
 
     const req = https.request(options, (res) => {
       const chunks = [];
@@ -536,7 +591,7 @@ async function generateOneRenderingImage({
           const directUrl = content.match(/https?:\/\/[^\s)\]]+/);
           const url = (markdownUrl?.[1] || directUrl?.[0] || '').trim();
           if (url) {
-            candidate = await tryFetchExternalImage(url);
+            candidate = await tryFetchExternalImage(url, imageConfig.useProxy);
           }
         }
       }
@@ -550,7 +605,7 @@ async function generateOneRenderingImage({
       }
 
       if (!candidate && data.data?.[0]?.url) {
-        candidate = await tryFetchExternalImage(data.data[0].url);
+        candidate = await tryFetchExternalImage(data.data[0].url, imageConfig.useProxy);
       }
 
       if (!candidate && Array.isArray(data.images) && data.images[0]) {
@@ -596,6 +651,109 @@ async function generateOneRenderingImage({
   }
 
   throw lastError || new Error('image generation failed');
+}
+
+async function editRenderingImage({
+  imageDataUrl,
+  prompt,
+  aspectRatio = '9:16',
+  strictNoText = false,
+  strictChemistry = false,
+  requiredSpecies = [],
+}) {
+  const normalizedPrompt = String(prompt || '').trim();
+  if (normalizedPrompt.length < 3) {
+    throw new Error('Edit prompt too short');
+  }
+
+  const imageConfig = getImageGenerationConfig();
+  if (!imageConfig.apiKey) {
+    throw new Error('IMAGE_LLM_API_KEY/GEMINI_API_KEY is not configured');
+  }
+
+  const sourceImage = parseImageDataUrl(imageDataUrl);
+  if (!sourceImage || sourceImage.buffer.length < 100) {
+    throw new Error('Source image is missing or invalid');
+  }
+  if (typeof fetch !== 'function' || typeof FormData !== 'function' || typeof Blob !== 'function') {
+    throw new Error('Image editing requires a Node runtime with fetch/FormData/Blob support');
+  }
+
+  const formData = new FormData();
+  formData.append('model', imageConfig.model);
+  formData.append('prompt', buildImageEditPrompt({
+    prompt: normalizedPrompt,
+    aspectRatio,
+    requiredSpecies: Array.isArray(requiredSpecies) ? requiredSpecies : [],
+  }));
+  formData.append('image', new Blob([sourceImage.buffer], { type: sourceImage.mimeType }), fileNameForMime(sourceImage.mimeType));
+  formData.append('size', sizeForAspectRatio(aspectRatio));
+  if (imageConfig.quality) {
+    formData.append('quality', imageConfig.quality);
+  }
+  if (imageConfig.outputFormat) {
+    formData.append('output_format', imageConfig.outputFormat);
+  }
+  if (imageConfig.responseFormat) {
+    formData.append('response_format', imageConfig.responseFormat);
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), imageConfig.timeoutMs);
+  let response;
+  try {
+    response = await fetch(`${imageConfig.baseUrl}/images/edits`, {
+      method: 'POST',
+      headers: buildImageAuthHeaders(imageConfig),
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Request timeout after ${imageConfig.timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const raw = await response.text();
+  if (raw.includes('524 A Timeout Occurred') || raw.includes('Cloudflare') || raw.includes('<html')) {
+    throw new Error('Image edit gateway returned HTML/Timeout instead of JSON');
+  }
+
+  const data = safeJsonParse(raw);
+  if (!response.ok) {
+    throw new Error(`images/edits HTTP ${response.status}: ${raw.slice(0, 180)}`);
+  }
+  if (!data) {
+    throw new Error(`images/edits non-JSON: ${raw.slice(0, 180)}`);
+  }
+  if (data.error) {
+    throw new Error(extractErrorMessage(data.error));
+  }
+
+  let candidate = null;
+  if (data?.data?.[0]?.b64_json) {
+    candidate = toDataUrl(data.data[0].b64_json);
+  } else if (data?.data?.[0]?.url) {
+    candidate = await tryFetchExternalImage(data.data[0].url, imageConfig.useProxy);
+  }
+
+  if (!candidate) {
+    throw new Error('Could not extract edited image from images/edits response');
+  }
+
+  if (strictNoText || strictChemistry) {
+    await validateGeneratedImage({
+      dataUrl: candidate,
+      requiredSpecies,
+      strictNoText,
+      strictChemistry,
+    }).catch(() => ({ ok: true }));
+  }
+
+  return candidate;
 }
 
 async function generateRenderingImages({
@@ -646,6 +804,7 @@ async function generateRenderingImages({
 
 module.exports = {
   buildImageHeaders,
+  editRenderingImage,
   generateRenderingImages,
   getImageGenerationConfig,
 };

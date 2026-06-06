@@ -27,7 +27,7 @@ const { getModelingRuntimeDiagnostics } = require('./src/modeling/health');
 const { parseSciencePdfFile } = require('./src/rendering/parse-pdf');
 const { parseScienceText, geminiChat } = require('./src/rendering/parse-science');
 const { validateRenderingImage } = require('./src/rendering/validate-image');
-const { generateRenderingImages } = require('./src/rendering/generate-image');
+const { editRenderingImage, generateRenderingImages } = require('./src/rendering/generate-image');
 const { profileFigureData } = require('./src/rendering/profile-figure-data');
 const { compileFigureContract } = require('./src/rendering/compile-figure');
 const { runFigureRender } = require('./src/rendering/run-figure');
@@ -2058,6 +2058,34 @@ app.post('/api/agent/generate-image', requireAgentAccess('cover'), async (req, r
         return res.json({ success: true, images });
     } catch (err) {
         console.error('[agent/generate-image]', err.message);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── Route: POST /api/agent/edit-image ────────────────────────────────────────
+// Edit the selected generated image with an instruction prompt.
+app.post('/api/agent/edit-image', requireAgentAccess('cover'), async (req, res) => {
+    const { imageDataUrl, prompt, aspectRatio = '9:16', strictNoText = false, strictChemistry = false, requiredSpecies = [] } = req.body;
+    if (!imageDataUrl || !String(imageDataUrl).startsWith('data:image/')) {
+        return res.status(400).json({ success: false, error: 'Source image is missing or invalid' });
+    }
+    if (!prompt || String(prompt).trim().length < 3) {
+        return res.status(400).json({ success: false, error: 'Edit prompt too short' });
+    }
+
+    try {
+        const image = await editRenderingImage({
+            imageDataUrl,
+            prompt,
+            aspectRatio,
+            strictNoText,
+            strictChemistry,
+            requiredSpecies,
+        });
+        await recordAgentUsage(req.body?.userId, 'cover');
+        return res.json({ success: true, image });
+    } catch (err) {
+        console.error('[agent/edit-image]', err.message);
         return res.status(500).json({ success: false, error: err.message });
     }
 });

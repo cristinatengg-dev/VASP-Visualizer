@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Copy, Check, ChevronRight, Sparkles, BarChart3,
-  AlertCircle, Download, RefreshCw, ImageIcon, Wand2,
+  AlertCircle, Download, RefreshCw, ImageIcon, Wand2, X,
 } from 'lucide-react';
 
 import InputPanel from './components/InputPanel';
@@ -36,6 +36,7 @@ import {
 import {
   parseScience,
   parsePdf,
+  editBaseImage,
   generateBaseImages,
   generateVisualPlans,
   compilePlanAPrompt,
@@ -268,8 +269,11 @@ const BaseGenerationPanel: React.FC<{
   baseImages: string[];
   selectedBaseIndex: number;
   isGeneratingBase: boolean;
+  isEditingImage: boolean;
   baseError: string | null;
+  editError: string | null;
   onGenerate: () => void;
+  onEditImage: (instruction: string) => Promise<boolean>;
   onSelectBase: (idx: number) => void;
   onExport: (idx: number) => void;
   onBack: () => void;
@@ -279,23 +283,38 @@ const BaseGenerationPanel: React.FC<{
   baseImages,
   selectedBaseIndex,
   isGeneratingBase,
+  isEditingImage,
   baseError,
+  editError,
   onGenerate,
+  onEditImage,
   onSelectBase,
   onExport,
   onBack,
 }) => {
   const [showJournalPreview, setShowJournalPreview] = useState(true);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editInstruction, setEditInstruction] = useState('');
+  const selectedImage = baseImages[selectedBaseIndex];
+
+  const handleApplyEdit = async () => {
+    if (!editInstruction.trim() || !selectedImage || isEditingImage) return;
+    const ok = await onEditImage(editInstruction.trim());
+    if (ok) {
+      setEditInstruction('');
+      setIsEditorOpen(false);
+    }
+  };
 
   return (
   <div className="space-y-5">
     <div>
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
-        Phase 5 · Gemini HD Generation
+        Phase 5 · HD Image Generation
       </p>
       <h2 className="text-lg font-black text-[#0A1128]">HD Image Generation</h2>
       <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-        Gemini generates 1 publication-grade HD image at 600 DPI quality. Export it when ready.
+        The image model generates 1 publication-grade HD image at 600 DPI quality. Edit or export it when ready.
       </p>
     </div>
 
@@ -314,39 +333,54 @@ const BaseGenerationPanel: React.FC<{
         <div className="w-12 h-12 border-2 border-gray-100 border-t-[#0A1128] rounded-full animate-spin" />
         <div className="text-center">
           <p className="text-sm font-bold text-[#0A1128]">Generating HD Images</p>
-          <p className="text-xs text-gray-500 mt-1">Gemini is generating 1 publication-grade image...</p>
+          <p className="text-xs text-gray-500 mt-1">The image model is generating 1 publication-grade image...</p>
           <p className="text-[10px] text-gray-400 mt-1 font-mono">This may take 30–90 seconds</p>
         </div>
       </div>
     ) : baseImages.length > 0 ? (
-      <div className="grid grid-cols-1 gap-3 max-w-2xl mx-auto">
-        {baseImages.map((img, idx) => (
-          <button
-            key={idx}
-            onClick={() => onSelectBase(idx)}
-            className={`
-              relative rounded-[16px] overflow-hidden border-2 transition-all duration-200
-              ${selectedBaseIndex === idx
-                ? 'border-[#0A1128] shadow-[0_4px_20px_rgba(10,17,40,0.2)]'
-                : 'border-gray-100 hover:border-gray-300'}
-            `}
-          >
-            <img
-              src={img.startsWith('data:') ? img : `data:image/png;base64,${img}`}
-              alt="Generated image"
-              className="w-full h-auto"
-            />
-            {showJournalPreview && selectedBaseIndex === idx && (
-              <JournalNameOverlay journal={outputParams.journal} />
-            )}
-            {selectedBaseIndex === idx && (
-              <div className="absolute top-2 right-2 w-5 h-5 bg-[#0A1128] rounded-full flex items-center justify-center">
-                <Check size={10} className="text-white" strokeWidth={3} />
-              </div>
-            )}
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/20 to-transparent px-2 py-1.5" />
-          </button>
-        ))}
+      <div className="max-w-2xl mx-auto space-y-3">
+        <div className="relative rounded-[16px] overflow-hidden border-2 border-[#0A1128] shadow-[0_4px_20px_rgba(10,17,40,0.2)]">
+          <img
+            src={selectedImage?.startsWith('data:') ? selectedImage : `data:image/png;base64,${selectedImage}`}
+            alt="Generated image"
+            className="w-full h-auto"
+          />
+          {showJournalPreview && (
+            <JournalNameOverlay journal={outputParams.journal} />
+          )}
+          <div className="absolute top-2 right-2 w-5 h-5 bg-[#0A1128] rounded-full flex items-center justify-center">
+            <Check size={10} className="text-white" strokeWidth={3} />
+          </div>
+          {isEditingImage && (
+            <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
+              <div className="w-10 h-10 border-2 border-gray-200 border-t-[#0A1128] rounded-full animate-spin" />
+              <p className="text-xs font-bold text-[#0A1128]">Applying Edit</p>
+            </div>
+          )}
+        </div>
+
+        {baseImages.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {baseImages.map((img, idx) => (
+              <button
+                key={`${idx}-${img.slice(0, 18)}`}
+                onClick={() => onSelectBase(idx)}
+                className={`relative h-20 w-16 flex-shrink-0 overflow-hidden rounded-[12px] border-2 transition-all ${
+                  selectedBaseIndex === idx
+                    ? 'border-[#0A1128] shadow-sm'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+                title={`Version ${idx + 1}`}
+              >
+                <img
+                  src={img.startsWith('data:') ? img : `data:image/png;base64,${img}`}
+                  alt={`Version ${idx + 1}`}
+                  className="h-full w-full object-cover"
+                />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     ) : (
       <div className="flex flex-col items-center justify-center py-16 space-y-3 bg-white border border-gray-100 rounded-[20px]">
@@ -360,6 +394,52 @@ const BaseGenerationPanel: React.FC<{
       </div>
     )}
 
+    {baseImages.length > 0 && isEditorOpen && (
+      <div className="max-w-2xl mx-auto space-y-2">
+        <div className="flex items-end gap-2 rounded-[24px] border border-gray-200 bg-white px-3 py-2 shadow-[0_8px_30px_rgba(10,17,40,0.08)]">
+          <div className="mb-1.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#0A1128] text-white">
+            <Wand2 size={14} strokeWidth={2} />
+          </div>
+          <textarea
+            value={editInstruction}
+            onChange={(event) => setEditInstruction(event.target.value)}
+            placeholder="Describe the edit..."
+            rows={1}
+            disabled={isEditingImage}
+            className="min-h-[40px] flex-1 resize-none bg-transparent py-2 text-sm font-medium text-[#0A1128] outline-none placeholder:text-gray-400 disabled:opacity-60"
+          />
+          <button
+            type="button"
+            onClick={handleApplyEdit}
+            disabled={!editInstruction.trim() || isEditingImage || !selectedImage}
+            className="mb-0.5 flex h-9 min-w-9 items-center justify-center rounded-full bg-[#0A1128] px-3 text-white transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+            title="Apply edit"
+          >
+            {isEditingImage ? (
+              <RefreshCw size={14} className="animate-spin" strokeWidth={2} />
+            ) : (
+              <Sparkles size={14} strokeWidth={2} />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsEditorOpen(false)}
+            disabled={isEditingImage}
+            className="mb-0.5 flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-all hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            title="Close editor"
+          >
+            <X size={14} strokeWidth={2} />
+          </button>
+        </div>
+        {editError && (
+          <div className="flex items-start gap-2 rounded-[14px] border border-red-100 bg-red-50 px-4 py-3">
+            <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-red-400" strokeWidth={2} />
+            <p className="text-[11px] leading-relaxed text-red-500">{editError}</p>
+          </div>
+        )}
+      </div>
+    )}
+
     <div className="flex gap-2 flex-wrap items-center">
       <button
         onClick={onBack}
@@ -369,12 +449,28 @@ const BaseGenerationPanel: React.FC<{
       </button>
       <button
         onClick={onGenerate}
-        disabled={isGeneratingBase}
+        disabled={isGeneratingBase || isEditingImage}
         className="flex items-center gap-1.5 px-5 py-2.5 border border-gray-200 rounded-[32px] text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <RefreshCw size={12} strokeWidth={2} className={isGeneratingBase ? 'animate-spin' : ''} />
         Generate
       </button>
+      {baseImages.length > 0 && selectedBaseIndex >= 0 && (
+        <button
+          type="button"
+          onClick={() => setIsEditorOpen(true)}
+          disabled={isEditingImage}
+          className={`flex items-center gap-1.5 px-4 py-2.5 border rounded-[32px] text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+            isEditorOpen
+              ? 'border-[#0A1128] bg-[#0A1128] text-white'
+              : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+          }`}
+          title="Edit selected image"
+        >
+          <Wand2 size={12} strokeWidth={2} />
+          Edit
+        </button>
+      )}
       {baseImages.length > 0 && (
         <button
           onClick={() => setShowJournalPreview(!showJournalPreview)}
@@ -390,7 +486,8 @@ const BaseGenerationPanel: React.FC<{
       {baseImages.length > 0 && selectedBaseIndex >= 0 && (
         <button
           onClick={() => onExport(selectedBaseIndex)}
-          className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 bg-emerald-600 text-white text-xs font-bold rounded-[32px] hover:bg-emerald-700 hover:-translate-y-0.5 transition-all duration-200"
+          disabled={isEditingImage}
+          className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 bg-emerald-600 text-white text-xs font-bold rounded-[32px] hover:bg-emerald-700 hover:-translate-y-0.5 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
         >
           <Download size={12} strokeWidth={2} />
           Export Clean Image (No Text)
@@ -456,9 +553,11 @@ const RenderingAgent: React.FC = () => {
 
   // ── Phase 5 state ──
   const [isGeneratingBase, setIsGeneratingBase] = useState(false);
+  const [isEditingImage, setIsEditingImage] = useState(false);
   const [baseImages, setBaseImages] = useState<string[]>([]);
   const [selectedBaseIndex, setSelectedBaseIndex] = useState<number>(0);
   const [baseError, setBaseError] = useState<string | null>(null);
+  const [imageEditError, setImageEditError] = useState<string | null>(null);
   const baseGenInFlightRef = useRef(false);
 
   const canGenerate = abstractText.trim().length > 20 || pdfFile !== null;
@@ -490,7 +589,7 @@ const RenderingAgent: React.FC = () => {
     } finally {
       setIsGenerating(false);
     }
-  }, [abstractText, pdfFile]);
+  }, [abstractText, pdfFile, presentRenderingError]);
 
   // ── Phase 3: Select plan + compile prompt ──
   const handleSelectPlan = useCallback((planId: string) => {
@@ -528,6 +627,7 @@ const RenderingAgent: React.FC = () => {
     baseGenInFlightRef.current = true;
     setIsGeneratingBase(true);
     setBaseError(null);
+    setImageEditError(null);
     setBaseImages([]);
     setSelectedBaseIndex(0);
 
@@ -556,7 +656,61 @@ const RenderingAgent: React.FC = () => {
       setIsGeneratingBase(false);
       baseGenInFlightRef.current = false;
     }
-  }, [compiledPrompt, outputParams.aspectRatio, parsedScience, advancedSwitches]);
+  }, [
+    advancedSwitches,
+    compiledPrompt,
+    outputParams.aspectRatio,
+    outputParams.customHeight,
+    outputParams.customWidth,
+    parsedScience,
+    presentRenderingError,
+  ]);
+
+  const handleEditBase = useCallback(async (instruction: string) => {
+    if (!compiledPrompt || isEditingImage) return false;
+    const sourceImage = baseImages[selectedBaseIndex];
+    if (!sourceImage) return false;
+
+    setIsEditingImage(true);
+    setImageEditError(null);
+
+    try {
+      const requiredSpecies = parsedScience
+        ? [...parsedScience.reactants, ...parsedScience.intermediates, ...parsedScience.products]
+        : [];
+      const dataUrl = sourceImage.startsWith('data:')
+        ? sourceImage
+        : `data:image/png;base64,${sourceImage}`;
+      const editedImage = await editBaseImage(
+        dataUrl,
+        instruction,
+        outputParams.aspectRatio === 'Custom' ? `${outputParams.customWidth}:${outputParams.customHeight}` : outputParams.aspectRatio,
+        {
+          strictNoText: true,
+          strictChemistry: Boolean(advancedSwitches.strictChemicalStructure || advancedSwitches.prioritizeAccuracy),
+          requiredSpecies,
+        }
+      );
+      setBaseImages((prev) => [...prev, editedImage]);
+      setSelectedBaseIndex(baseImages.length);
+      return true;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setImageEditError(presentRenderingError(message));
+      return false;
+    } finally {
+      setIsEditingImage(false);
+    }
+  }, [
+    advancedSwitches,
+    baseImages,
+    compiledPrompt,
+    isEditingImage,
+    outputParams,
+    parsedScience,
+    presentRenderingError,
+    selectedBaseIndex,
+  ]);
 
   // ── Export ──
   const handleExport = (idx: number) => {
@@ -776,8 +930,11 @@ const RenderingAgent: React.FC = () => {
                 baseImages={baseImages}
                 selectedBaseIndex={selectedBaseIndex}
                 isGeneratingBase={isGeneratingBase}
+                isEditingImage={isEditingImage}
                 baseError={baseError}
+                editError={imageEditError}
                 onGenerate={handleGenerateBase}
+                onEditImage={handleEditBase}
                 onSelectBase={setSelectedBaseIndex}
                 onExport={handleExport}
                 onBack={() => setCurrentStep('prompt-review')}

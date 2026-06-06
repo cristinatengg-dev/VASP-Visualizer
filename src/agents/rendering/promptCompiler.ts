@@ -382,10 +382,29 @@ export interface GenerateBaseImagesOptions {
   maxAttemptsPerImage?: number;
 }
 
+export interface EditBaseImageOptions {
+  strictNoText?: boolean;
+  strictChemistry?: boolean;
+  requiredSpecies?: ChemicalSpecies[];
+}
+
+const serializeRequiredSpecies = (requiredSpecies?: ChemicalSpecies[]) => (
+  requiredSpecies
+    ? requiredSpecies.map(s => ({
+        formula_en: s.formula_en,
+        atoms: s.atoms,
+        bond_topology: s.bond_topology,
+        geometry_hint: s.geometry_hint,
+        color_rule: s.color_rule,
+        role: s.role,
+        priority: s.priority
+      }))
+    : []
+);
+
 /**
  * generateBaseImages — Phase 5
- * Calls /api/agent/generate-image which uses Gemini image model
- * to produce 3 compositionally correct base images from the compiled prompt.
+ * Calls /api/agent/generate-image which uses the configured image model.
  */
 export const generateBaseImages = async (
   fullPrompt: string,
@@ -395,23 +414,7 @@ export const generateBaseImages = async (
 ): Promise<string[]> => {
   const baseUrl = API_BASE_URL.replace(/\/+$/, '');
   const endpoint = `${baseUrl}/agent/generate-image`;
-
-  // Helper to deep clean object for serialization (removes non-serializable fields)
-  const deepClean = <T>(obj: T): T => {
-    return JSON.parse(JSON.stringify(obj));
-  };
-
-  const safeRequiredSpecies = options.requiredSpecies 
-    ? options.requiredSpecies.map(s => ({
-        formula_en: s.formula_en,
-        atoms: s.atoms,
-        bond_topology: s.bond_topology,
-        geometry_hint: s.geometry_hint,
-        color_rule: s.color_rule,
-        role: s.role,
-        priority: s.priority
-      }))
-    : [];
+  const safeRequiredSpecies = serializeRequiredSpecies(options.requiredSpecies);
 
   let res: Response;
   try {
@@ -422,45 +425,94 @@ export const generateBaseImages = async (
       strictNoText: Boolean(options.strictNoText),
       strictChemistry: Boolean(options.strictChemistry),
       requiredSpecies: safeRequiredSpecies,
-        maxAttemptsPerImage: options.maxAttemptsPerImage,
-      };
+      maxAttemptsPerImage: options.maxAttemptsPerImage,
+    };
   
-      res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      throw new Error(humanizeRenderingApiError(`Request failed to ${endpoint}: ${msg}`, 'Image generation request failed'));
-    }
+    res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(humanizeRenderingApiError(`Request failed to ${endpoint}: ${msg}`, 'Image generation request failed'));
+  }
   
-    const text = await res.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      console.error("Non-JSON response from server:", text.substring(0, 200));
-      throw new Error(`Invalid JSON response from server (Status: ${res.status})`);
-    }
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    console.error("Non-JSON response from server:", text.substring(0, 200));
+    throw new Error(`Invalid JSON response from server (Status: ${res.status})`);
+  }
 
-    if (!res.ok || !data.success) {
-      throw new Error(humanizeRenderingApiError(data.error || `Image generation error ${res.status}`, 'Image generation failed'));
-    }
-    
-    // Ensure images array exists and contains valid data strings
-    if (!Array.isArray(data.images) || data.images.length === 0) {
-      throw new Error('Server returned success but no images were provided.');
-    }
-    
-    // Validate image format to prevent rendering empty boxes
-    const validImages = data.images.filter((img: any) => typeof img === 'string' && img.length > 100);
-    if (validImages.length === 0) {
-      throw new Error('Server returned images but they were empty or invalid format.');
-    }
-    
-    return validImages as string[];
-  };
+  if (!res.ok || !data.success) {
+    throw new Error(humanizeRenderingApiError(data.error || `Image generation error ${res.status}`, 'Image generation failed'));
+  }
+
+  // Ensure images array exists and contains valid data strings
+  if (!Array.isArray(data.images) || data.images.length === 0) {
+    throw new Error('Server returned success but no images were provided.');
+  }
+
+  // Validate image format to prevent rendering empty boxes
+  const validImages = data.images.filter((img: any) => typeof img === 'string' && img.length > 100);
+  if (validImages.length === 0) {
+    throw new Error('Server returned images but they were empty or invalid format.');
+  }
+
+  return validImages as string[];
+};
+
+export const editBaseImage = async (
+  imageDataUrl: string,
+  editPrompt: string,
+  aspectRatio: string = '9:16',
+  options: EditBaseImageOptions = {}
+): Promise<string> => {
+  const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+  const endpoint = `${baseUrl}/agent/edit-image`;
+  const safeRequiredSpecies = serializeRequiredSpecies(options.requiredSpecies);
+
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageDataUrl,
+        prompt: editPrompt,
+        aspectRatio,
+        strictNoText: Boolean(options.strictNoText),
+        strictChemistry: Boolean(options.strictChemistry),
+        requiredSpecies: safeRequiredSpecies,
+      }),
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(humanizeRenderingApiError(`Request failed to ${endpoint}: ${msg}`, 'Image edit request failed'));
+  }
+
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    console.error('Non-JSON response from server:', text.substring(0, 200));
+    throw new Error(`Invalid JSON response from server (Status: ${res.status})`);
+  }
+
+  if (!res.ok || !data.success) {
+    throw new Error(humanizeRenderingApiError(data.error || `Image edit error ${res.status}`, 'Image edit failed'));
+  }
+
+  if (typeof data.image !== 'string' || data.image.length < 100) {
+    throw new Error('Server returned success but no edited image was provided.');
+  }
+
+  return data.image as string;
+};
 
 // ─── Real API: Phase 7 — HD Refinement (Doubao Seedream) ────────────────────
 
