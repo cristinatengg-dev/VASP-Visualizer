@@ -469,6 +469,7 @@ export const editBaseImage = async (
   imageDataUrl: string,
   editPrompt: string,
   aspectRatio: string = '9:16',
+  maskDataUrl?: string | null,
   options: EditBaseImageOptions = {}
 ): Promise<string> => {
   const baseUrl = API_BASE_URL.replace(/\/+$/, '');
@@ -482,6 +483,7 @@ export const editBaseImage = async (
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         imageDataUrl,
+        maskDataUrl: maskDataUrl || undefined,
         prompt: editPrompt,
         aspectRatio,
         strictNoText: Boolean(options.strictNoText),

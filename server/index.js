@@ -2065,9 +2065,12 @@ app.post('/api/agent/generate-image', requireAgentAccess('cover'), async (req, r
 // ── Route: POST /api/agent/edit-image ────────────────────────────────────────
 // Edit the selected generated image with an instruction prompt.
 app.post('/api/agent/edit-image', requireAgentAccess('cover'), async (req, res) => {
-    const { imageDataUrl, prompt, aspectRatio = '9:16', strictNoText = false, strictChemistry = false, requiredSpecies = [] } = req.body;
+    const { imageDataUrl, maskDataUrl, prompt, aspectRatio = '9:16', strictNoText = false, strictChemistry = false, requiredSpecies = [] } = req.body;
     if (!imageDataUrl || !String(imageDataUrl).startsWith('data:image/')) {
         return res.status(400).json({ success: false, error: 'Source image is missing or invalid' });
+    }
+    if (maskDataUrl && !String(maskDataUrl).startsWith('data:image/')) {
+        return res.status(400).json({ success: false, error: 'Selection mask is missing or invalid' });
     }
     if (!prompt || String(prompt).trim().length < 3) {
         return res.status(400).json({ success: false, error: 'Edit prompt too short' });
@@ -2076,6 +2079,7 @@ app.post('/api/agent/edit-image', requireAgentAccess('cover'), async (req, res) 
     try {
         const image = await editRenderingImage({
             imageDataUrl,
+            maskDataUrl,
             prompt,
             aspectRatio,
             strictNoText,

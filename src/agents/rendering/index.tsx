@@ -10,12 +10,13 @@
  *   6. export          → Download result
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Copy, Check, ChevronRight, Sparkles, BarChart3,
   AlertCircle, Download, RefreshCw, ImageIcon, Wand2, X,
+  Brush, Eraser, RotateCcw,
 } from 'lucide-react';
 
 import InputPanel from './components/InputPanel';
@@ -263,6 +264,92 @@ const JournalNameOverlay: React.FC<{ journal: string }> = ({ journal }) => {
   );
 };
 
+type MaskTool = 'brush' | 'erase';
+type MaskPoint = { x: number; y: number };
+type MaskStroke = {
+  tool: MaskTool;
+  size: number;
+  points: MaskPoint[];
+};
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+const normalizeImageSource = (image: string) => (
+  image.startsWith('data:') ? image : `data:image/png;base64,${image}`
+);
+
+const loadRasterImage = (src: string): Promise<HTMLImageElement> => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => resolve(img);
+  img.onerror = () => reject(new Error('Could not load selected image'));
+  img.src = src;
+});
+
+const paintStroke = (
+  ctx: CanvasRenderingContext2D,
+  stroke: MaskStroke,
+  width: number,
+  height: number,
+  target: 'overlay' | 'mask'
+) => {
+  if (stroke.points.length === 0) return;
+
+  const lineWidth = Math.max(2, stroke.size * Math.min(width, height));
+  const paintSelection = target === 'overlay'
+    ? stroke.tool === 'brush'
+    : stroke.tool === 'erase';
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = lineWidth;
+  ctx.globalCompositeOperation = paintSelection ? 'source-over' : 'destination-out';
+  ctx.strokeStyle = target === 'overlay' ? 'rgba(16, 185, 129, 0.42)' : 'rgba(0, 0, 0, 1)';
+  ctx.fillStyle = ctx.strokeStyle;
+
+  const [first, ...rest] = stroke.points;
+  const firstX = first.x * width;
+  const firstY = first.y * height;
+
+  if (rest.length === 0) {
+    ctx.beginPath();
+    ctx.arc(firstX, firstY, lineWidth / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(firstX, firstY);
+  for (const point of rest) {
+    ctx.lineTo(point.x * width, point.y * height);
+  }
+  ctx.stroke();
+  ctx.restore();
+};
+
+const createEditMaskDataUrl = async (image: string, strokes: MaskStroke[]) => {
+  const hasPaint = strokes.some((stroke) => stroke.tool === 'brush');
+  if (!hasPaint) return null;
+
+  const img = await loadRasterImage(normalizeImageSource(image));
+  const width = Math.max(1, img.naturalWidth || img.width);
+  const height = Math.max(1, img.naturalHeight || img.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not prepare edit mask');
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+  ctx.fillRect(0, 0, width, height);
+  for (const stroke of strokes) {
+    paintStroke(ctx, stroke, width, height, 'mask');
+  }
+
+  return canvas.toDataURL('image/png');
+};
+
 const BaseGenerationPanel: React.FC<{
   compiledPrompt: CompiledPrompt;
   outputParams: OutputParams;
@@ -273,7 +360,7 @@ const BaseGenerationPanel: React.FC<{
   baseError: string | null;
   editError: string | null;
   onGenerate: () => void;
-  onEditImage: (instruction: string) => Promise<boolean>;
+  onEditImage: (instruction: string, maskDataUrl?: string | null) => Promise<boolean>;
   onSelectBase: (idx: number) => void;
   onExport: (idx: number) => void;
   onBack: () => void;
@@ -295,13 +382,116 @@ const BaseGenerationPanel: React.FC<{
   const [showJournalPreview, setShowJournalPreview] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editInstruction, setEditInstruction] = useState('');
+  const [maskTool, setMaskTool] = useState<MaskTool>('brush');
+  const [brushSize, setBrushSize] = useState(42);
+  const [maskStrokes, setMaskStrokes] = useState<MaskStroke[]>([]);
+  const [isDrawingMask, setIsDrawingMask] = useState(false);
+  const [maskError, setMaskError] = useState<string | null>(null);
+  const previewImageRef = useRef<HTMLImageElement | null>(null);
+  const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const selectedImage = baseImages[selectedBaseIndex];
+  const hasMaskPaint = maskStrokes.some((stroke) => stroke.tool === 'brush');
+
+  const renderMaskOverlay = useCallback(() => {
+    const canvas = maskCanvasRef.current;
+    const image = previewImageRef.current;
+    if (!canvas || !image) return;
+
+    const rect = image.getBoundingClientRect();
+    const width = Math.max(1, rect.width);
+    const height = Math.max(1, rect.height);
+    const dpr = window.devicePixelRatio || 1;
+    const nextWidth = Math.round(width * dpr);
+    const nextHeight = Math.round(height * dpr);
+
+    if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+      canvas.width = nextWidth;
+      canvas.height = nextHeight;
+    }
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    for (const stroke of maskStrokes) {
+      paintStroke(ctx, stroke, width, height, 'overlay');
+    }
+  }, [maskStrokes]);
+
+  useEffect(() => {
+    renderMaskOverlay();
+    const handleResize = () => requestAnimationFrame(renderMaskOverlay);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [renderMaskOverlay, selectedImage, isEditorOpen]);
+
+  useEffect(() => {
+    setMaskStrokes([]);
+    setMaskError(null);
+  }, [selectedBaseIndex]);
+
+  const getMaskPoint = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      x: clamp01((event.clientX - rect.left) / Math.max(1, rect.width)),
+      y: clamp01((event.clientY - rect.top) / Math.max(1, rect.height)),
+    };
+  };
+
+  const handleMaskPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isEditorOpen || isEditingImage) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const rect = event.currentTarget.getBoundingClientRect();
+    const size = brushSize / Math.max(1, Math.min(rect.width, rect.height));
+    const point = getMaskPoint(event);
+    setMaskError(null);
+    setIsDrawingMask(true);
+    setMaskStrokes((prev) => [...prev, { tool: maskTool, size, points: [point] }]);
+  };
+
+  const handleMaskPointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawingMask || isEditingImage) return;
+    event.preventDefault();
+    const point = getMaskPoint(event);
+    setMaskStrokes((prev) => {
+      if (prev.length === 0) return prev;
+      const next = [...prev];
+      const last = next[next.length - 1];
+      next[next.length - 1] = { ...last, points: [...last.points, point] };
+      return next;
+    });
+  };
+
+  const handleMaskPointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawingMask) return;
+    event.preventDefault();
+    setIsDrawingMask(false);
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture may already be released by the browser.
+    }
+  };
 
   const handleApplyEdit = async () => {
     if (!editInstruction.trim() || !selectedImage || isEditingImage) return;
-    const ok = await onEditImage(editInstruction.trim());
+    setMaskError(null);
+
+    let maskDataUrl: string | null = null;
+    try {
+      maskDataUrl = await createEditMaskDataUrl(selectedImage, maskStrokes);
+    } catch (error) {
+      setMaskError(error instanceof Error ? error.message : 'Could not prepare edit mask');
+      return;
+    }
+
+    const ok = await onEditImage(editInstruction.trim(), maskDataUrl);
     if (ok) {
       setEditInstruction('');
+      setMaskStrokes([]);
       setIsEditorOpen(false);
     }
   };
@@ -341,10 +531,26 @@ const BaseGenerationPanel: React.FC<{
       <div className="max-w-2xl mx-auto space-y-3">
         <div className="relative rounded-[16px] overflow-hidden border-2 border-[#0A1128] shadow-[0_4px_20px_rgba(10,17,40,0.2)]">
           <img
+            ref={previewImageRef}
+            onLoad={renderMaskOverlay}
             src={selectedImage?.startsWith('data:') ? selectedImage : `data:image/png;base64,${selectedImage}`}
             alt="Generated image"
             className="w-full h-auto"
           />
+          {isEditorOpen && (
+            <canvas
+              ref={maskCanvasRef}
+              className={`absolute inset-0 h-full w-full ${
+                isEditingImage ? 'cursor-wait' : 'cursor-crosshair'
+              }`}
+              style={{ touchAction: 'none' }}
+              onPointerDown={handleMaskPointerDown}
+              onPointerMove={handleMaskPointerMove}
+              onPointerUp={handleMaskPointerUp}
+              onPointerCancel={handleMaskPointerUp}
+              onPointerLeave={handleMaskPointerUp}
+            />
+          )}
           {showJournalPreview && (
             <JournalNameOverlay journal={outputParams.journal} />
           )}
@@ -396,6 +602,64 @@ const BaseGenerationPanel: React.FC<{
 
     {baseImages.length > 0 && isEditorOpen && (
       <div className="max-w-2xl mx-auto space-y-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-[18px] border border-gray-200 bg-white px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setMaskTool('brush')}
+            disabled={isEditingImage}
+            className={`flex items-center gap-1.5 rounded-full border px-3 py-2 text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-45 ${
+              maskTool === 'brush'
+                ? 'border-[#0A1128] bg-[#0A1128] text-white'
+                : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+            title="Brush"
+          >
+            <Brush size={12} strokeWidth={2} />
+            Brush
+          </button>
+          <button
+            type="button"
+            onClick={() => setMaskTool('erase')}
+            disabled={isEditingImage}
+            className={`flex items-center gap-1.5 rounded-full border px-3 py-2 text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-45 ${
+              maskTool === 'erase'
+                ? 'border-[#0A1128] bg-[#0A1128] text-white'
+                : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+            title="Erase"
+          >
+            <Eraser size={12} strokeWidth={2} />
+            Erase
+          </button>
+          <label className="flex min-w-[150px] flex-1 items-center gap-2 rounded-full border border-gray-200 px-3 py-2 text-[11px] font-bold text-gray-600">
+            <span>Size</span>
+            <input
+              type="range"
+              min={14}
+              max={96}
+              value={brushSize}
+              disabled={isEditingImage}
+              onChange={(event) => setBrushSize(Number(event.target.value))}
+              className="h-1 flex-1 accent-[#0A1128]"
+              title="Brush size"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setMaskStrokes([])}
+            disabled={isEditingImage || maskStrokes.length === 0}
+            className="flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-2 text-[11px] font-bold text-gray-600 transition-all hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
+            title="Clear selection"
+          >
+            <RotateCcw size={12} strokeWidth={2} />
+            Clear
+          </button>
+          <span className={`rounded-full px-3 py-2 text-[10px] font-bold ${
+            hasMaskPaint ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-400'
+          }`}>
+            {hasMaskPaint ? 'Local Edit' : 'Full Image'}
+          </span>
+        </div>
         <div className="flex items-end gap-2 rounded-[24px] border border-gray-200 bg-white px-3 py-2 shadow-[0_8px_30px_rgba(10,17,40,0.08)]">
           <div className="mb-1.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#0A1128] text-white">
             <Wand2 size={14} strokeWidth={2} />
@@ -431,10 +695,10 @@ const BaseGenerationPanel: React.FC<{
             <X size={14} strokeWidth={2} />
           </button>
         </div>
-        {editError && (
+        {(maskError || editError) && (
           <div className="flex items-start gap-2 rounded-[14px] border border-red-100 bg-red-50 px-4 py-3">
             <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-red-400" strokeWidth={2} />
-            <p className="text-[11px] leading-relaxed text-red-500">{editError}</p>
+            <p className="text-[11px] leading-relaxed text-red-500">{maskError || editError}</p>
           </div>
         )}
       </div>
@@ -666,7 +930,7 @@ const RenderingAgent: React.FC = () => {
     presentRenderingError,
   ]);
 
-  const handleEditBase = useCallback(async (instruction: string) => {
+  const handleEditBase = useCallback(async (instruction: string, maskDataUrl?: string | null) => {
     if (!compiledPrompt || isEditingImage) return false;
     const sourceImage = baseImages[selectedBaseIndex];
     if (!sourceImage) return false;
@@ -685,6 +949,7 @@ const RenderingAgent: React.FC = () => {
         dataUrl,
         instruction,
         outputParams.aspectRatio === 'Custom' ? `${outputParams.customWidth}:${outputParams.customHeight}` : outputParams.aspectRatio,
+        maskDataUrl,
         {
           strictNoText: true,
           strictChemistry: Boolean(advancedSwitches.strictChemicalStructure || advancedSwitches.prioritizeAccuracy),

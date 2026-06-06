@@ -1,4 +1,3 @@
-const { validateRenderingImage } = require('./validate-image');
 const https = require('https');
 const { proxyAgent } = require('../proxy-agent');
 
@@ -405,16 +404,21 @@ ${speciesConstraints.length ? speciesConstraints.map((line) => `- ${line}`).join
 ${String(prompt || '').slice(0, 3500)}`;
 }
 
-function buildImageEditPrompt({ prompt, aspectRatio, requiredSpecies }) {
+function buildImageEditPrompt({ prompt, aspectRatio, requiredSpecies, hasMask }) {
   const speciesConstraints = Array.isArray(requiredSpecies)
     ? requiredSpecies
       .map((species) => speciesToConstraint(species))
       .filter(Boolean)
     : [];
 
+  const maskInstruction = hasMask
+    ? 'A mask is provided. Edit ONLY the transparent selected mask region. Preserve every pixel outside the selected mask region as much as possible.'
+    : 'No mask is provided. Apply the edit to the image while preserving the existing composition as much as possible.';
+
   return `Edit the provided scientific journal cover image according to this instruction:
 "${String(prompt || '').slice(0, 1200)}"
 
+${maskInstruction}
 Keep the existing composition, camera angle, main scientific objects, color palette, and publication-grade rendering unless the instruction explicitly changes them. Preserve the clean HD journal-cover look. Aspect ratio MUST remain ${String(aspectRatio || '9:16')}.
 
 CRITICAL: ABSOLUTELY NO TEXT OR GLYPHS of any kind.
@@ -428,23 +432,6 @@ CRITICAL: Preserve chemical correctness. Do not add/remove required atoms or cha
 
 Required molecular structures that must remain correct:
 ${speciesConstraints.length ? speciesConstraints.map((line) => `- ${line}`).join('\n') : '- preserve all molecular structures already present in the source image'}`;
-}
-
-async function validateGeneratedImage({
-  dataUrl,
-  requiredSpecies,
-  strictNoText,
-  strictChemistry,
-}) {
-  if (!strictNoText && !strictChemistry) {
-    return { ok: true };
-  }
-
-  return validateRenderingImage({
-    imageDataUrl: dataUrl,
-    requiredSpecies: Array.isArray(requiredSpecies) ? requiredSpecies : [],
-    strictChemistry: Boolean(strictChemistry),
-  });
 }
 
 async function tryFetchExternalImage(url, useProxy = true) {
@@ -655,6 +642,7 @@ async function generateOneRenderingImage({
 
 async function editRenderingImage({
   imageDataUrl,
+  maskDataUrl,
   prompt,
   aspectRatio = '9:16',
   strictNoText = false,
@@ -675,6 +663,10 @@ async function editRenderingImage({
   if (!sourceImage || sourceImage.buffer.length < 100) {
     throw new Error('Source image is missing or invalid');
   }
+  const sourceMask = maskDataUrl ? parseImageDataUrl(maskDataUrl) : null;
+  if (maskDataUrl && (!sourceMask || sourceMask.buffer.length < 100)) {
+    throw new Error('Selection mask is missing or invalid');
+  }
   if (typeof fetch !== 'function' || typeof FormData !== 'function' || typeof Blob !== 'function') {
     throw new Error('Image editing requires a Node runtime with fetch/FormData/Blob support');
   }
@@ -685,8 +677,13 @@ async function editRenderingImage({
     prompt: normalizedPrompt,
     aspectRatio,
     requiredSpecies: Array.isArray(requiredSpecies) ? requiredSpecies : [],
+    hasMask: Boolean(sourceMask),
   }));
   formData.append('image', new Blob([sourceImage.buffer], { type: sourceImage.mimeType }), fileNameForMime(sourceImage.mimeType));
+  if (sourceMask) {
+    formData.append('mask', new Blob([sourceMask.buffer], { type: sourceMask.mimeType }), 'mask.png');
+  }
+  formData.append('n', '1');
   formData.append('size', sizeForAspectRatio(aspectRatio));
   if (imageConfig.quality) {
     formData.append('quality', imageConfig.quality);
@@ -744,15 +741,8 @@ async function editRenderingImage({
     throw new Error('Could not extract edited image from images/edits response');
   }
 
-  if (strictNoText || strictChemistry) {
-    await validateGeneratedImage({
-      dataUrl: candidate,
-      requiredSpecies,
-      strictNoText,
-      strictChemistry,
-    }).catch(() => ({ ok: true }));
-  }
-
+  // Keep edits to one upstream model call; prompt constraints carry the no-text
+  // and chemistry requirements without an extra vision-validation round trip.
   return candidate;
 }
 
