@@ -420,10 +420,13 @@ const RenderingAgent: React.FC = () => {
       || /无效的令牌/i.test(raw)
       || /new_api_error/i.test(raw)
     ) {
+      if (/No available channel|model_not_found/i.test(raw)) {
+        return '图像模型通道暂不可用，请在模型平台确认当前 API Key 的分组已开通 gpt-image-2。';
+      }
       return '图像服务鉴权失败，请联系管理员检查上游令牌或网关配置。';
     }
 
-    if (/(TEXT_LLM_API_KEY|GEMINI_API_KEY).*not configured/i.test(raw)) {
+    if (/(IMAGE_LLM_API_KEY|TEXT_LLM_API_KEY|GEMINI_API_KEY).*not configured/i.test(raw)) {
       return '图像服务尚未配置，请联系管理员补充可用凭据。';
     }
 

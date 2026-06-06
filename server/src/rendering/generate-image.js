@@ -2,12 +2,34 @@ const { validateRenderingImage } = require('./validate-image');
 const https = require('https');
 const { proxyAgent } = require('../proxy-agent');
 
-const GEMINI_BASE_URL = process.env.GEMINI_BASE_URL || 'https://api.aipaibox.com/v1';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_IMAGE_MODEL_RAW = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
-const GEMINI_IMAGE_STRATEGY = process.env.GEMINI_IMAGE_STRATEGY || 'chat_only';
+const DEFAULT_LEGACY_BASE_URL = 'https://api.aipaibox.com/v1';
+const DEFAULT_LEGACY_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
+const DEFAULT_IMAGE_LLM_BASE_URL = 'https://api.aipaibox.com/v1';
+const DEFAULT_IMAGE_LLM_MODEL = 'gpt-image-2';
 
-function normalizeGeminiModel(model) {
+function clean(value) {
+  return String(value || '').trim();
+}
+
+function hasExplicitImageLlmConfig() {
+  return [
+    'IMAGE_LLM_API_KEY',
+    'IMAGE_LLM_BASE_URL',
+    'IMAGE_LLM_MODEL',
+    'IMAGE_LLM_AUTH_HEADER',
+    'IMAGE_LLM_AUTH_SCHEME',
+    'IMAGE_LLM_STRATEGY',
+    'IMAGE_LLM_QUALITY',
+    'IMAGE_LLM_OUTPUT_FORMAT',
+    'IMAGE_LLM_RESPONSE_FORMAT',
+  ].some((name) => clean(process.env[name]));
+}
+
+function normalizeBaseUrl(baseUrl) {
+  return clean(baseUrl).replace(/\/+$/, '');
+}
+
+function normalizeImageModel(model) {
   const normalized = String(model || '').trim();
   if (normalized === 'gemini-3.1-pro-proview') {
     return 'gemini-3-pro-image-preview';
@@ -15,7 +37,70 @@ function normalizeGeminiModel(model) {
   return normalized;
 }
 
-const GEMINI_IMAGE_MODEL = normalizeGeminiModel(GEMINI_IMAGE_MODEL_RAW);
+function numberOrDefault(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getImageGenerationConfig() {
+  const explicitImageConfig = hasExplicitImageLlmConfig();
+  const baseUrl = normalizeBaseUrl(
+    process.env.IMAGE_LLM_BASE_URL
+      || (explicitImageConfig ? DEFAULT_IMAGE_LLM_BASE_URL : process.env.GEMINI_BASE_URL)
+      || DEFAULT_LEGACY_BASE_URL
+  );
+  const model = normalizeImageModel(
+    process.env.IMAGE_LLM_MODEL
+      || (explicitImageConfig ? DEFAULT_IMAGE_LLM_MODEL : process.env.GEMINI_IMAGE_MODEL)
+      || DEFAULT_LEGACY_IMAGE_MODEL
+  );
+  const authHeader = clean(
+    process.env.IMAGE_LLM_AUTH_HEADER
+      || (explicitImageConfig ? 'Authorization' : 'Authorization')
+  );
+  const authScheme = clean(
+    process.env.IMAGE_LLM_AUTH_SCHEME
+      || (authHeader.toLowerCase() === 'authorization' ? 'Bearer' : '')
+  );
+
+  return {
+    apiKey: clean(process.env.IMAGE_LLM_API_KEY || process.env.GEMINI_API_KEY),
+    authHeader,
+    authScheme,
+    baseUrl,
+    model,
+    strategy: clean(
+      process.env.IMAGE_LLM_STRATEGY
+        || process.env.GEMINI_IMAGE_STRATEGY
+        || (explicitImageConfig ? 'images_first' : 'chat_only')
+    ),
+    quality: clean(process.env.IMAGE_LLM_QUALITY),
+    outputFormat: clean(process.env.IMAGE_LLM_OUTPUT_FORMAT || (explicitImageConfig ? 'png' : '')),
+    responseFormat: clean(process.env.IMAGE_LLM_RESPONSE_FORMAT || (explicitImageConfig ? '' : 'b64_json')),
+    timeoutMs: numberOrDefault(process.env.IMAGE_LLM_TIMEOUT_MS, explicitImageConfig ? 240000 : 85000),
+    useProxy: clean(process.env.IMAGE_LLM_USE_PROXY || (explicitImageConfig ? '0' : '1')) !== '0',
+  };
+}
+
+function buildImageHeaders(config) {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  if (!config.apiKey) {
+    return headers;
+  }
+
+  if (config.authHeader.toLowerCase() === 'authorization') {
+    headers.Authorization = config.authScheme
+      ? `${config.authScheme} ${config.apiKey}`
+      : config.apiKey;
+  } else {
+    headers[config.authHeader] = config.apiKey;
+  }
+
+  return headers;
+}
 
 const SPECIES_CANON = {
   // ── Diatomics ──
@@ -102,7 +187,7 @@ async function fetchWithTimeout(url, init, timeoutMs = 85000) {
       method: init.method || 'GET',
       headers: init.headers || {},
     };
-    if (proxyAgent) options.agent = proxyAgent;
+    if (init.useProxy !== false && proxyAgent) options.agent = proxyAgent;
 
     const timeoutId = setTimeout(() => {
       req.destroy();
@@ -271,7 +356,7 @@ function buildImagePrompt({ prompt, aspectRatio, requiredSpecies }) {
       .filter(Boolean)
     : [];
 
-  return `nano banana 2: Generate a high-quality scientific journal cover image. Output the image directly — NO text description, NO markdown, just the image. The image must be 600 DPI publication-grade quality. Aspect ratio MUST be ${String(aspectRatio || '9:16')} (portrait).
+  return `Generate a high-quality scientific journal cover image. Output the image directly — NO text description, NO markdown, just the image. The image must be 600 DPI publication-grade quality. Aspect ratio MUST be ${String(aspectRatio || '9:16')} (portrait).
 
 CRITICAL: ABSOLUTELY NO TEXT OR GLYPHS of any kind.
 - No English letters, no Chinese characters, no numbers, no punctuation.
@@ -343,27 +428,37 @@ async function generateOneRenderingImage({
 }) {
   let lastError = null;
   let bestCandidate = null;
+  const imageConfig = getImageGenerationConfig();
 
   for (let attemptIndex = 0; attemptIndex < maxAttemptsPerImage; attemptIndex += 1) {
     let candidate = null;
 
     const tryImagesGenerations = async () => {
+      const body = {
+        model: imageConfig.model,
+        prompt: imagePrompt,
+        n: 1,
+        size: sizeForAspectRatio(aspectRatio),
+      };
+      if (imageConfig.responseFormat) {
+        body.response_format = imageConfig.responseFormat;
+      }
+      if (imageConfig.outputFormat) {
+        body.output_format = imageConfig.outputFormat;
+      }
+      if (imageConfig.quality) {
+        body.quality = imageConfig.quality;
+      }
+
       const response = await fetchWithTimeout(
-        `${GEMINI_BASE_URL}/images/generations`,
+        `${imageConfig.baseUrl}/images/generations`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${GEMINI_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: GEMINI_IMAGE_MODEL,
-            prompt: imagePrompt,
-            n: 1,
-            size: sizeForAspectRatio(aspectRatio),
-            response_format: 'b64_json',
-          }),
-        }
+          headers: buildImageHeaders(imageConfig),
+          body: JSON.stringify(body),
+          useProxy: imageConfig.useProxy,
+        },
+        imageConfig.timeoutMs
       );
 
       const raw = await response.text();
@@ -393,15 +488,13 @@ async function generateOneRenderingImage({
 
     const tryChatCompletions = async () => {
       const response = await fetchWithTimeout(
-        `${GEMINI_BASE_URL}/chat/completions`,
+        `${imageConfig.baseUrl}/chat/completions`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${GEMINI_API_KEY}`,
-          },
+          headers: buildImageHeaders(imageConfig),
+          useProxy: imageConfig.useProxy,
           body: JSON.stringify({
-            model: GEMINI_IMAGE_MODEL,
+            model: imageConfig.model,
             messages: [
               {
                 role: 'user',
@@ -411,7 +504,8 @@ async function generateOneRenderingImage({
             n: 1,
             temperature: 0.7,
           }),
-        }
+        },
+        imageConfig.timeoutMs
       );
 
       const raw = await response.text();
@@ -471,7 +565,7 @@ async function generateOneRenderingImage({
     };
 
     try {
-      if (GEMINI_IMAGE_STRATEGY !== 'chat_only') {
+      if (imageConfig.strategy !== 'chat_only') {
         candidate = await tryImagesGenerations();
       }
       if (!candidate) {
@@ -517,8 +611,9 @@ async function generateRenderingImages({
   if (normalizedPrompt.length < 10) {
     throw new Error('Prompt too short');
   }
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured');
+  const imageConfig = getImageGenerationConfig();
+  if (!imageConfig.apiKey) {
+    throw new Error('IMAGE_LLM_API_KEY/GEMINI_API_KEY is not configured');
   }
 
   const targetCount = Math.max(1, Math.min(Number(numberOfImages || 1), 4));
@@ -550,5 +645,7 @@ async function generateRenderingImages({
 }
 
 module.exports = {
+  buildImageHeaders,
   generateRenderingImages,
+  getImageGenerationConfig,
 };

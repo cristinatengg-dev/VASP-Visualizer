@@ -308,16 +308,20 @@ const humanizeRenderingApiError = (message: string, fallback: string) => {
     return fallback;
   }
 
-  if (/(TEXT_LLM_API_KEY|GEMINI_API_KEY).*not configured/i.test(raw)) {
-    return '图像分析服务尚未配置，请联系管理员补充文本模型凭据。';
+  if (/(IMAGE_LLM_API_KEY|TEXT_LLM_API_KEY|GEMINI_API_KEY).*not configured/i.test(raw)) {
+    return '图像服务尚未配置，请联系管理员补充可用凭据。';
   }
 
   if (
     /(Text LLM|Gemini) API error\s*401/i.test(raw)
+    || /No available channel|model_not_found/i.test(raw)
     || /invalid token/i.test(raw)
     || /无效的令牌/i.test(raw)
     || /new_api_error/i.test(raw)
   ) {
+    if (/No available channel|model_not_found/i.test(raw)) {
+      return '图像模型通道暂不可用，请在模型平台确认当前 API Key 的分组已开通 gpt-image-2。';
+    }
     return '图像分析网关鉴权失败，请联系管理员更新令牌或上游网关配置。';
   }
 
