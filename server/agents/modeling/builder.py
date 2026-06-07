@@ -984,6 +984,11 @@ def build_molecule_record(formula: str) -> MoleculeRecord:
     canonical = canonicalize_molecule_query(query)
 
     try:
+        return get_builtin_molecule_record(canonical)
+    except Exception:
+        pass
+
+    try:
         library_record = LocalStructureLibrary().resolve_molecule(query)
         if library_record:
             if not library_record.bonds:
