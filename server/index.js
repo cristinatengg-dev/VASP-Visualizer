@@ -2062,6 +2062,15 @@ app.post('/api/agent/generate-image', requireAgentAccess('cover'), async (req, r
     }
 });
 
+const imageEditJobs = new Map();
+const IMAGE_EDIT_JOB_TTL_MS = 30 * 60 * 1000;
+
+const scheduleImageEditJobCleanup = (jobId) => {
+    setTimeout(() => {
+        imageEditJobs.delete(jobId);
+    }, IMAGE_EDIT_JOB_TTL_MS).unref?.();
+};
+
 // ── Route: POST /api/agent/edit-image ────────────────────────────────────────
 // Edit the selected generated image with an instruction prompt.
 app.post('/api/agent/edit-image', requireAgentAccess('cover'), async (req, res) => {
@@ -2076,22 +2085,61 @@ app.post('/api/agent/edit-image', requireAgentAccess('cover'), async (req, res) 
         return res.status(400).json({ success: false, error: 'Edit prompt too short' });
     }
 
-    try {
-        const image = await editRenderingImage({
-            imageDataUrl,
-            maskDataUrl,
-            prompt,
-            aspectRatio,
-            strictNoText,
-            strictChemistry,
-            requiredSpecies,
-        });
-        await recordAgentUsage(req.body?.userId, 'cover');
-        return res.json({ success: true, image });
-    } catch (err) {
-        console.error('[agent/edit-image]', err.message);
-        return res.status(500).json({ success: false, error: err.message });
+    const jobId = randomUUID();
+    const job = {
+        id: jobId,
+        status: 'queued',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        image: null,
+        error: null,
+    };
+    imageEditJobs.set(jobId, job);
+    scheduleImageEditJobCleanup(jobId);
+
+    setImmediate(async () => {
+        job.status = 'running';
+        job.updatedAt = Date.now();
+        try {
+            const image = await editRenderingImage({
+                imageDataUrl,
+                maskDataUrl,
+                prompt,
+                aspectRatio,
+                strictNoText,
+                strictChemistry,
+                requiredSpecies,
+            });
+            await recordAgentUsage(req.body?.userId, 'cover');
+            job.status = 'succeeded';
+            job.image = image;
+            job.updatedAt = Date.now();
+        } catch (err) {
+            console.error('[agent/edit-image]', err.message);
+            job.status = 'failed';
+            job.error = err.message;
+            job.updatedAt = Date.now();
+        }
+    });
+
+    return res.status(202).json({ success: true, jobId, status: job.status });
+});
+
+app.get('/api/agent/edit-image/:jobId', async (req, res) => {
+    const job = imageEditJobs.get(req.params.jobId);
+    if (!job) {
+        return res.status(404).json({ success: false, error: 'Image edit job not found or expired' });
     }
+
+    if (job.status === 'failed') {
+        return res.status(500).json({ success: false, jobId: job.id, status: job.status, error: job.error || 'Image edit failed' });
+    }
+
+    if (job.status === 'succeeded') {
+        return res.json({ success: true, jobId: job.id, status: job.status, image: job.image });
+    }
+
+    return res.json({ success: true, jobId: job.id, status: job.status });
 });
 
 // ── Route: POST /api/video/generate ──────────────────────────────────────────

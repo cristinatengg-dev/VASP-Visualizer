@@ -475,6 +475,19 @@ export const editBaseImage = async (
   const baseUrl = API_BASE_URL.replace(/\/+$/, '');
   const endpoint = `${baseUrl}/agent/edit-image`;
   const safeRequiredSpecies = serializeRequiredSpecies(options.requiredSpecies);
+  const parseJsonResponse = async (response: Response, fallback: string) => {
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.error('Non-JSON response from server:', text.substring(0, 200));
+      if (response.status === 524) {
+        throw new Error('图像编辑等待时间过长，网关已超时。系统已改为后台任务模式，请重新提交。');
+      }
+      throw new Error(`${fallback} (Status: ${response.status})`);
+    }
+  };
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   let res: Response;
   try {
@@ -496,24 +509,50 @@ export const editBaseImage = async (
     throw new Error(humanizeRenderingApiError(`Request failed to ${endpoint}: ${msg}`, 'Image edit request failed'));
   }
 
-  const text = await res.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch (e) {
-    console.error('Non-JSON response from server:', text.substring(0, 200));
-    throw new Error(`Invalid JSON response from server (Status: ${res.status})`);
-  }
+  const data = await parseJsonResponse(res, 'Invalid image edit response from server');
 
   if (!res.ok || !data.success) {
     throw new Error(humanizeRenderingApiError(data.error || `Image edit error ${res.status}`, 'Image edit failed'));
   }
 
-  if (typeof data.image !== 'string' || data.image.length < 100) {
-    throw new Error('Server returned success but no edited image was provided.');
+  if (typeof data.image === 'string' && data.image.length > 100) {
+    return data.image as string;
   }
 
-  return data.image as string;
+  if (typeof data.jobId !== 'string' || data.jobId.length < 10) {
+    throw new Error('Server accepted the edit request but did not return an image or job id.');
+  }
+
+  const statusEndpoint = `${endpoint}/${encodeURIComponent(data.jobId)}`;
+  const startedAt = Date.now();
+  const maxWaitMs = 8 * 60 * 1000;
+  let pollDelayMs = 1800;
+
+  while (Date.now() - startedAt < maxWaitMs) {
+    await sleep(pollDelayMs);
+    pollDelayMs = Math.min(5000, Math.round(pollDelayMs * 1.15));
+
+    let statusRes: Response;
+    try {
+      statusRes = await fetch(statusEndpoint, { method: 'GET' });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(humanizeRenderingApiError(`Request failed to ${statusEndpoint}: ${msg}`, 'Image edit status request failed'));
+    }
+
+    const statusData = await parseJsonResponse(statusRes, 'Invalid image edit status response from server');
+    if (!statusRes.ok || !statusData.success) {
+      throw new Error(humanizeRenderingApiError(statusData.error || `Image edit status error ${statusRes.status}`, 'Image edit failed'));
+    }
+    if (statusData.status === 'succeeded' && typeof statusData.image === 'string' && statusData.image.length > 100) {
+      return statusData.image as string;
+    }
+    if (statusData.status === 'failed') {
+      throw new Error(humanizeRenderingApiError(statusData.error || 'Image edit failed', 'Image edit failed'));
+    }
+  }
+
+  throw new Error('图像编辑仍在处理中，但等待时间已超过 8 分钟。请稍后重试。');
 };
 
 // ─── Real API: Phase 7 — HD Refinement (Doubao Seedream) ────────────────────
