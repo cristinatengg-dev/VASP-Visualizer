@@ -37,7 +37,7 @@ Schema:
     "element": "string (e.g. O, Cu)",
     "count": number (default 1)
   },
-  "provider_preferences": ["materials_project","atomly","csd","icsd","optimade","fallback"]
+  "provider_preferences": ["local_structure","materials_project","atomly","csd","icsd","optimade","fallback"]
 }
 
 Important defaults:

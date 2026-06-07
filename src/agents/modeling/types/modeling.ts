@@ -1,4 +1,5 @@
 export const MODELING_PROVIDER_OPTIONS = [
+  'local_structure',
   'materials_project',
   'atomly',
   'csd',
@@ -126,6 +127,9 @@ export interface ModelingBuildMeta {
   hkl?: Array<number | string> | null;
   databaseSource?: string | null;
   databaseSourceLabel?: string | null;
+  identifier?: string | null;
+  structureName?: string | null;
+  structurePath?: string | null;
   providersTried?: string[];
   providerPreferences?: string[];
   totalAtoms?: number;

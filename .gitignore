@@ -33,6 +33,9 @@ server/db.json
 server/uploads/
 server/runtime-storage/
 server/.venv-modeling/
+server/data/structure-libraries/*
+!server/data/structure-libraries/README.md
+!server/data/structure-libraries/.gitkeep
 ssl/*
 !ssl/.gitkeep
 

@@ -19,6 +19,7 @@ export interface Bond {
   atom2Id: string;
   length: number;
   type: 'single' | 'double' | 'triple';
+  order?: number;
 }
 
 export interface MolecularStructure {

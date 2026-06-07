@@ -9,7 +9,7 @@ import {
 } from '../types/modeling';
 import { useStore } from '../../../store/useStore';
 import { API_BASE_URL } from '../../../config';
-import type { Atom, MolecularStructure } from '../../../types';
+import type { Atom, Bond, MolecularStructure } from '../../../types';
 import { getAtomProperties } from '../../../utils/atomData';
 
 const MODELING_PROVIDER_SET = new Set<string>(MODELING_PROVIDER_OPTIONS);
@@ -69,6 +69,7 @@ export const useModeling = () => {
   const [runtimeSessionError, setRuntimeSessionError] = useState<string | null>(null);
   const [isLoadingRuntimeSession, setIsLoadingRuntimeSession] = useState(false);
   const setMolecularData = useStore(state => state.setMolecularData);
+  const setShowBonds = useStore(state => state.setShowBonds);
   const user = useStore(state => state.user);
 
   const normalizeAtoms = (raw: any): Atom[] => {
@@ -121,6 +122,40 @@ export const useModeling = () => {
       min: { x: minX, y: minY, z: minZ },
       max: { x: maxX, y: maxY, z: maxZ },
     };
+  };
+
+  const normalizeBonds = (raw: any, atoms: Atom[]): MolecularStructure['bonds'] => {
+    const arr = Array.isArray(raw) ? raw : [];
+    const atomIds = new Set(atoms.map(atom => atom.id));
+    return arr
+      .map<Bond | null>((bond, idx) => {
+        const atom1Id = typeof bond?.atom1Id === 'string'
+          ? bond.atom1Id
+          : (Number.isInteger(bond?.from) ? atoms[bond.from]?.id : undefined);
+        const atom2Id = typeof bond?.atom2Id === 'string'
+          ? bond.atom2Id
+          : (Number.isInteger(bond?.to) ? atoms[bond.to]?.id : undefined);
+        if (!atom1Id || !atom2Id || !atomIds.has(atom1Id) || !atomIds.has(atom2Id)) {
+          return null;
+        }
+
+        const parsedOrder = Number(bond?.order);
+        const order = Number.isFinite(parsedOrder)
+          ? Math.max(1, Math.min(3, Math.round(parsedOrder)))
+          : (bond?.type === 'triple' ? 3 : (bond?.type === 'double' ? 2 : 1));
+        const type: Bond['type'] = order >= 3 ? 'triple' : (order === 2 ? 'double' : 'single');
+        const length = Number(bond?.length);
+
+        return {
+          id: typeof bond?.id === 'string' ? bond.id : `bond-${idx}`,
+          atom1Id,
+          atom2Id,
+          length: Number.isFinite(length) ? length : 0,
+          type,
+          order,
+        } satisfies Bond;
+      })
+      .filter((bond): bond is Bond => Boolean(bond));
   };
 
   // Ensure the URL is properly formatted for both local dev and production
@@ -345,15 +380,19 @@ export const useModeling = () => {
     }
 
     const atoms = normalizeAtoms(result.data.atoms);
+    const bonds = normalizeBonds(result.data.bonds, atoms);
     const molecularData: MolecularStructure = {
       id: `model-${Date.now()}`,
       filename: `AI_Generated_${requestIntent.task_type}.vasp`,
       atoms,
-      bonds: [],
+      bonds,
       boundingBox: computeBoundingBox(atoms),
       latticeVectors: result.data.latticeVectors,
     };
     setMolecularData(molecularData);
+    if (bonds.length > 0) {
+      setShowBonds(true);
+    }
     setLatestBuildMeta({
       ...(result.meta || {}),
       providerPreferences: Array.isArray(result?.meta?.providerPreferences)

@@ -41,6 +41,13 @@ try:
     from pymatgen.io.cif import CifWriter
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
     import numpy as np
+    from structure_library import (
+        LocalStructureLibrary,
+        MoleculeRecord,
+        StructureRecord,
+        normalize_bond,
+        bond_order_to_type,
+    )
 except Exception as e:
     sys.stderr.write(f"CRITICAL: Failed to initialize pymatgen runtime: {e}\n")
     sys.stderr.write("Please reinstall compatible numpy / pymatgen binaries on the modeling host.\n")
@@ -54,6 +61,7 @@ MP_BASE_URL = os.environ.get('MP_BASE_URL', 'https://api.materialsproject.org')
 MP_PROXY_URL = os.environ.get('MP_PROXY_URL', '')  # Cloudflare Worker proxy URL as fallback
 
 DEFAULT_PROVIDER_ORDER = [
+    'local_structure',
     'materials_project',
     'atomly',
     'csd',
@@ -63,6 +71,7 @@ DEFAULT_PROVIDER_ORDER = [
 ]
 
 PROVIDER_LABELS = {
+    'local_structure': 'Local Structure Library',
     'materials_project': 'Materials Project',
     'atomly': 'Atomly',
     'csd': 'CSD',
@@ -72,6 +81,16 @@ PROVIDER_LABELS = {
 }
 
 PROVIDER_ALIASES = {
+    'local': 'local_structure',
+    'local_structure': 'local_structure',
+    'local-structure': 'local_structure',
+    'local structure': 'local_structure',
+    'structure_library': 'local_structure',
+    'structure-library': 'local_structure',
+    'pubchem': 'local_structure',
+    'pubchem3d': 'local_structure',
+    'cod': 'local_structure',
+    'jarvis': 'local_structure',
     'mp': 'materials_project',
     'materialsproject': 'materials_project',
     'materials_project': 'materials_project',
@@ -211,6 +230,8 @@ def sanitize_material_query(value: Any, default: str) -> str:
         return default
     if re.match(r'^(mp|mvc)-\d+$', query, re.I):
         return query
+    if re.match(r'^(cod[:_-]?)?\d{7}$', query, re.I):
+        return query
     try:
         Composition(query)
         return query
@@ -225,6 +246,28 @@ def create_rocksalt_structure(a: float, species_a: str, species_b: str) -> Struc
         [species_a, species_b],
         [[0, 0, 0], [0.5, 0.5, 0.5]]
     )
+
+def get_structure_from_local_library(material_query: str) -> Tuple[Optional[Structure], Optional[str], Optional[Dict[str, Any]]]:
+    try:
+        library = LocalStructureLibrary()
+        record = library.resolve_structure(material_query)
+        if not record:
+            sys.stderr.write(f"Local Structure Library: No local crystal match for '{material_query}'.\n")
+            return None, None, None
+        sys.stderr.write(
+            f"Local Structure Library: Found {record.formula} "
+            f"({record.identifier or record.path or material_query}).\n"
+        )
+        return record.structure, record.formula, {
+            'database_source': record.source,
+            'database_source_label': record.source_label,
+            'identifier': record.identifier,
+            'name': record.name,
+            'path': record.path,
+        }
+    except Exception as err:
+        sys.stderr.write(f"Local Structure Library Error: {err}\n")
+        return None, None, None
 
 def get_fallback_structure(formula: str) -> Tuple[Optional[Structure], Optional[str]]:
     """Provide common structures when external APIs are unreachable."""
@@ -709,8 +752,11 @@ def resolve_structure_from_providers(
         tried.append(provider)
         struct: Optional[Structure] = None
         formula: Optional[str] = None
+        provider_meta: Optional[Dict[str, Any]] = None
 
-        if provider == 'materials_project':
+        if provider == 'local_structure':
+            struct, formula, provider_meta = get_structure_from_local_library(material_query)
+        elif provider == 'materials_project':
             struct, formula = get_structure_from_mp_api(material_query)
         elif provider == 'atomly':
             struct, formula = get_structure_from_atomly(material_query)
@@ -725,9 +771,12 @@ def resolve_structure_from_providers(
 
         if struct is not None:
             return struct, formula, {
-                'database_source': provider,
-                'database_source_label': PROVIDER_LABELS.get(provider, provider),
+                'database_source': (provider_meta or {}).get('database_source') or provider,
+                'database_source_label': (provider_meta or {}).get('database_source_label') or PROVIDER_LABELS.get(provider, provider),
                 'providers_tried': tried,
+                'identifier': (provider_meta or {}).get('identifier'),
+                'name': (provider_meta or {}).get('name'),
+                'path': (provider_meta or {}).get('path'),
             }
 
     return None, None, {
@@ -811,7 +860,7 @@ def build_slab(
         
     return selected_slab
 
-def build_molecule(formula: str) -> Molecule:
+def canonicalize_molecule_query(formula: str) -> str:
     raw_formula = str(formula or '').strip()
     alias = raw_formula.replace(' ', '').lower()
     alias_map = {
@@ -832,54 +881,64 @@ def build_molecule(formula: str) -> Molecule:
         'ch4': 'CH4',
         'methane': 'CH4',
     }
-    canonical = alias_map.get(alias, raw_formula.replace(' ', ''))
+    return alias_map.get(alias, raw_formula.replace(' ', ''))
 
+def get_builtin_molecule_record(formula: str) -> MoleculeRecord:
+    canonical = canonicalize_molecule_query(formula)
     common_mols = {
         "H2O": {
             "species": ["O", "H", "H"],
             "coords": [[0.0, 0.0, 0.0], [0.96, 0.0, 0.0], [-0.24, 0.93, 0.0]],
+            "bonds": [normalize_bond(0, 1, 1), normalize_bond(0, 2, 1)],
             "anchor_index": 0,
             "default_height": 1.8,
         },
         "CO": {
             "species": ["C", "O"],
             "coords": [[0.0, 0.0, 0.0], [1.13, 0.0, 0.0]],
+            "bonds": [normalize_bond(0, 1, 3)],
             "anchor_index": 0,
             "default_height": 1.9,
         },
         "CO2": {
             "species": ["C", "O", "O"],
             "coords": [[0.0, 0.0, 0.0], [1.16, 0.0, 0.0], [-1.16, 0.0, 0.0]],
+            "bonds": [normalize_bond(0, 1, 2), normalize_bond(0, 2, 2)],
             "anchor_index": 0,
             "default_height": 2.1,
         },
         "O2": {
             "species": ["O", "O"],
             "coords": [[0.0, 0.0, 0.0], [1.21, 0.0, 0.0]],
+            "bonds": [normalize_bond(0, 1, 2)],
             "anchor_index": 0,
             "default_height": 1.8,
         },
         "N2": {
             "species": ["N", "N"],
             "coords": [[0.0, 0.0, 0.0], [1.10, 0.0, 0.0]],
+            "bonds": [normalize_bond(0, 1, 3)],
             "anchor_index": 0,
             "default_height": 1.8,
         },
         "H2": {
             "species": ["H", "H"],
             "coords": [[0.0, 0.0, 0.0], [0.74, 0.0, 0.0]],
+            "bonds": [normalize_bond(0, 1, 1)],
             "anchor_index": 0,
             "default_height": 1.5,
         },
         "NH3": {
             "species": ["N", "H", "H", "H"],
             "coords": [[0.0, 0.0, 0.0], [0.94, 0.0, 0.38], [-0.47, 0.81, 0.38], [-0.47, -0.81, 0.38]],
+            "bonds": [normalize_bond(0, 1, 1), normalize_bond(0, 2, 1), normalize_bond(0, 3, 1)],
             "anchor_index": 0,
             "default_height": 1.9,
         },
         "CH4": {
             "species": ["C", "H", "H", "H", "H"],
             "coords": [[0.0, 0.0, 0.0], [0.63, 0.63, 0.63], [-0.63, -0.63, 0.63], [-0.63, 0.63, -0.63], [0.63, -0.63, -0.63]],
+            "bonds": [normalize_bond(0, 1, 1), normalize_bond(0, 2, 1), normalize_bond(0, 3, 1), normalize_bond(0, 4, 1)],
             "anchor_index": 0,
             "default_height": 2.0,
         },
@@ -892,7 +951,61 @@ def build_molecule(formula: str) -> Molecule:
             + ", ".join(sorted(common_mols.keys()))
         )
 
-    return Molecule(spec["species"], spec["coords"])
+    return MoleculeRecord(
+        molecule=Molecule(spec["species"], spec["coords"]),
+        formula=canonical,
+        bonds=spec["bonds"],
+        source="fallback",
+        source_label="Builtin deterministic molecule template",
+        identifier=canonical,
+        name=canonical,
+        anchor_index=int(spec.get("anchor_index", 0)),
+        default_height=float(spec.get("default_height", 2.0)),
+    )
+
+def infer_bonds_for_molecule(molecule: Molecule) -> List[Dict[str, Any]]:
+    try:
+        covalent_bonds = molecule.get_covalent_bonds()
+    except Exception:
+        return []
+
+    site_index: Dict[int, int] = {id(site): idx for idx, site in enumerate(molecule.sites)}
+    bonds: List[Dict[str, Any]] = []
+    for bond in covalent_bonds:
+        idx_a = site_index.get(id(bond.site1))
+        idx_b = site_index.get(id(bond.site2))
+        if idx_a is None or idx_b is None:
+            continue
+        bonds.append(normalize_bond(idx_a, idx_b, 1))
+    return bonds
+
+def build_molecule_record(formula: str) -> MoleculeRecord:
+    query = str(formula or '').strip()
+    canonical = canonicalize_molecule_query(query)
+
+    try:
+        library_record = LocalStructureLibrary().resolve_molecule(query)
+        if library_record:
+            if not library_record.bonds:
+                library_record.bonds = infer_bonds_for_molecule(library_record.molecule)
+            return library_record
+    except Exception as err:
+        sys.stderr.write(f"Local Structure Library molecule lookup failed for '{query}': {err}\n")
+
+    if canonical != query:
+        try:
+            library_record = LocalStructureLibrary().resolve_molecule(canonical)
+            if library_record:
+                if not library_record.bonds:
+                    library_record.bonds = infer_bonds_for_molecule(library_record.molecule)
+                return library_record
+        except Exception as err:
+            sys.stderr.write(f"Local Structure Library molecule lookup failed for '{canonical}': {err}\n")
+
+    return get_builtin_molecule_record(canonical)
+
+def build_molecule(formula: str) -> Molecule:
+    return build_molecule_record(formula).molecule
 
 def molecule_to_boxed_structure(molecule: Molecule, padding: float = 8.0) -> Structure:
     coords = np.array([site.coords for site in molecule.sites], dtype=float)
@@ -908,27 +1021,7 @@ def molecule_to_boxed_structure(molecule: Molecule, padding: float = 8.0) -> Str
     return Structure(Lattice.cubic(box_length), species, shifted.tolist(), coords_are_cartesian=True)
 
 def get_adsorbate_spec(formula: str) -> Dict[str, Any]:
-    raw_formula = str(formula or '').strip()
-    alias = raw_formula.replace(' ', '').lower()
-    alias_map = {
-        'co2': 'CO2',
-        'carbon dioxide': 'CO2',
-        'co': 'CO',
-        'carbon monoxide': 'CO',
-        'h2o': 'H2O',
-        'water': 'H2O',
-        'o2': 'O2',
-        'oxygen': 'O2',
-        'n2': 'N2',
-        'nitrogen': 'N2',
-        'h2': 'H2',
-        'hydrogen': 'H2',
-        'nh3': 'NH3',
-        'ammonia': 'NH3',
-        'ch4': 'CH4',
-        'methane': 'CH4',
-    }
-    canonical = alias_map.get(alias, raw_formula.replace(' ', ''))
+    canonical = canonicalize_molecule_query(formula)
     defaults = {
         "CO2": {"anchor_index": 0, "default_height": 2.1},
         "CO": {"anchor_index": 0, "default_height": 1.9},
@@ -1182,12 +1275,13 @@ def apply_vacancy_defect(
 def place_adsorbates_on_slab(
     slab: Structure,
     adsorbates: List[Dict[str, Any]]
-) -> Tuple[Structure, List[Dict[str, Any]]]:
+) -> Tuple[Structure, List[Dict[str, Any]], List[Dict[str, Any]]]:
     if not adsorbates:
-        return slab, []
+        return slab, [], []
 
     working = slab.copy()
     placements: List[Dict[str, Any]] = []
+    explicit_bonds: List[Dict[str, Any]] = []
 
     for adsorbate in adsorbates:
         formula_raw = str(adsorbate.get('formula') or '').strip()
@@ -1196,7 +1290,11 @@ def place_adsorbates_on_slab(
 
         try:
             spec = get_adsorbate_spec(formula_raw)
-            molecule = build_molecule(spec['formula'])
+            molecule_record = build_molecule_record(spec['formula'])
+            molecule = molecule_record.molecule
+            molecule_bonds = molecule_record.bonds
+            spec['anchor_index'] = molecule_record.anchor_index
+            spec['default_height'] = molecule_record.default_height
         except Exception as err:
             placements.append({
                 'formula': formula_raw,
@@ -1225,6 +1323,7 @@ def place_adsorbates_on_slab(
             shifted_coords[:, 2] += float(spec.get('default_height', 2.0))
             shifted_coords += point
 
+            atom_offset = len(working)
             for idx, site in enumerate(molecule.sites):
                 working.append(
                     site.specie.symbol,
@@ -1233,20 +1332,30 @@ def place_adsorbates_on_slab(
                     validate_proximity=False
                 )
 
+            for bond in molecule_bonds:
+                explicit_bonds.append({
+                    **bond,
+                    "from": int(bond.get("from", 0)) + atom_offset,
+                    "to": int(bond.get("to", 0)) + atom_offset,
+                    "source": "adsorbate",
+                    "formula": molecule_record.formula,
+                })
+
         placements.append({
             'formula': spec['formula'],
             'initialSite': site_kind,
             'count': count,
             'placedCount': len(anchor_points),
+            'bondSource': getattr(molecule_record, 'source_label', None),
         })
 
-    return working, placements
+    return working, placements, explicit_bonds
 
 # -----------------------------------------------------------------------------
 # 4. Export & Formatting (Layer 5)
 # -----------------------------------------------------------------------------
 
-def structure_to_render_data(struct: Structure) -> dict:
+def structure_to_render_data(struct: Structure, explicit_bonds: Optional[List[Dict[str, Any]]] = None) -> dict:
     """Convert Pymatgen Structure to frontend JSON format."""
     # Lattice vectors
     matrix = struct.lattice.matrix.tolist()
@@ -1263,9 +1372,37 @@ def structure_to_render_data(struct: Structure) -> dict:
             },
             "index": i
         })
-        
+
+    bonds_data: List[Dict[str, Any]] = []
+    for idx, bond in enumerate(explicit_bonds or []):
+        try:
+            atom_a = int(bond.get("from", bond.get("atom1", 0)))
+            atom_b = int(bond.get("to", bond.get("atom2", 0)))
+        except Exception:
+            continue
+        if atom_a < 0 or atom_b < 0 or atom_a >= len(struct) or atom_b >= len(struct) or atom_a == atom_b:
+            continue
+        order = bond.get("order", 1)
+        try:
+            order_int = max(1, min(3, int(round(float(order)))))
+        except Exception:
+            order_int = 1
+        length = float(np.linalg.norm(np.array(struct[atom_a].coords) - np.array(struct[atom_b].coords)))
+        bonds_data.append({
+            "id": bond.get("id") or f"bond-{idx}",
+            "atom1Id": f"atom-{atom_a}",
+            "atom2Id": f"atom-{atom_b}",
+            "from": atom_a,
+            "to": atom_b,
+            "order": order_int,
+            "type": bond.get("type") or bond_order_to_type(order_int),
+            "length": length,
+            "source": bond.get("source") or "explicit",
+        })
+
     return {
         "atoms": atoms_data,
+        "bonds": bonds_data,
         "latticeVectors": matrix,
         "totalAtoms": len(atoms_data),
         "formula": struct.composition.reduced_formula
@@ -1396,8 +1533,9 @@ def process_request(intent: dict) -> dict:
             )
 
         placement_meta = []
+        explicit_bonds: List[Dict[str, Any]] = []
         if intent.get('adsorbates'):
-            slab, placement_meta = place_adsorbates_on_slab(
+            slab, placement_meta, explicit_bonds = place_adsorbates_on_slab(
                 slab,
                 intent.get('adsorbates', [])
             )
@@ -1407,7 +1545,7 @@ def process_request(intent: dict) -> dict:
             raise ValueError(f"Generated system is too large ({len(slab)} atoms). Please reduce supercell size.")
             
         # 4. Prepare Output
-        render_data = structure_to_render_data(slab)
+        render_data = structure_to_render_data(slab, explicit_bonds=explicit_bonds)
         exports = generate_exports(slab)
         
         return {
@@ -1420,6 +1558,9 @@ def process_request(intent: dict) -> dict:
                 "hkl": miller_index,
                 "databaseSource": source_meta.get('database_source'),
                 "databaseSourceLabel": source_meta.get('database_source_label'),
+                "identifier": source_meta.get('identifier'),
+                "structureName": source_meta.get('name'),
+                "structurePath": source_meta.get('path'),
                 "providersTried": source_meta.get('providers_tried', []),
                 "providerPreferences": provider_preferences,
                 "doping": doping_meta,
@@ -1477,6 +1618,9 @@ def process_request(intent: dict) -> dict:
                 "system": "bulk",
                 "databaseSource": source_meta.get('database_source'),
                 "databaseSourceLabel": source_meta.get('database_source_label'),
+                "identifier": source_meta.get('identifier'),
+                "structureName": source_meta.get('name'),
+                "structurePath": source_meta.get('path'),
                 "providersTried": source_meta.get('providers_tried', []),
                 "providerPreferences": provider_preferences,
                 "doping": doping_meta,
@@ -1494,25 +1638,27 @@ def process_request(intent: dict) -> dict:
             or 'H2O'
         )
         try:
-            molecule = build_molecule(str(formula))
+            molecule_record = build_molecule_record(str(formula))
         except Exception:
             formula = 'H2O'
-            molecule = build_molecule(formula)
+            molecule_record = build_molecule_record(formula)
 
-        boxed = molecule_to_boxed_structure(molecule)
-        render_data = structure_to_render_data(boxed)
+        boxed = molecule_to_boxed_structure(molecule_record.molecule)
+        render_data = structure_to_render_data(boxed, explicit_bonds=molecule_record.bonds)
         exports = generate_exports(boxed)
         return {
             "success": True,
             "data": render_data,
             "exports": exports,
             "meta": {
-                "formula": render_data.get("formula") or formula,
+                "formula": molecule_record.formula or render_data.get("formula") or formula,
                 "system": "molecule",
-                "databaseSource": "fallback",
-                "databaseSourceLabel": "Fallback",
-                "providersTried": ["fallback"],
+                "databaseSource": molecule_record.source,
+                "databaseSourceLabel": molecule_record.source_label,
+                "providersTried": [molecule_record.source],
                 "providerPreferences": provider_preferences,
+                "identifier": molecule_record.identifier,
+                "name": molecule_record.name,
             }
         }
 

@@ -1,4 +1,5 @@
 const DEFAULT_MODELING_PROVIDER_ORDER = [
+  'local_structure',
   'materials_project',
   'atomly',
   'csd',
@@ -8,6 +9,7 @@ const DEFAULT_MODELING_PROVIDER_ORDER = [
 ];
 
 const MODELING_PROVIDER_LABELS = {
+  local_structure: 'Local Structure Library',
   materials_project: 'Materials Project',
   atomly: 'Atomly',
   csd: 'CSD',
@@ -17,6 +19,16 @@ const MODELING_PROVIDER_LABELS = {
 };
 
 const MODELING_PROVIDER_ALIASES = {
+  local: 'local_structure',
+  local_structure: 'local_structure',
+  'local-structure': 'local_structure',
+  'local structure': 'local_structure',
+  structure_library: 'local_structure',
+  'structure-library': 'local_structure',
+  pubchem: 'local_structure',
+  pubchem3d: 'local_structure',
+  cod: 'local_structure',
+  jarvis: 'local_structure',
   mp: 'materials_project',
   materialsproject: 'materials_project',
   materials_project: 'materials_project',
@@ -71,8 +83,22 @@ function normalizeModelingProviderPreferences(value) {
 }
 
 function buildModelingProviderAvailability() {
+  const path = require('path');
+  const fs = require('fs');
+  const structureLibraryDir = process.env.STRUCTURE_LIBRARY_DIR
+    || path.join(__dirname, '../../data/structure-libraries');
+  const structureLibraryIndex = process.env.STRUCTURE_LIBRARY_INDEX
+    || path.join(structureLibraryDir, 'index.sqlite');
+
   return DEFAULT_MODELING_PROVIDER_ORDER.map((provider) => {
     switch (provider) {
+      case 'local_structure':
+        return {
+          provider,
+          label: MODELING_PROVIDER_LABELS[provider],
+          configured: fs.existsSync(structureLibraryIndex) || fs.existsSync(structureLibraryDir),
+          mode: fs.existsSync(structureLibraryIndex) ? 'indexed_local_data' : 'local_files_optional',
+        };
       case 'materials_project':
         return {
           provider,

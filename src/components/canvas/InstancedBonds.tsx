@@ -17,6 +17,12 @@ const end = new THREE.Vector3();
 const mid = new THREE.Vector3();
 const diff = new THREE.Vector3();
 const up = new THREE.Vector3(0, 1, 0);
+const xAxis = new THREE.Vector3(1, 0, 0);
+const baseStart = new THREE.Vector3();
+const baseEnd = new THREE.Vector3();
+const strandStart = new THREE.Vector3();
+const strandEnd = new THREE.Vector3();
+const side = new THREE.Vector3();
 const dummy = new THREE.Object3D();
 const colorObj = new THREE.Color();
 const rotation = new THREE.Quaternion();
@@ -36,11 +42,42 @@ export const InstancedBonds: React.FC<InstancedBondsProps> = ({ atoms, onBondCli
 
   const bondsData = useMemo(() => {
     if (!showBonds) return [];
-    if (!molecularData || styleConfig.bondRules.length === 0 || atoms.length === 0) return [];
+    if (!molecularData || atoms.length === 0) return [];
     if (atoms.length > 50000) {
         console.warn("Too many atoms, auto-disabling bond calculation to prevent crash.");
         return [];
     }
+
+    const explicitBonds = Array.isArray(molecularData.bonds) ? molecularData.bonds : [];
+    if (explicitBonds.length > 0) {
+        const atomIndexById = new Map(atoms.map((atom, idx) => [atom.id, idx]));
+        return explicitBonds
+            .map((bond) => {
+                const idxA = atomIndexById.get(bond.atom1Id);
+                const idxB = atomIndexById.get(bond.atom2Id);
+                if (idxA === undefined || idxB === undefined || idxA === idxB) return null;
+                const atomA = atoms[idxA];
+                const atomB = atoms[idxB];
+                const parsedOrder = Number(bond.order);
+                const order = Number.isFinite(parsedOrder)
+                    ? Math.max(1, Math.min(3, Math.round(parsedOrder)))
+                    : (bond.type === 'triple' ? 3 : (bond.type === 'double' ? 2 : 1));
+                return {
+                    idxA,
+                    idxB,
+                    colorA: styleConfig.customColors[atomA.element] || atomA.color,
+                    colorB: styleConfig.customColors[atomB.element] || atomB.color,
+                    isPBCBond: false,
+                    pbcEndBx: atomB.position.x,
+                    pbcEndBy: atomB.position.y,
+                    pbcEndBz: atomB.position.z,
+                    order,
+                };
+            })
+            .filter((bond): bond is NonNullable<typeof bond> => Boolean(bond));
+    }
+
+    if (styleConfig.bondRules.length === 0) return [];
     
     const usePBC = styleConfig.usePBC && molecularData.latticeVectors && molecularData.latticeVectors.length === 3;
     
@@ -97,6 +134,7 @@ export const InstancedBonds: React.FC<InstancedBondsProps> = ({ atoms, onBondCli
       // endBx/y/z = position of atom B corrected by minimum image (may differ from atom B's actual position)
       isPBCBond: boolean;
       pbcEndBx: number; pbcEndBy: number; pbcEndBz: number;
+      order: number;
     }> = [];
 
     const count = atoms.length;
@@ -225,6 +263,7 @@ export const InstancedBonds: React.FC<InstancedBondsProps> = ({ atoms, onBondCli
                         pbcEndBx,
                         pbcEndBy,
                         pbcEndBz,
+                        order: 1,
                     });
                     if (computedBonds.length >= MAX_BONDS) return computedBonds;
                 }
@@ -282,6 +321,7 @@ export const InstancedBonds: React.FC<InstancedBondsProps> = ({ atoms, onBondCli
                                     colorB: styleConfig.customColors[atomB.element] || atomB.color,
                                     isPBCBond,
                                     pbcEndBx, pbcEndBy, pbcEndBz,
+                                    order: 1,
                                 });
                                 if (computedBonds.length >= MAX_BONDS) return computedBonds;
                             }
@@ -340,6 +380,7 @@ export const InstancedBonds: React.FC<InstancedBondsProps> = ({ atoms, onBondCli
                                     colorB: styleConfig.customColors[atomB.element] || atomB.color,
                                     isPBCBond: true,
                                     pbcEndBx, pbcEndBy, pbcEndBz,
+                                    order: 1,
                                 });
                                 if (computedBonds.length >= MAX_BONDS) return computedBonds;
                             }
@@ -354,9 +395,13 @@ export const InstancedBonds: React.FC<InstancedBondsProps> = ({ atoms, onBondCli
 
   const instanceCapacity = useMemo(() => {
     if (!showBonds) return 1;
-    const desired = Math.max(1, Math.min(MAX_BONDS, bondsData.length * 2));
+    const strandCount = bondsData.reduce((total, bond) => {
+      const order = Math.max(1, Math.min(3, Math.round(Number(bond.order) || 1)));
+      return total + order;
+    }, 0);
+    const desired = Math.max(1, Math.min(MAX_BONDS, strandCount * 2));
     return Math.max(1, desired);
-  }, [showBonds, bondsData.length]);
+  }, [showBonds, bondsData]);
 
   const activeStyle = (materialStyle === 'vesta' || materialStyle === 'stick') ? materialStyle : 'preview';
 
@@ -379,47 +424,59 @@ export const InstancedBonds: React.FC<InstancedBondsProps> = ({ atoms, onBondCli
     };
 
     for (let i = 0; i < bondsData.length; i++) {
-      if (instanceCount + 2 >= instanceCapacity) break;
       const bond = bondsData[i];
       const { idxA, idxB, colorA, colorB, isPBCBond, pbcEndBx, pbcEndBy, pbcEndBz } = bond;
       
-      getPos(idxA, start);
+      getPos(idxA, baseStart);
       
       if (isPBCBond) {
         // For PBC bonds, use the minimum-image corrected position for atom B
-        end.set(pbcEndBx, pbcEndBy, pbcEndBz);
+        baseEnd.set(pbcEndBx, pbcEndBy, pbcEndBz);
       } else {
-        getPos(idxB, end);
+        getPos(idxB, baseEnd);
       }
       
-      if (isNaN(start.x) || isNaN(end.x)) continue;
-      const fullLen = start.distanceTo(end);
+      if (isNaN(baseStart.x) || isNaN(baseEnd.x)) continue;
+      const fullLen = baseStart.distanceTo(baseEnd);
       if (!Number.isFinite(fullLen) || fullLen <= 0.01) continue;
-      const halfLen = fullLen / 2;
+      const order = Math.max(1, Math.min(3, Math.round(Number(bond.order) || 1)));
+      const offsets = order === 1 ? [0] : (order === 2 ? [-0.6, 0.6] : [-0.9, 0, 0.9]);
+      const spacing = Math.max(bondRadius * 2.4, 0.08);
 
-      // Half bond from A toward B (color A)
-      diff.subVectors(end, start).normalize();
-      rotation.setFromUnitVectors(up, diff);
-      dummy.position.copy(start);
-      dummy.quaternion.copy(rotation);
-      dummy.scale.set(bondRadius, halfLen, bondRadius);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(instanceCount, dummy.matrix);
-      colorObj.set(colorA);
-      mesh.setColorAt(instanceCount, colorObj);
-      instanceCount++;
+      diff.subVectors(baseEnd, baseStart).normalize();
+      side.crossVectors(diff, Math.abs(diff.dot(up)) > 0.92 ? xAxis : up).normalize();
 
-      // Half bond from B toward A (color B)
-      diff.subVectors(start, end).normalize();
-      rotation.setFromUnitVectors(up, diff);
-      dummy.position.copy(end);
-      dummy.quaternion.copy(rotation);
-      dummy.scale.set(bondRadius, halfLen, bondRadius);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(instanceCount, dummy.matrix);
-      colorObj.set(colorB);
-      mesh.setColorAt(instanceCount, colorObj);
-      instanceCount++;
+      for (const offsetFactor of offsets) {
+        if (instanceCount + 2 > instanceCapacity) break;
+
+        strandStart.copy(baseStart).addScaledVector(side, offsetFactor * spacing);
+        strandEnd.copy(baseEnd).addScaledVector(side, offsetFactor * spacing);
+        const halfLen = strandStart.distanceTo(strandEnd) / 2;
+
+        // Half bond from A toward B (color A)
+        diff.subVectors(strandEnd, strandStart).normalize();
+        rotation.setFromUnitVectors(up, diff);
+        dummy.position.copy(strandStart);
+        dummy.quaternion.copy(rotation);
+        dummy.scale.set(bondRadius, halfLen, bondRadius);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(instanceCount, dummy.matrix);
+        colorObj.set(colorA);
+        mesh.setColorAt(instanceCount, colorObj);
+        instanceCount++;
+
+        // Half bond from B toward A (color B)
+        diff.subVectors(strandStart, strandEnd).normalize();
+        rotation.setFromUnitVectors(up, diff);
+        dummy.position.copy(strandEnd);
+        dummy.quaternion.copy(rotation);
+        dummy.scale.set(bondRadius, halfLen, bondRadius);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(instanceCount, dummy.matrix);
+        colorObj.set(colorB);
+        mesh.setColorAt(instanceCount, colorObj);
+        instanceCount++;
+      }
     }
 
     mesh.count = instanceCount;
@@ -446,9 +503,17 @@ export const InstancedBonds: React.FC<InstancedBondsProps> = ({ atoms, onBondCli
     if (!onBondClick) return;
     const instanceId = e.instanceId;
     if (instanceId === undefined || instanceId === null) return;
-    // Each bond uses 2 instances (half A and half B), so bond index = floor(instanceId / 2)
-    const bondIdx = Math.floor(instanceId / 2);
-    const bond = bondsData[bondIdx];
+    const strandPairIdx = Math.floor(instanceId / 2);
+    let bond = null as (typeof bondsData[number] | null);
+    let cursor = 0;
+    for (const candidate of bondsData) {
+      const order = Math.max(1, Math.min(3, Math.round(Number(candidate.order) || 1)));
+      if (strandPairIdx < cursor + order) {
+        bond = candidate;
+        break;
+      }
+      cursor += order;
+    }
     if (!bond) return;
     e.stopPropagation();
     const atomA = atoms[bond.idxA];
