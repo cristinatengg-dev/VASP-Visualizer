@@ -2036,30 +2036,80 @@ app.get('/api/materials/search', async (req, res) => {
     res.json({ success: true, formula, results });
 });
 
+const imageGenerationJobs = new Map();
+const IMAGE_GENERATION_JOB_TTL_MS = 30 * 60 * 1000;
+
+const scheduleImageGenerationJobCleanup = (jobId) => {
+    setTimeout(() => {
+        imageGenerationJobs.delete(jobId);
+    }, IMAGE_GENERATION_JOB_TTL_MS).unref?.();
+};
+
 // ── Route 2: POST /api/agent/generate-image ───────────────────────────────────
-// Phase 5: Generate HD images
+// Phase 5: Generate HD images. Runs as an async job to avoid gateway timeouts
+// while upstream image models are still rendering.
 app.post('/api/agent/generate-image', requireAgentAccess('cover'), async (req, res) => {
     const { prompt, numberOfImages = 1, aspectRatio = '9:16', strictNoText = false, strictChemistry = false, requiredSpecies = [], maxAttemptsPerImage = 2 } = req.body;
     if (!prompt || String(prompt).trim().length < 10) {
         return res.status(400).json({ success: false, error: 'Prompt too short' });
     }
 
-    try {
-        const images = await generateRenderingImages({
-            prompt,
-            numberOfImages,
-            aspectRatio,
-            strictNoText,
-            strictChemistry,
-            requiredSpecies,
-            maxAttemptsPerImage,
-        });
-        await recordAgentUsage(req.body?.userId, 'cover');
-        return res.json({ success: true, images });
-    } catch (err) {
-        console.error('[agent/generate-image]', err.message);
-        return res.status(500).json({ success: false, error: err.message });
+    const jobId = randomUUID();
+    const userId = req.body?.userId;
+    const job = {
+        id: jobId,
+        status: 'queued',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        images: null,
+        error: null,
+    };
+    imageGenerationJobs.set(jobId, job);
+    scheduleImageGenerationJobCleanup(jobId);
+
+    setImmediate(async () => {
+        job.status = 'running';
+        job.updatedAt = Date.now();
+        try {
+            const images = await generateRenderingImages({
+                prompt,
+                numberOfImages,
+                aspectRatio,
+                strictNoText,
+                strictChemistry,
+                requiredSpecies,
+                maxAttemptsPerImage,
+            });
+            await recordAgentUsage(userId, 'cover');
+            job.status = 'succeeded';
+            job.images = images;
+            job.updatedAt = Date.now();
+        } catch (err) {
+            console.error('[agent/generate-image]', err.message);
+            job.status = 'failed';
+            job.error = err.message;
+            job.updatedAt = Date.now();
+        }
+    });
+
+    return res.status(202).json({ success: true, jobId, status: job.status });
+});
+
+app.get('/api/agent/generate-image/:jobId', async (req, res) => {
+    const job = imageGenerationJobs.get(req.params.jobId);
+    if (!job) {
+        return res.status(404).json({ success: false, error: 'Image generation job not found or expired' });
     }
+
+    if (job.status === 'failed') {
+        return res.status(500).json({ success: false, jobId: job.id, status: job.status, error: job.error || 'Image generation failed' });
+    }
+
+    if (job.status === 'succeeded') {
+        return res.json({ success: true, jobId: job.id, status: job.status, images: job.images || [] });
+    }
+
+    return res.json({ success: true, jobId: job.id, status: job.status });
 });
 
 const imageEditJobs = new Map();

@@ -415,6 +415,23 @@ export const generateBaseImages = async (
   const baseUrl = API_BASE_URL.replace(/\/+$/, '');
   const endpoint = `${baseUrl}/agent/generate-image`;
   const safeRequiredSpecies = serializeRequiredSpecies(options.requiredSpecies);
+  const parseJsonResponse = async (response: Response, fallback: string) => {
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.error("Non-JSON response from server:", text.substring(0, 200));
+      if (response.status === 524) {
+        throw new Error('图像生成等待时间过长，网关已超时。系统已改为后台任务模式，请重新提交。');
+      }
+      throw new Error(`${fallback} (Status: ${response.status})`);
+    }
+  };
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  const extractValidImages = (images: unknown): string[] => {
+    if (!Array.isArray(images)) return [];
+    return images.filter((img): img is string => typeof img === 'string' && img.length > 100);
+  };
 
   let res: Response;
   try {
@@ -437,32 +454,53 @@ export const generateBaseImages = async (
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(humanizeRenderingApiError(`Request failed to ${endpoint}: ${msg}`, 'Image generation request failed'));
   }
-  
-  const text = await res.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch (e) {
-    console.error("Non-JSON response from server:", text.substring(0, 200));
-    throw new Error(`Invalid JSON response from server (Status: ${res.status})`);
-  }
+
+  const data = await parseJsonResponse(res, 'Invalid image generation response from server');
 
   if (!res.ok || !data.success) {
     throw new Error(humanizeRenderingApiError(data.error || `Image generation error ${res.status}`, 'Image generation failed'));
   }
 
-  // Ensure images array exists and contains valid data strings
-  if (!Array.isArray(data.images) || data.images.length === 0) {
-    throw new Error('Server returned success but no images were provided.');
+  const directImages = extractValidImages(data.images);
+  if (directImages.length > 0) {
+    return directImages;
   }
 
-  // Validate image format to prevent rendering empty boxes
-  const validImages = data.images.filter((img: any) => typeof img === 'string' && img.length > 100);
-  if (validImages.length === 0) {
-    throw new Error('Server returned images but they were empty or invalid format.');
+  if (typeof data.jobId !== 'string' || data.jobId.length < 10) {
+    throw new Error('Server accepted the generation request but did not return images or a job id.');
   }
 
-  return validImages as string[];
+  const statusEndpoint = `${endpoint}/${encodeURIComponent(data.jobId)}`;
+  const startedAt = Date.now();
+  const maxWaitMs = 8 * 60 * 1000;
+  let pollDelayMs = 1800;
+
+  while (Date.now() - startedAt < maxWaitMs) {
+    await sleep(pollDelayMs);
+    pollDelayMs = Math.min(5000, Math.round(pollDelayMs * 1.15));
+
+    let statusRes: Response;
+    try {
+      statusRes = await fetch(statusEndpoint, { method: 'GET' });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(humanizeRenderingApiError(`Request failed to ${statusEndpoint}: ${msg}`, 'Image generation status request failed'));
+    }
+
+    const statusData = await parseJsonResponse(statusRes, 'Invalid image generation status response from server');
+    if (!statusRes.ok || !statusData.success) {
+      throw new Error(humanizeRenderingApiError(statusData.error || `Image generation status error ${statusRes.status}`, 'Image generation failed'));
+    }
+    const statusImages = extractValidImages(statusData.images);
+    if (statusData.status === 'succeeded' && statusImages.length > 0) {
+      return statusImages;
+    }
+    if (statusData.status === 'failed') {
+      throw new Error(humanizeRenderingApiError(statusData.error || 'Image generation failed', 'Image generation failed'));
+    }
+  }
+
+  throw new Error('图像生成仍在处理中，但等待时间已超过 8 分钟。请稍后重试。');
 };
 
 export const editBaseImage = async (
