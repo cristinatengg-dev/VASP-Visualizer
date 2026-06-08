@@ -296,6 +296,16 @@ const StatusPill: React.FC<{ status: AgentStatus }> = ({ status }) => {
   );
 };
 
+const getSurfaceRoute = (agent: WorkspaceAgent, database: DatabaseAgent) => {
+  if (agent.id === 'database') return database.route || agent.route;
+  return agent.route;
+};
+
+const getSurfaceTitle = (agent: WorkspaceAgent, database: DatabaseAgent) => {
+  if (agent.id === 'database') return `${database.name} · Database Agent`;
+  return agent.name;
+};
+
 const AgentWorkspace: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useStore();
@@ -311,9 +321,37 @@ const AgentWorkspace: React.FC = () => {
     () => databaseAgents.find((db) => db.id === selectedDbId) || databaseAgents[0],
     [selectedDbId]
   );
+  const activeSurfaceRoute = getSurfaceRoute(selectedAgent, selectedDatabase);
+  const activeSurfaceTitle = getSurfaceTitle(selectedAgent, selectedDatabase);
+  const isEmbeddedSurface = selectedAgent.id !== 'orchestrator';
+
+  const activateAgent = (agentId: string) => {
+    setSelectedAgentId(agentId);
+  };
+
+  const handleNavItem = (itemId: string) => {
+    if (itemId === 'home') {
+      navigate('/');
+      return;
+    }
+    if (itemId === 'explore') {
+      navigate('/explore');
+      return;
+    }
+    const navAgentMap: Record<string, string> = {
+      agent: 'orchestrator',
+      experts: 'compute',
+      skills: 'modeling',
+      connectors: 'export',
+      library: 'database',
+      automation: 'export',
+    };
+    const nextAgentId = navAgentMap[itemId];
+    if (nextAgentId) activateAgent(nextAgentId);
+  };
 
   const openSelectedAgent = () => {
-    navigate(selectedAgent.route);
+    navigate(activeSurfaceRoute);
   };
 
   return (
@@ -344,6 +382,7 @@ const AgentWorkspace: React.FC = () => {
           <div className="flex-1 overflow-y-auto px-3 py-4 custom-scrollbar">
             <button
               type="button"
+              onClick={() => activateAgent('orchestrator')}
               className="mb-3 flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold shadow-sm transition hover:border-slate-300"
             >
               <MessageSquarePlus size={16} />
@@ -352,16 +391,18 @@ const AgentWorkspace: React.FC = () => {
             <nav className="space-y-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const active = item.id === 'agent';
+                const active =
+                  (item.id === 'agent' && selectedAgent.id === 'orchestrator') ||
+                  (item.id === 'experts' && selectedAgent.id === 'compute') ||
+                  (item.id === 'skills' && selectedAgent.id === 'modeling') ||
+                  (item.id === 'connectors' && selectedAgent.id === 'export') ||
+                  (item.id === 'library' && selectedAgent.id === 'database') ||
+                  (item.id === 'automation' && selectedAgent.id === 'export');
                 return (
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => {
-                      if (item.id === 'home') navigate('/');
-                      if (item.id === 'explore') navigate('/explore');
-                      if (item.id === 'library') navigate('/materials');
-                    }}
+                    onClick={() => handleNavItem(item.id)}
                     className={cx(
                       'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition',
                       active ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -444,17 +485,18 @@ const AgentWorkspace: React.FC = () => {
 
           <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px]">
             <section className="flex min-h-0 flex-col overflow-hidden">
-              <div className="grid shrink-0 gap-3 border-b border-slate-200 bg-white px-4 py-4 md:grid-cols-4 md:px-6">
-                {agents.slice(0, 4).map((agent) => {
+              <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 md:px-6">
+                <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar">
+                {agents.map((agent) => {
                   const Icon = agent.icon;
                   const active = selectedAgent.id === agent.id;
                   return (
                     <button
                       key={agent.id}
                       type="button"
-                      onClick={() => setSelectedAgentId(agent.id)}
+                      onClick={() => activateAgent(agent.id)}
                       className={cx(
-                        'min-h-[86px] rounded-lg border p-3 text-left transition',
+                        'min-h-[86px] w-[184px] shrink-0 rounded-lg border p-3 text-left transition',
                         active ? 'border-slate-900 bg-slate-900 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300'
                       )}
                     >
@@ -469,8 +511,58 @@ const AgentWorkspace: React.FC = () => {
                     </button>
                   );
                 })}
+                </div>
               </div>
 
+              {isEmbeddedSurface ? (
+                <div className="min-h-0 flex-1 bg-slate-100 p-3 md:p-4">
+                  <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <div className="flex h-12 shrink-0 items-center gap-3 border-b border-slate-200 px-4">
+                      <div className={cx('flex h-8 w-8 items-center justify-center rounded-md', selectedAgent.accent)}>
+                        <selectedAgent.icon size={16} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold">{activeSurfaceTitle}</p>
+                        <p className="truncate text-[11px] text-slate-400">{activeSurfaceRoute}</p>
+                      </div>
+                      <StatusPill status={selectedAgent.id === 'database' ? selectedDatabase.status : selectedAgent.status} />
+                      <button
+                        type="button"
+                        onClick={openSelectedAgent}
+                        className="hidden h-8 items-center gap-2 rounded-md border border-slate-200 px-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 sm:flex"
+                      >
+                        Full page
+                        <ArrowRight size={13} />
+                      </button>
+                    </div>
+                    <iframe
+                      key={activeSurfaceRoute}
+                      title={activeSurfaceTitle}
+                      src={activeSurfaceRoute}
+                      className="min-h-0 w-full flex-1 border-0 bg-white"
+                    />
+                    {selectedAgent.id === 'database' && (
+                      <div className="flex shrink-0 gap-2 overflow-x-auto border-t border-slate-200 bg-white px-3 py-2 custom-scrollbar xl:hidden">
+                        {databaseAgents.map((db) => (
+                          <button
+                            key={db.id}
+                            type="button"
+                            onClick={() => setSelectedDbId(db.id)}
+                            className={cx(
+                              'h-9 shrink-0 rounded-md border px-3 text-xs font-semibold transition',
+                              selectedDatabase.id === db.id
+                                ? 'border-slate-900 bg-slate-900 text-white'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                            )}
+                          >
+                            {db.shortName}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 custom-scrollbar md:px-6">
                 <div className="mx-auto max-w-4xl space-y-4">
                   <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -537,7 +629,7 @@ const AgentWorkspace: React.FC = () => {
                         <button
                           key={agent.id}
                           type="button"
-                          onClick={() => setSelectedAgentId(agent.id)}
+                          onClick={() => activateAgent(agent.id)}
                           className="rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-300"
                         >
                           <div className="flex items-center gap-2">
@@ -554,7 +646,9 @@ const AgentWorkspace: React.FC = () => {
                   </div>
                 </div>
               </div>
+              )}
 
+              {!isEmbeddedSurface && (
               <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-4 md:px-6">
                 <div className="mx-auto max-w-4xl rounded-lg border border-slate-200 bg-white shadow-sm">
                   <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
@@ -589,6 +683,7 @@ const AgentWorkspace: React.FC = () => {
                   </div>
                 </div>
               </div>
+              )}
             </section>
 
             <aside className="hidden min-h-0 border-l border-slate-200 bg-white xl:flex xl:flex-col">
@@ -670,10 +765,13 @@ const AgentWorkspace: React.FC = () => {
                   {selectedDatabase.route && (
                     <button
                       type="button"
-                      onClick={() => navigate(selectedDatabase.route as string)}
+                      onClick={() => {
+                        setSelectedAgentId('database');
+                        setSelectedDbId(selectedDatabase.id);
+                      }}
                       className="mt-4 flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:border-slate-300"
                     >
-                      Open source route
+                      Load in workspace
                       <ChevronRight size={14} />
                     </button>
                   )}
