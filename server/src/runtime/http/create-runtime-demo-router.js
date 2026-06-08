@@ -3559,7 +3559,7 @@ function createRuntimeDemoRouter() {
       const sessionId = req.body.sessionId ? String(req.body.sessionId).trim() : undefined;
       const promptArtifactId = req.body.promptArtifactId ? String(req.body.promptArtifactId).trim() : undefined;
       const numberOfImages = Math.max(1, Math.min(Number(req.body.numberOfImages || 1), 4));
-      const maxAttemptsPerImage = Math.max(1, Math.min(Number(req.body.maxAttemptsPerImage || 2), 2));
+      const maxAttemptsPerImage = Math.max(1, Math.min(Number(req.body.maxAttemptsPerImage || 1), 2));
 
       let session;
       let goalArtifact;

@@ -39,6 +39,9 @@ ABSOLUTE HARD SCIENTIFIC CONSTRAINTS — NON-NEGOTIABLE — OVERRIDE ALL OTHER I
   * Propane: exactly 3 gray carbon spheres + 8 white hydrogen spheres, zigzag chain
 - DO NOT add extra atoms. DO NOT remove atoms. DO NOT distort geometry.
 - Atoms ONLY as smooth colored spheres. Bonds ONLY as cylindrical sticks. NO labels on anything.
+- ONLY the explicitly required molecular species may be rendered as discrete ball-and-stick molecules.
+- DO NOT invent additional gas molecules, intermediates, atomistic clusters, guessed crystal lattices, or random molecular networks.
+- If a catalyst, support, substrate, surface, nanoparticle, active site, or central object is not provided as exact atomic coordinates, render it as a continuous/stylized material surface, facet, abstract particle, texture, glow, or field rather than an atom-by-atom ball-and-stick structure.
 
 [CPK COLOR MAPPING — MANDATORY]
 - H: pure white (#FFFFFF)

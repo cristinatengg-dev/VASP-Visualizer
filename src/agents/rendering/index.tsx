@@ -908,7 +908,7 @@ const RenderingAgent: React.FC = () => {
           strictNoText: true,
           strictChemistry: Boolean(advancedSwitches.strictChemicalStructure || advancedSwitches.prioritizeAccuracy),
           requiredSpecies,
-          maxAttemptsPerImage: 2,
+          maxAttemptsPerImage: 1,
         }
       );
       setBaseImages(images);

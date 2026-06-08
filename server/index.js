@@ -2049,7 +2049,7 @@ const scheduleImageGenerationJobCleanup = (jobId) => {
 // Phase 5: Generate HD images. Runs as an async job to avoid gateway timeouts
 // while upstream image models are still rendering.
 app.post('/api/agent/generate-image', requireAgentAccess('cover'), async (req, res) => {
-    const { prompt, numberOfImages = 1, aspectRatio = '9:16', strictNoText = false, strictChemistry = false, requiredSpecies = [], maxAttemptsPerImage = 2 } = req.body;
+    const { prompt, numberOfImages = 1, aspectRatio = '9:16', strictNoText = false, strictChemistry = false, requiredSpecies = [], maxAttemptsPerImage = 1 } = req.body;
     if (!prompt || String(prompt).trim().length < 10) {
         return res.status(400).json({ success: false, error: 'Prompt too short' });
     }

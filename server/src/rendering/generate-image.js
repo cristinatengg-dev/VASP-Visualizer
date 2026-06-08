@@ -397,6 +397,9 @@ CRITICAL: ABSOLUTELY NO TEXT OR GLYPHS of any kind.
 CRITICAL: Represent atoms ONLY as spheres (CPK colors) and bonds ONLY as sticks; molecules must be unlabeled.
 CRITICAL: Chemical correctness: do not add/remove atoms; do not change carbon counts; bond orders and connectivity must match exactly.
 CRITICAL: If any text would appear, remove it completely and keep only unlabeled atoms/bonds.
+CRITICAL: Verified-structure-only rule: ONLY the required molecular structures listed below may be rendered as discrete ball-and-stick molecules. Do NOT invent extra gas molecules, intermediates, clusters, crystal lattices, or atomistic support structures.
+CRITICAL: If a catalyst, support, substrate, surface, active site, nanoparticle, or central object does not have explicit atomic coordinates in the prompt, render it as a smooth/stylized material surface, abstract particle, texture, glow, or field. Do NOT turn it into a guessed atom-by-atom lattice or random molecular network.
+CRITICAL: For unverified supports/backgrounds, avoid close-up atomistic ball-and-stick rendering. Use continuous metallic/oxide/carbon surfaces, gradients, facets, or non-atomistic textures instead.
 
 Required molecular structures (must match exactly):
 ${speciesConstraints.length ? speciesConstraints.map((line) => `- ${line}`).join('\n') : '- none'}
@@ -753,7 +756,7 @@ async function generateRenderingImages({
   strictNoText = false,
   strictChemistry = false,
   requiredSpecies = [],
-  maxAttemptsPerImage = 2,
+  maxAttemptsPerImage = 1,
 }) {
   const normalizedPrompt = String(prompt || '').trim();
   if (normalizedPrompt.length < 10) {
@@ -765,14 +768,20 @@ async function generateRenderingImages({
   }
 
   const targetCount = Math.max(1, Math.min(Number(numberOfImages || 1), 4));
-  const attempts = Math.max(1, Math.min(Number(maxAttemptsPerImage || 2), 2));
+  const attempts = Math.max(1, Math.min(Number(maxAttemptsPerImage || 1), 2));
+  const normalizedSpecies = Array.isArray(requiredSpecies) ? requiredSpecies : [];
+  const imagePrompt = buildImagePrompt({
+    prompt: normalizedPrompt,
+    aspectRatio,
+    requiredSpecies: normalizedSpecies,
+  });
 
   const tasks = Array.from({ length: targetCount }, () => generateOneRenderingImage({
-    imagePrompt: normalizedPrompt,
+    imagePrompt,
     aspectRatio,
     strictNoText: Boolean(strictNoText),
     strictChemistry: Boolean(strictChemistry),
-    requiredSpecies: Array.isArray(requiredSpecies) ? requiredSpecies : [],
+    requiredSpecies: normalizedSpecies,
     maxAttemptsPerImage: attempts,
   }));
 

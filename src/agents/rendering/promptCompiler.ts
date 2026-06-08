@@ -117,6 +117,9 @@ const formatChemicalSpeciesNoFormula = (species: ChemicalSpecies[]): string => {
     .join('; ');
 };
 
+const VERIFIED_STRUCTURE_ONLY_RULE =
+  'Verified-structure-only rule: only the required species listed in this prompt may be rendered as discrete ball-and-stick molecules. Do not invent extra gas molecules, intermediates, random clusters, guessed crystal lattices, or atomistic support networks. If the catalyst, support, substrate, surface, active site, nanoparticle, or central object is not supplied as exact atomic coordinates, render it as a smooth/stylized material surface, abstract particle, texture, glow, facet, or field instead of an atom-by-atom lattice.';
+
 // ─── Output Size Formatter ────────────────────────────────────────────────────
 
 const formatOutputConstraints = (outputParams: OutputParams): string => {
@@ -181,10 +184,10 @@ export const compilePlanAPrompt = (
     && science.support_or_substrate.trim().length > 0;
 
   const substrateDescription = hasExplicitSubstrate
-    ? `Support/substrate: ${science.support_or_substrate}.`
+    ? `Support/substrate: ${science.support_or_substrate}. Unless exact atomic coordinates are supplied, show it as a continuous/stylized material surface or crystalline texture, NOT a guessed atomistic ball-and-stick lattice.`
     : `Support/substrate: Render as an abstract artistic surface — use gradient color fields, soft glow layers, crystalline textures, or flowing energy surfaces rather than explicit molecular ball-and-stick structures. The substrate should serve as an aesthetic background or platform, NOT as a specific molecular structure. Think of it as an artistic impression of a surface: smooth metallic gradients, luminous planes, fractal crystal patterns, or wave-like energy fields.`;
 
-  const coreScientificStructure = `Core entity: ${science.central_object}. ${substrateDescription} Active site: ${science.active_site || 'none specified'}. Environment: ${science.environment}.`;
+  const coreScientificStructure = `Core entity: ${science.central_object}. ${substrateDescription} Active site: ${science.active_site || 'none specified'}. Environment: ${science.environment}. ${VERIFIED_STRUCTURE_ONLY_RULE}`;
 
   // ── Slot 4: Specific Event / Mechanism
   const specificEvent = `Key mechanism: ${science.key_mechanism}. Visual keywords that must appear: ${science.visual_keywords.join(', ')}.`;
@@ -200,15 +203,15 @@ export const compilePlanAPrompt = (
 
   // ── Slot 6: Mandatory Chemical Species
   const mandatoryChemicalSpecies = allSpecies.length > 0
-    ? `All of the following chemical species MUST appear and be chemically accurate: ${strictMode ? formatChemicalSpeciesNoFormula(allSpecies) : formatChemicalSpecies(allSpecies)}. Must-show elements: ${science.must_show_elements.join(', ')}.`
+    ? `All of the following chemical species MUST appear and be chemically accurate: ${strictMode ? formatChemicalSpeciesNoFormula(allSpecies) : formatChemicalSpecies(allSpecies)}. These listed species are the ONLY discrete ball-and-stick molecules allowed in the image. Do not add unlisted molecules or extra atoms. Must-show elements: ${science.must_show_elements.join(', ')}.`
     : science.must_show_elements.length > 0
       ? `Key elements to include: ${science.must_show_elements.join(', ')}.`
       : 'Render core scientific entities with maximum structural accuracy.';
 
   // ── Slot 7: Scientific Accuracy Constraints
   const scientificAccuracyConstraints = strictMode
-    ? `STRICT MODE: All molecular structures must be chemically valid. Atom counts, bond topology, bond types (single/double/triple), and molecular geometry MUST be correct. CPK color system required: C=gray, O=red, H=white, N=blue, S=yellow. Forbidden: ${science.forbidden_elements.join(', ') || 'no extra clutter'}.`
-    : `Render chemical species with correct atom counts and standard CPK coloring. Avoid impossible bond arrangements. Forbidden: ${science.forbidden_elements.join(', ') || 'no extra clutter'}.`;
+    ? `STRICT MODE: All molecular structures must be chemically valid. Atom counts, bond topology, bond types (single/double/triple), and molecular geometry MUST be correct. CPK color system required: C=gray, O=red, H=white, N=blue, S=yellow. ${VERIFIED_STRUCTURE_ONLY_RULE} Forbidden: ${science.forbidden_elements.join(', ') || 'no extra clutter'}.`
+    : `Render chemical species with correct atom counts and standard CPK coloring. Avoid impossible bond arrangements. ${VERIFIED_STRUCTURE_ONLY_RULE} Forbidden: ${science.forbidden_elements.join(', ') || 'no extra clutter'}.`;
 
   // ── Slot 8: Reduced Clutter
   const reducedClutter = `CRITICAL: The image must contain ABSOLUTELY ZERO TEXT of any kind — no letters, no numbers, no element symbols, no chemical formulas, no labels, no annotations, no arrows, no diagrams. SPECIFICALLY FORBIDDEN: atom labels like "Ru1", "N1", "C2", "O3", or ANY element symbol printed on atom spheres — atoms must be PURE blank colored spheres distinguished ONLY by CPK color. Keep the image clean and focused. No irrelevant background objects. Forbidden visual elements: ${science.forbidden_elements.join(', ') || 'none specified'}, text, labels, atom indices, element symbols on atoms, annotations, arrows, numbers, letters, chemical notation. The image must be 100% text-free.`;
