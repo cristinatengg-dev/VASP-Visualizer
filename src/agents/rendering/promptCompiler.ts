@@ -120,6 +120,37 @@ const formatChemicalSpeciesNoFormula = (species: ChemicalSpecies[]): string => {
 const VERIFIED_STRUCTURE_ONLY_RULE =
   'Verified-structure-only rule: only the required species listed in this prompt may be rendered as discrete ball-and-stick molecules. Do not invent extra gas molecules, intermediates, random clusters, guessed crystal lattices, or atomistic support networks. If the catalyst, support, substrate, surface, active site, nanoparticle, or central object is not supplied as exact atomic coordinates, render it as a smooth/stylized material surface, abstract particle, texture, glow, facet, or field instead of an atom-by-atom lattice.';
 
+const formatSpeciesIsolationRule = (species: ChemicalSpecies[]): string => {
+  const formulas = Array.from(new Set(
+    species
+      .map((s) => String(s.formula_en || '').trim())
+      .filter(Boolean)
+  ));
+  const lower = new Set(formulas.map((formula) => formula.toLowerCase()));
+  const forbidden = [
+    'any unlisted reaction intermediate',
+    'any fused or hybrid molecule made by bonding atoms from two listed species together',
+  ];
+
+  if (lower.has('co2') && (lower.has('h2') || lower.has('h') || lower.has('h2o'))) {
+    forbidden.push('CO2H');
+    forbidden.push('COOH');
+    forbidden.push('HCOO');
+    forbidden.push('HCOOH');
+    forbidden.push('HOCO');
+    forbidden.push('any carboxyl, formate, formic-acid, bicarbonate, or hydrogenated-CO2 motif unless explicitly listed as a required species');
+  }
+
+  if (lower.has('co') && (lower.has('h2') || lower.has('h'))) {
+    forbidden.push('HCO');
+    forbidden.push('HCOH');
+    forbidden.push('any hydrogenated-CO motif unless explicitly listed as a required species');
+  }
+
+  const allowed = formulas.length ? formulas.join(', ') : 'only the explicitly listed species';
+  return `Species isolation rule: allowed molecular identities are ${allowed}. These formula names are internal constraints only and must NOT be rendered as text. Each required species must remain a separate molecular object unless the exact combined product/intermediate is explicitly listed as its own required species. Never draw a new bond between atoms that belong to two different required species. Keep separate gas-phase molecules visually separated by clear empty space. Forbidden molecular identity changes: ${forbidden.join('; ')}. If a reaction would imply a transition state or intermediate, show it with abstract light/energy only, not by inventing a new ball-and-stick molecule.`;
+};
+
 // ─── Output Size Formatter ────────────────────────────────────────────────────
 
 const formatOutputConstraints = (outputParams: OutputParams): string => {
@@ -200,18 +231,19 @@ export const compilePlanAPrompt = (
   const spatialDepthLayers = `Foreground: close-up of ${science.central_object} with maximum structural detail. Mid-ground: ${science.environment} context and supporting elements. ${backgroundLayer}`;
 
   const strictMode = switches.strictChemicalStructure || switches.prioritizeAccuracy;
+  const speciesIsolationRule = formatSpeciesIsolationRule(allSpecies);
 
   // ── Slot 6: Mandatory Chemical Species
   const mandatoryChemicalSpecies = allSpecies.length > 0
-    ? `All of the following chemical species MUST appear and be chemically accurate: ${strictMode ? formatChemicalSpeciesNoFormula(allSpecies) : formatChemicalSpecies(allSpecies)}. These listed species are the ONLY discrete ball-and-stick molecules allowed in the image. Do not add unlisted molecules or extra atoms. Must-show elements: ${science.must_show_elements.join(', ')}.`
+    ? `All of the following chemical species MUST appear and be chemically accurate: ${strictMode ? formatChemicalSpeciesNoFormula(allSpecies) : formatChemicalSpecies(allSpecies)}. These listed species are the ONLY discrete ball-and-stick molecules allowed in the image. Do not add unlisted molecules or extra atoms. ${speciesIsolationRule} Must-show elements: ${science.must_show_elements.join(', ')}.`
     : science.must_show_elements.length > 0
       ? `Key elements to include: ${science.must_show_elements.join(', ')}.`
       : 'Render core scientific entities with maximum structural accuracy.';
 
   // ── Slot 7: Scientific Accuracy Constraints
   const scientificAccuracyConstraints = strictMode
-    ? `STRICT MODE: All molecular structures must be chemically valid. Atom counts, bond topology, bond types (single/double/triple), and molecular geometry MUST be correct. CPK color system required: C=gray, O=red, H=white, N=blue, S=yellow. ${VERIFIED_STRUCTURE_ONLY_RULE} Forbidden: ${science.forbidden_elements.join(', ') || 'no extra clutter'}.`
-    : `Render chemical species with correct atom counts and standard CPK coloring. Avoid impossible bond arrangements. ${VERIFIED_STRUCTURE_ONLY_RULE} Forbidden: ${science.forbidden_elements.join(', ') || 'no extra clutter'}.`;
+    ? `STRICT MODE: All molecular structures must be chemically valid. Atom counts, bond topology, bond types (single/double/triple), and molecular geometry MUST be correct. CPK color system required: C=gray, O=red, H=white, N=blue, S=yellow. ${VERIFIED_STRUCTURE_ONLY_RULE} ${speciesIsolationRule} Forbidden: ${science.forbidden_elements.join(', ') || 'no extra clutter'}.`
+    : `Render chemical species with correct atom counts and standard CPK coloring. Avoid impossible bond arrangements. ${VERIFIED_STRUCTURE_ONLY_RULE} ${speciesIsolationRule} Forbidden: ${science.forbidden_elements.join(', ') || 'no extra clutter'}.`;
 
   // ── Slot 8: Reduced Clutter
   const reducedClutter = `CRITICAL: The image must contain ABSOLUTELY ZERO TEXT of any kind — no letters, no numbers, no element symbols, no chemical formulas, no labels, no annotations, no arrows, no diagrams. SPECIFICALLY FORBIDDEN: atom labels like "Ru1", "N1", "C2", "O3", or ANY element symbol printed on atom spheres — atoms must be PURE blank colored spheres distinguished ONLY by CPK color. Keep the image clean and focused. No irrelevant background objects. Forbidden visual elements: ${science.forbidden_elements.join(', ') || 'none specified'}, text, labels, atom indices, element symbols on atoms, annotations, arrows, numbers, letters, chemical notation. The image must be 100% text-free.`;

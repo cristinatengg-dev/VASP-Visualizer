@@ -185,6 +185,53 @@ function speciesToConstraint(species) {
   return `${role ? `[${role}] ` : ''}${base}`;
 }
 
+function requiredSpeciesFormulas(requiredSpecies) {
+  const formulas = [];
+  for (const species of Array.isArray(requiredSpecies) ? requiredSpecies : []) {
+    const formula = String(species?.formula_en || '').trim();
+    if (formula && !formulas.includes(formula)) {
+      formulas.push(formula);
+    }
+  }
+  return formulas;
+}
+
+function buildSpeciesIsolationRules(requiredSpecies) {
+  const formulas = requiredSpeciesFormulas(requiredSpecies);
+  const hasFormula = (formula) => formulas.some((candidate) => candidate.toLowerCase() === formula.toLowerCase());
+  const forbidden = [
+    'any unlisted reaction intermediate',
+    'any fused or hybrid molecule made by bonding atoms from two listed species together',
+  ];
+
+  if (hasFormula('CO2') && (hasFormula('H2') || hasFormula('H') || hasFormula('H2O'))) {
+    forbidden.push('CO2H');
+    forbidden.push('COOH');
+    forbidden.push('HCOO');
+    forbidden.push('HCOOH');
+    forbidden.push('HOCO');
+    forbidden.push('any carboxyl, formate, formic-acid, bicarbonate, or hydrogenated-CO2 motif unless it is explicitly listed as a required species');
+  }
+
+  if (hasFormula('CO') && (hasFormula('H2') || hasFormula('H'))) {
+    forbidden.push('HCO');
+    forbidden.push('HCOH');
+    forbidden.push('any hydrogenated-CO motif unless it is explicitly listed as a required species');
+  }
+
+  const allowed = formulas.length
+    ? formulas.join(', ')
+    : 'only the molecules explicitly listed in the prompt';
+
+  return [
+    `Allowed molecular identities: ${allowed}. These formula names are internal constraints only; do NOT render them as text.`,
+    'Each required species must remain a separate molecular object unless the exact combined product/intermediate is explicitly listed as its own required species.',
+    'Never draw a new bond between atoms that belong to two different required species. Keep separate gas-phase molecules visually separated by clear empty space.',
+    `Forbidden molecular identity changes: ${forbidden.join('; ')}.`,
+    'If a requested reaction would imply a transition state or intermediate, show it with abstract light/energy only, not by inventing a new ball-and-stick molecule.',
+  ].join('\n');
+}
+
 async function fetchWithTimeout(url, init, timeoutMs = 85000) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
@@ -384,6 +431,7 @@ function buildImagePrompt({ prompt, aspectRatio, requiredSpecies }) {
       .map((species) => speciesToConstraint(species))
       .filter(Boolean)
     : [];
+  const speciesIsolationRules = buildSpeciesIsolationRules(requiredSpecies);
 
   return `Generate a high-quality scientific journal cover image. Output the image directly — NO text description, NO markdown, just the image. The image must be 600 DPI publication-grade quality. Aspect ratio MUST be ${String(aspectRatio || '9:16')} (portrait).
 
@@ -400,6 +448,8 @@ CRITICAL: If any text would appear, remove it completely and keep only unlabeled
 CRITICAL: Verified-structure-only rule: ONLY the required molecular structures listed below may be rendered as discrete ball-and-stick molecules. Do NOT invent extra gas molecules, intermediates, clusters, crystal lattices, or atomistic support structures.
 CRITICAL: If a catalyst, support, substrate, surface, active site, nanoparticle, or central object does not have explicit atomic coordinates in the prompt, render it as a smooth/stylized material surface, abstract particle, texture, glow, or field. Do NOT turn it into a guessed atom-by-atom lattice or random molecular network.
 CRITICAL: For unverified supports/backgrounds, avoid close-up atomistic ball-and-stick rendering. Use continuous metallic/oxide/carbon surfaces, gradients, facets, or non-atomistic textures instead.
+CRITICAL: Species isolation:
+${speciesIsolationRules}
 
 Required molecular structures (must match exactly):
 ${speciesConstraints.length ? speciesConstraints.map((line) => `- ${line}`).join('\n') : '- none'}
@@ -413,6 +463,7 @@ function buildImageEditPrompt({ prompt, aspectRatio, requiredSpecies, hasMask })
       .map((species) => speciesToConstraint(species))
       .filter(Boolean)
     : [];
+  const speciesIsolationRules = buildSpeciesIsolationRules(requiredSpecies);
 
   const maskInstruction = hasMask
     ? 'A mask is provided. Edit ONLY the transparent selected mask region. Preserve every pixel outside the selected mask region as much as possible.'
@@ -432,6 +483,8 @@ CRITICAL: ABSOLUTELY NO TEXT OR GLYPHS of any kind.
 - Do NOT print chemical formulas anywhere.
 
 CRITICAL: Preserve chemical correctness. Do not add/remove required atoms or change bond connectivity unless the edit instruction explicitly requests a scientifically valid change.
+CRITICAL: Preserve species identity and isolation:
+${speciesIsolationRules}
 
 Required molecular structures that must remain correct:
 ${speciesConstraints.length ? speciesConstraints.map((line) => `- ${line}`).join('\n') : '- preserve all molecular structures already present in the source image'}`;

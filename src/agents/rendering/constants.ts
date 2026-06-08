@@ -41,6 +41,7 @@ ABSOLUTE HARD SCIENTIFIC CONSTRAINTS — NON-NEGOTIABLE — OVERRIDE ALL OTHER I
 - Atoms ONLY as smooth colored spheres. Bonds ONLY as cylindrical sticks. NO labels on anything.
 - ONLY the explicitly required molecular species may be rendered as discrete ball-and-stick molecules.
 - DO NOT invent additional gas molecules, intermediates, atomistic clusters, guessed crystal lattices, or random molecular networks.
+- DO NOT fuse separate listed species into a new molecule. For example, if CO2 and H2/H are listed separately, keep them separate; do NOT generate CO2H, COOH, HCOO, HCOOH, HOCO, formate, formic acid, bicarbonate, or any hydrogenated-CO2 motif unless that exact species is explicitly listed.
 - If a catalyst, support, substrate, surface, nanoparticle, active site, or central object is not provided as exact atomic coordinates, render it as a continuous/stylized material surface, facet, abstract particle, texture, glow, or field rather than an atom-by-atom ball-and-stick structure.
 
 [CPK COLOR MAPPING — MANDATORY]
