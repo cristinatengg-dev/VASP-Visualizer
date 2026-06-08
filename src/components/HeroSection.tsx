@@ -513,7 +513,7 @@ const HeroSection: React.FC = () => {
       <div className="absolute top-6 right-8 z-30">
         {user ? (
           <button
-            onClick={() => navigate("/app")}
+            onClick={() => navigate("/workspace")}
             className="
               inline-flex items-center gap-2
               px-5 py-2.5
@@ -589,7 +589,7 @@ const HeroSection: React.FC = () => {
 
           {/* ④ CTA 按钮（居中，单个） */}
           <motion.div variants={itemVariants}>
-            <CTAButton onClick={() => navigate("/explore")} />
+            <CTAButton onClick={() => navigate(user ? "/workspace" : "/login")} />
           </motion.div>
 
           {/* ⑤ Agent 卡片（横向一行，不溢出） */}

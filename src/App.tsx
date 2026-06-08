@@ -5,6 +5,7 @@ import { AccountDropdown } from './components/AccountDropdown';
 import HeroSection from './components/HeroSection';
 import SplashScreen from './components/SplashScreen';
 import Explore from './pages/Explore';
+import AgentWorkspace from './pages/AgentWorkspace';
 import Manual from './pages/Manual';
 import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -129,6 +130,8 @@ function App() {
       <Route path="/app" element={<AppRoute />} />
       {/* 其他页面 */}
       <Route path="/explore" element={<Explore />} />
+      <Route path="/workspace" element={<AgentRoute><AgentWorkspace /></AgentRoute>} />
+      <Route path="/agent" element={<AgentRoute><AgentWorkspace /></AgentRoute>} />
       <Route path="/materials" element={<MaterialsExplorer />} />
       <Route path="/materials/battery" element={<MaterialsExplorer />} />
       <Route path="/materials/nuclear" element={<NuclearMaterialsExplorer />} />
