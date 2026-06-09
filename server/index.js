@@ -468,6 +468,14 @@ app.get('/api/compute/job/:id/status', async (req, res) => {
             // local — read from runtime-status.json
             const snapshotRef = path.join(job.workDir, 'job-spec.json');
             statusResult = await queryLocalJobStatus(snapshotRef);
+            if (!statusResult?.ok && job.submissionMode === 'local_demo' && statusResult?.reason === 'runtime_status_missing') {
+                statusResult = {
+                    ok: true,
+                    jobStatus: 'completed',
+                    schedulerState: 'materialized',
+                    source: 'local_demo',
+                };
+            }
         }
 
         res.json({ success: true, jobId, ...statusResult });
@@ -2010,6 +2018,73 @@ app.post('/api/agent/retrieve', requireAgentAccess('retrieval'), async (req, res
             res.end();
         }
     }
+});
+
+// ── Route: POST /api/agent/presentation/nature-ppt ───────────────────────────
+// Phase 7: Create a downloadable PPTX report from the completed orchestrator run.
+const PRESENTATION_OUTPUT_DIR = path.join(__dirname, 'data', 'presentations');
+const NATURE_PAPER2PPT_SKILL_SOURCE = 'https://github.com/Yuan1z0825/nature-skills/tree/main/skills/nature-paper2ppt';
+
+const sanitizePresentationFilename = (value) => String(value || 'agent-report')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 90) || 'agent-report';
+
+app.post('/api/agent/presentation/nature-ppt', async (req, res) => {
+    try {
+        fs.mkdirSync(PRESENTATION_OUTPUT_DIR, { recursive: true });
+        const requestSlug = sanitizePresentationFilename(req.body?.selectedIdea?.title || req.body?.prompt || 'agent-report');
+        const filename = `${Date.now()}-${requestSlug}.pptx`;
+        const outPath = path.join(PRESENTATION_OUTPUT_DIR, filename);
+        const scriptPath = path.join(__dirname, 'agents', 'presentation', 'nature_paper2ppt.py');
+
+        const child = spawn('python3', [scriptPath, outPath], {
+            cwd: __dirname,
+            stdio: ['pipe', 'pipe', 'pipe'],
+        });
+
+        let stdout = '';
+        let stderr = '';
+        child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+        child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+        child.stdin.write(JSON.stringify(req.body || {}));
+        child.stdin.end();
+
+        const exitCode = await new Promise((resolve) => {
+            child.on('close', resolve);
+        });
+
+        if (exitCode !== 0) {
+            throw new Error(stderr || `PPT generator exited with ${exitCode}`);
+        }
+
+        let qa = null;
+        try {
+            qa = JSON.parse(stdout || '{}')?.qa || null;
+        } catch (_error) {
+            qa = stdout.trim() || null;
+        }
+
+        res.json({
+            success: true,
+            filename,
+            downloadUrl: `/api/agent/presentation/${encodeURIComponent(filename)}`,
+            qa,
+            skillSource: NATURE_PAPER2PPT_SKILL_SOURCE,
+        });
+    } catch (err) {
+        console.error('[agent/presentation/nature-ppt]', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/agent/presentation/:filename', (req, res) => {
+    const filename = sanitizePresentationFilename(req.params.filename);
+    const filePath = path.join(PRESENTATION_OUTPUT_DIR, filename);
+    if (!filePath.startsWith(PRESENTATION_OUTPUT_DIR) || !fs.existsSync(filePath)) {
+        return res.status(404).json({ success: false, error: 'Presentation not found' });
+    }
+    res.download(filePath, filename);
 });
 
 // ── Route: GET /api/materials/search — Battery Materials Explorer ─────────────
