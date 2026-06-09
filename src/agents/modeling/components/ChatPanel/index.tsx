@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   MODELING_PROVIDER_OPTIONS,
   ModelingIntent,
@@ -7,13 +7,16 @@ import {
 import { useModeling } from '../../hooks/useModeling';
 import { useStore } from '../../../../store/useStore';
 import { API_BASE_URL } from '../../../../config';
-import { renderDataToMolecularStructure, molecularStructureToRenderData } from '../../../../utils/catalystHelpers';interface ChatPanelProps {
+import { renderDataToMolecularStructure, molecularStructureToRenderData } from '../../../../utils/catalystHelpers';
+
+interface ChatPanelProps {
   onIntentChange: (intent: ModelingIntent) => void;
   currentIntent: ModelingIntent | null;
   prefillPrompt?: string | null;
+  autoSubmitPrefill?: boolean;
 }
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, prefillPrompt }) => {
+const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, prefillPrompt, autoSubmitPrefill = false }) => {
   const [input, setInput] = useState(prefillPrompt ?? '');
   const [providerOrderInput, setProviderOrderInput] = useState(MODELING_PROVIDER_OPTIONS.join(','));
   const [editMaterial, setEditMaterial] = useState('');
@@ -30,6 +33,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
   const [editDopingCount, setEditDopingCount] = useState('1');
   const [editDefectElement, setEditDefectElement] = useState('');
   const [editDefectCount, setEditDefectCount] = useState('1');
+  const autoSubmittedRef = useRef(false);
   const {
     parseIntent,
     buildModel,
@@ -100,26 +104,37 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
     setEditDefectCount(String(currentIntent.defect?.count || 1));
   }, [currentIntent]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isBuilding) return;
+  const handleSend = useCallback(async (overrideInput?: string, autoBuild = false) => {
+    const prompt = (overrideInput ?? input).trim();
+    if (!prompt || isBuilding) return;
     
-    console.log('Sending to Gemini for parsing:', input);
+    console.log('Sending to Gemini for parsing:', prompt);
     try {
-      const parsedIntent = await parseIntent(input, normalizedProviders);
+      const parsedIntent = await parseIntent(prompt, normalizedProviders);
       if (parsedIntent) {
-        onIntentChange({
+        const nextIntent: ModelingIntent = {
           ...parsedIntent,
           provider_preferences: parsedIntent.provider_preferences?.length
             ? parsedIntent.provider_preferences
             : normalizedProviders,
-        });
+        };
+        onIntentChange(nextIntent);
+        if (autoBuild) {
+          await buildModel(nextIntent, normalizedProviders);
+        }
       }
     } catch (e) {
       console.error('handleSend error:', e);
     }
     
     setInput('');
-  };
+  }, [buildModel, input, isBuilding, normalizedProviders, onIntentChange, parseIntent]);
+
+  useEffect(() => {
+    if (!autoSubmitPrefill || !prefillPrompt || autoSubmittedRef.current) return;
+    autoSubmittedRef.current = true;
+    void handleSend(prefillPrompt, true);
+  }, [autoSubmitPrefill, handleSend, prefillPrompt]);
 
   const buildEditablePromptFromIntent = (intent: ModelingIntent | null) => {
     if (!intent) {
@@ -646,7 +661,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
             rows={5}
           />
           <button 
-            onClick={handleSend}
+            onClick={() => handleSend()}
             type="button"
             aria-label="发送"
             className="absolute bottom-3 right-3 px-3 py-2 bg-[#0A1128] text-white rounded-[32px] hover:bg-[#162044] transition-colors shadow-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200"

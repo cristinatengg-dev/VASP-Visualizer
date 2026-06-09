@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -306,11 +306,42 @@ const getSurfaceTitle = (agent: WorkspaceAgent, database: DatabaseAgent) => {
   return agent.name;
 };
 
+const appendPromptToRoute = (route: string, prompt: string, autoSubmit = false) => {
+  const trimmed = prompt.trim();
+  if (!trimmed) return route;
+  const [path, rawQuery = ''] = route.split('?');
+  const params = new URLSearchParams(rawQuery);
+  params.set('prompt', trimmed);
+  if (autoSubmit) params.set('auto', '1');
+  return `${path}?${params.toString()}`;
+};
+
+const inferAgentIdFromPrompt = (prompt: string, fileNames: string[]): string => {
+  const text = `${prompt} ${fileNames.join(' ')}`.toLowerCase();
+  if (/\.(vasp|poscar|contcar|cif|xyz|xdatcar)\b/.test(text)) return 'rendering';
+  if (/\.(png|jpg|jpeg|webp|tif|tiff)\b/.test(text)) return 'illustration';
+  if (text.includes('生图') || text.includes('封面') || text.includes('cover') || text.includes('image') || text.includes('图片')) return 'illustration';
+  if (text.includes('建模') || text.includes('搭') || text.includes('晶面') || text.includes('slab') || text.includes('adsorbate') || text.includes('分子') || text.includes('结构')) return 'modeling';
+  if (text.includes('计算') || text.includes('vasp') || text.includes('incar') || text.includes('kpoints') || text.includes('hpc')) return 'compute';
+  if (text.includes('渲染') || text.includes('可视化') || text.includes('轨迹') || text.includes('trajectory')) return 'rendering';
+  if (text.includes('数据库') || text.includes('materials project') || text.includes('cif')) return 'database';
+  return 'retrieval';
+};
+
 const AgentWorkspace: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useStore();
   const [selectedAgentId, setSelectedAgentId] = useState('database');
   const [selectedDbId, setSelectedDbId] = useState('materials-project');
+  const [workspacePrompt, setWorkspacePrompt] = useState('');
+  const [taskSearch, setTaskSearch] = useState('');
+  const [handoffPrompt, setHandoffPrompt] = useState('');
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [toolsEnabled, setToolsEnabled] = useState(true);
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const accountLabel = user?.email || 'Research user';
 
   const selectedAgent = useMemo(
@@ -321,11 +352,18 @@ const AgentWorkspace: React.FC = () => {
     () => databaseAgents.find((db) => db.id === selectedDbId) || databaseAgents[0],
     [selectedDbId]
   );
-  const activeSurfaceRoute = getSurfaceRoute(selectedAgent, selectedDatabase);
+  const activeSurfaceBaseRoute = getSurfaceRoute(selectedAgent, selectedDatabase);
+  const activeSurfaceRoute = appendPromptToRoute(
+    activeSurfaceBaseRoute,
+    selectedAgent.id === 'retrieval' || selectedAgent.id === 'modeling' ? handoffPrompt : '',
+    selectedAgent.id === 'modeling'
+  );
   const activeSurfaceTitle = getSurfaceTitle(selectedAgent, selectedDatabase);
   const isEmbeddedSurface = selectedAgent.id !== 'orchestrator';
+  const filteredRecentTasks = recentTasks.filter((task) => task.toLowerCase().includes(taskSearch.trim().toLowerCase()));
 
-  const activateAgent = (agentId: string) => {
+  const activateAgent = (agentId: string, preservePrompt = false) => {
+    if (!preservePrompt) setHandoffPrompt('');
     setSelectedAgentId(agentId);
   };
 
@@ -354,6 +392,70 @@ const AgentWorkspace: React.FC = () => {
     navigate(activeSurfaceRoute);
   };
 
+  const handleComposerSubmit = () => {
+    const prompt = workspacePrompt.trim();
+    const fileNames = attachedFiles.map((file) => file.name);
+    if (!prompt && fileNames.length === 0) {
+      setWorkspaceNotice('请输入任务，或先选择一个文件。');
+      return;
+    }
+
+    if (!toolsEnabled) {
+      setWorkspaceNotice('Tools 已关闭：任务已保留在输入框中，没有自动调用 agent。');
+      return;
+    }
+
+    const enrichedPrompt = [
+      prompt || 'Process the attached research file.',
+      fileNames.length ? `Attached files: ${fileNames.join(', ')}` : '',
+    ].filter(Boolean).join('\n');
+    const targetAgentId = inferAgentIdFromPrompt(prompt, fileNames);
+    setHandoffPrompt(enrichedPrompt);
+    setSelectedAgentId(targetAgentId);
+    setWorkspaceNotice(`已调用 ${agents.find((agent) => agent.id === targetAgentId)?.name || 'Agent'}：${prompt || fileNames.join(', ')}`);
+  };
+
+  const handleAttachFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    setAttachedFiles((prev) => [...prev, ...files]);
+    setWorkspaceNotice(`已选择 ${files.length} 个文件，发送任务时会作为上下文路由到对应 agent。`);
+    event.target.value = '';
+  };
+
+  const removeAttachment = (fileName: string) => {
+    setAttachedFiles((prev) => prev.filter((file) => file.name !== fileName));
+  };
+
+  const startVoiceInput = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setWorkspaceNotice('当前浏览器不支持语音输入。');
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'zh-CN';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onstart = () => {
+      setIsListening(true);
+      setWorkspaceNotice('正在听写，请开始说话。');
+    };
+    recognition.onerror = () => {
+      setIsListening(false);
+      setWorkspaceNotice('语音输入失败，请直接输入文字。');
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.onresult = (event: any) => {
+      const transcript = event.results?.[0]?.[0]?.transcript || '';
+      if (transcript) {
+        setWorkspacePrompt((prev) => [prev, transcript].filter(Boolean).join(prev ? ' ' : ''));
+        setWorkspaceNotice('语音已写入输入框。');
+      }
+    };
+    recognition.start();
+  };
+
   return (
     <div className="h-screen w-screen overflow-hidden bg-[#F7F8FA] text-[#101828]">
       <div className="flex h-full min-w-0">
@@ -374,8 +476,20 @@ const AgentWorkspace: React.FC = () => {
             </button>
             <div className="mt-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <Search size={15} className="text-slate-400" />
-              <span className="text-xs text-slate-400">Search tasks</span>
-              <Settings2 size={15} className="ml-auto text-slate-400" />
+              <input
+                value={taskSearch}
+                onChange={(event) => setTaskSearch(event.target.value)}
+                className="min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400"
+                placeholder="Search tasks"
+              />
+              <button
+                type="button"
+                onClick={() => activateAgent('export')}
+                className="ml-auto text-slate-400 transition hover:text-slate-700"
+                title="Open runtime settings"
+              >
+                <Settings2 size={15} />
+              </button>
             </div>
           </div>
 
@@ -419,10 +533,15 @@ const AgentWorkspace: React.FC = () => {
             <div className="mt-6">
               <p className="px-3 text-[11px] font-semibold uppercase text-slate-400">Tasks</p>
               <div className="mt-2 space-y-1">
-                {recentTasks.map((task, index) => (
+                {filteredRecentTasks.map((task, index) => (
                   <button
                     key={task}
                     type="button"
+                    onClick={() => {
+                      setWorkspacePrompt(task);
+                      activateAgent('orchestrator');
+                      setWorkspaceNotice('任务已放入输入框，点击发送即可调用对应 agent。');
+                    }}
                     className={cx(
                       'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition',
                       index === 0 ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50'
@@ -467,6 +586,7 @@ const AgentWorkspace: React.FC = () => {
             <div className="ml-auto flex items-center gap-2">
               <button
                 type="button"
+                onClick={() => activateAgent('export')}
                 className="hidden h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 sm:flex"
               >
                 <PanelRight size={16} />
@@ -648,42 +768,131 @@ const AgentWorkspace: React.FC = () => {
               </div>
               )}
 
-              {!isEmbeddedSurface && (
               <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-4 md:px-6">
                 <div className="mx-auto max-w-4xl rounded-lg border border-slate-200 bg-white shadow-sm">
                   <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
-                    <button type="button" className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-50">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept=".vasp,.poscar,.contcar,.cif,.xyz,.xdatcar,.pdf,image/*"
+                      onChange={handleAttachFiles}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-50"
+                      title="Attach research files"
+                    >
                       <Paperclip size={16} />
                     </button>
-                    <button type="button" className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => activateAgent('database')}
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-50"
+                      title="Open library/database"
+                    >
                       <FolderOpen size={16} />
                     </button>
                     <div className="ml-auto flex items-center gap-2">
-                      <button type="button" className="hidden h-8 items-center gap-2 rounded-md border border-slate-200 px-2 text-xs font-semibold text-slate-600 sm:flex">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setToolsEnabled((value) => !value);
+                          setWorkspaceNotice(!toolsEnabled ? 'Tools 已开启：发送会自动调用对应 agent。' : 'Tools 已关闭：发送不会自动调用 agent。');
+                        }}
+                        className={cx(
+                          'hidden h-8 items-center gap-2 rounded-md border px-2 text-xs font-semibold sm:flex',
+                          toolsEnabled
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            : 'border-slate-200 bg-white text-slate-500'
+                        )}
+                      >
                         <ShieldCheck size={14} />
-                        Tools ON
+                        Tools {toolsEnabled ? 'ON' : 'OFF'}
                       </button>
-                      <button type="button" className="h-8 rounded-md border border-slate-200 px-2 text-xs font-semibold text-slate-600">
-                        deepseek-v4-pro
-                      </button>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setIsModelMenuOpen((value) => !value)}
+                          className="h-8 rounded-md border border-slate-200 px-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                        >
+                          deepseek-v4-pro
+                        </button>
+                        {isModelMenuOpen && (
+                          <div className="absolute bottom-10 right-0 z-20 w-[220px] rounded-lg border border-slate-200 bg-white p-2 text-xs shadow-lg">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsModelMenuOpen(false);
+                                setWorkspaceNotice('文本 Agent 已绑定 deepseek-v4-pro。');
+                              }}
+                              className="flex w-full items-center justify-between rounded-md bg-slate-900 px-3 py-2 text-left font-semibold text-white"
+                            >
+                              deepseek-v4-pro
+                              <Check size={13} />
+                            </button>
+                            <p className="mt-2 px-1 text-[10px] leading-4 text-slate-400">
+                              当前文本调度固定走 deepseek-v4-pro；这里用于确认当前生效模型。
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
+                  {(attachedFiles.length > 0 || workspaceNotice) && (
+                    <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2">
+                      {attachedFiles.map((file) => (
+                        <button
+                          key={`${file.name}-${file.size}`}
+                          type="button"
+                          onClick={() => removeAttachment(file.name)}
+                          className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:border-rose-200 hover:text-rose-600"
+                          title="Click to remove"
+                        >
+                          {file.name}
+                        </button>
+                      ))}
+                      {workspaceNotice && <span className="text-[11px] text-slate-500">{workspaceNotice}</span>}
+                    </div>
+                  )}
                   <div className="flex items-end gap-3 px-4 py-3">
                     <textarea
+                      value={workspacePrompt}
+                      onChange={(event) => setWorkspacePrompt(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          handleComposerSubmit();
+                        }
+                      }}
                       rows={2}
                       className="min-h-[54px] flex-1 resize-none border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
                       placeholder="输入科研任务，例如：检索 CO2 加氢催化剂，构建 Cu(111)+CO2+H2，并生成可编辑封面图..."
                     />
-                    <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={startVoiceInput}
+                      className={cx(
+                        'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border text-slate-500 hover:bg-slate-50',
+                        isListening ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-200'
+                      )}
+                      title="Voice input"
+                    >
                       <Mic size={16} />
                     </button>
-                    <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#0A1128] text-white hover:bg-[#17213D]">
+                    <button
+                      type="button"
+                      onClick={handleComposerSubmit}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#0A1128] text-white hover:bg-[#17213D]"
+                      title="Send to agent"
+                    >
                       <ArrowRight size={18} />
                     </button>
                   </div>
                 </div>
               </div>
-              )}
             </section>
 
             <aside className="hidden min-h-0 border-l border-slate-200 bg-white xl:flex xl:flex-col">

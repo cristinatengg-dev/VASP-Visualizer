@@ -48,12 +48,15 @@ const ModelingAgent: React.FC = () => {
   const handoffModelType = searchParams.get('model_type');
   const handoffSupercell = searchParams.get('supercell');
 
-  const prefillPrompt = buildStructuredHandoffPrompt({
-    material: handoffMaterial,
-    mpid: handoffMpid,
-    modelType: handoffModelType,
-    supercell: handoffSupercell,
-  }) || handoffPrompt || null;
+  const [handoffSeed] = useState(() => ({
+    prompt: buildStructuredHandoffPrompt({
+      material: handoffMaterial,
+      mpid: handoffMpid,
+      modelType: handoffModelType,
+      supercell: handoffSupercell,
+    }) || handoffPrompt || null,
+    autoSubmit: searchParams.get('auto') === '1' || searchParams.get('run') === '1',
+  }));
 
   // Clear handoff params from URL after reading them once
   useEffect(() => {
@@ -74,7 +77,12 @@ const ModelingAgent: React.FC = () => {
         </div>
 
         <div className="flex-1 overflow-hidden">
-          <ChatPanel onIntentChange={setIntent} currentIntent={intent} prefillPrompt={prefillPrompt} />
+          <ChatPanel
+            onIntentChange={setIntent}
+            currentIntent={intent}
+            prefillPrompt={handoffSeed.prompt}
+            autoSubmitPrefill={handoffSeed.autoSubmit}
+          />
         </div>
       </div>
 

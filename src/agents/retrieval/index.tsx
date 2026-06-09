@@ -4,7 +4,7 @@ import {
   Lightbulb, Loader2, Search, Sparkles, ExternalLink, Clock,
   CheckCircle2, Circle,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { API_BASE_URL } from '../../config';
 
@@ -393,7 +393,9 @@ const PaperCard: React.FC<{ paper: Paper }> = ({ paper }) => (
 
 const IdeaAgent: React.FC = () => {
   const navigate = useNavigate();
-  const [query, setQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialPrompt = searchParams.get('prompt') || searchParams.get('query') || '';
+  const [query, setQuery] = useState(initialPrompt);
   const [isStreaming, setIsStreaming] = useState(false);
   const [stages, setStages] = useState<StageEvent[]>([]);
   const [result, setResult] = useState<CompleteData | null>(null);
@@ -404,6 +406,7 @@ const IdeaAgent: React.FC = () => {
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const autoSearchRef = useRef(false);
 
   const selectedCard = result?.idea_cards.find((c) => c.id === selectedIdeaId) ?? null;
 
@@ -440,8 +443,9 @@ const IdeaAgent: React.FC = () => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   }, []);
 
-  const handleSearch = async () => {
-    if (!query.trim() || isStreaming) return;
+  const handleSearch = useCallback(async (overrideQuery?: string) => {
+    const prompt = (overrideQuery ?? query).trim();
+    if (!prompt || isStreaming) return;
     setIsStreaming(true);
     setStages([]);
     setResult(null);
@@ -454,7 +458,7 @@ const IdeaAgent: React.FC = () => {
       const response = await fetch(`${API_BASE_URL}/agent/retrieve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: query }),
+        body: JSON.stringify({ prompt }),
       });
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
 
@@ -489,7 +493,15 @@ const IdeaAgent: React.FC = () => {
     } finally {
       setIsStreaming(false);
     }
-  };
+  }, [isStreaming, query, updateStage]);
+
+  useEffect(() => {
+    if (!initialPrompt || autoSearchRef.current) return;
+    autoSearchRef.current = true;
+    setQuery(initialPrompt);
+    setSearchParams({}, { replace: true });
+    void handleSearch(initialPrompt);
+  }, [handleSearch, initialPrompt, setSearchParams]);
 
   const handleHandoff = (card: IdeaCard) => {
     const params = new URLSearchParams();
@@ -589,7 +601,7 @@ const IdeaAgent: React.FC = () => {
               placeholder="描述你的研究目标..."
               className="w-full resize-none bg-gray-50 border border-gray-200 rounded-2xl py-2.5 px-3 pr-10 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all disabled:opacity-50"
             />
-            <button onClick={handleSearch} disabled={isStreaming || !query.trim()}
+            <button onClick={() => handleSearch()} disabled={isStreaming || !query.trim()}
               className="absolute right-2 bottom-2 w-7 h-7 flex items-center justify-center bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed">
               {isStreaming ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
             </button>
