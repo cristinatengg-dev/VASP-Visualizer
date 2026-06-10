@@ -5,11 +5,15 @@ const { Schema } = mongoose;
 const artifactKinds = [
   'goal',
   'plan',
+  'research_bundle',
+  'modeling_intent',
+  'orchestration_checkpoint',
   'structure',
   'compute_input_set',
   'result_bundle',
   'visual_asset',
   'report',
+  'presentation',
 ];
 
 const artifactStatus = ['draft', 'ready', 'archived', 'invalid'];

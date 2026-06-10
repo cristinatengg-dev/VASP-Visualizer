@@ -20,6 +20,7 @@ const { connectDB, getUser, createUser, updateUser, redeemCode, createVerificati
 const { Order } = require('./models');
 const { createRuntimeDemoRouter } = require('./src/runtime/http/create-runtime-demo-router');
 const { createRuntimeWorkerRunner } = require('./src/runtime/workers/create-runtime-worker-runner');
+const { createResearchOrchestratorHarnessRouter } = require('./src/agent-harness/research-orchestrator-router');
 const { parseModelingIntent } = require('./src/modeling/parse-intent');
 const { buildModelingStructure } = require('./src/modeling/build-structure');
 const { buildModelingProviderAvailability, normalizeModelingProviderPreferences } = require('./src/modeling/provider-registry');
@@ -111,6 +112,7 @@ app.use('/api/catalyst', createCatalystRouter());
 
 // Agent access check endpoint
 app.get('/api/agent-access', handleAgentAccessCheck);
+app.use('/api/agent/harness', requireAgentAccess('retrieval'), createResearchOrchestratorHarnessRouter());
 
 const upload = multer({ 
     dest: 'uploads/',
@@ -378,7 +380,7 @@ app.post('/api/compute/compile', requireAgentAccess('compute'), async (req, res)
 // In-memory job registry for tracking submitted jobs across polling requests.
 const activeJobs = new Map();
 
-app.post('/api/compute/submit', async (req, res) => {
+app.post('/api/compute/submit', requireAgentAccess('compute'), async (req, res) => {
     try {
         const { profileId, structure, intent, compiledFiles } = req.body;
         const profile = getComputeProfile(profileId);
@@ -2030,7 +2032,7 @@ const sanitizePresentationFilename = (value) => String(value || 'agent-report')
     .replace(/^-+|-+$/g, '')
     .slice(0, 90) || 'agent-report';
 
-app.post('/api/agent/presentation/nature-ppt', async (req, res) => {
+app.post('/api/agent/presentation/nature-ppt', requireAgentAccess('rendering'), async (req, res) => {
     try {
         fs.mkdirSync(PRESENTATION_OUTPUT_DIR, { recursive: true });
         const requestSlug = sanitizePresentationFilename(req.body?.selectedIdea?.title || req.body?.prompt || 'agent-report');

@@ -106,6 +106,28 @@ interface ToolEvent {
   details: string[];
 }
 
+interface HarnessArtifact {
+  id: string;
+  kind: string;
+  summary: string;
+}
+
+interface HarnessCheckpoint {
+  id: string;
+  phase: WorkflowPhase | 'system';
+  status: ToolStatus | 'info' | 'waiting';
+  summary: string;
+  artifact?: HarnessArtifact;
+}
+
+interface HarnessSessionState {
+  sessionId: string;
+  goalArtifactId: string | null;
+  planArtifactId: string | null;
+  harness: string;
+  checkpoints: HarnessCheckpoint[];
+}
+
 interface StageEvent {
   type: 'stage';
   stage: string;
@@ -607,9 +629,11 @@ const AgentWorkspace: React.FC = () => {
   const [pptUrl, setPptUrl] = useState<string | null>(null);
   const [pptQa, setPptQa] = useState<string | null>(null);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const [harnessSession, setHarnessSession] = useState<HarnessSessionState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const harnessSessionIdRef = useRef<string | null>(null);
 
   const selectedIdea = useMemo(() => {
     if (!research?.idea_cards?.length) return null;
@@ -644,6 +668,157 @@ const AgentWorkspace: React.FC = () => {
     setToolEvents((prev) => prev.map((event) => (event.id === id ? { ...event, ...patch } : event)));
   }, []);
 
+  const getAuthHeaders = useCallback((extra?: Record<string, string>) => {
+    const token = localStorage.getItem('vasp_token') || '';
+    return {
+      ...(extra || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }, []);
+
+  const withUserPayload = useCallback((payload: Record<string, any> = {}) => {
+    const userId = user?.email || localStorage.getItem('vasp_user_id') || '';
+    return {
+      ...payload,
+      ...(userId ? { userId, ownerId: userId } : {}),
+    };
+  }, [user?.email]);
+
+  const postJson = useCallback(async <T,>(path: string, payload: Record<string, any> = {}): Promise<T> => {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(withUserPayload(payload)),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.error || data?.message || `HTTP ${response.status}`);
+    }
+    return data as T;
+  }, [getAuthHeaders, withUserPayload]);
+
+  const appendHarnessCheckpoint = useCallback((checkpoint: HarnessCheckpoint) => {
+    setHarnessSession((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        checkpoints: [...prev.checkpoints.slice(-24), checkpoint],
+      };
+    });
+  }, []);
+
+  const startHarnessSession = useCallback(async (prompt: string) => {
+    try {
+      const payload = await postJson<{
+        success: boolean;
+        sessionId: string;
+        goalArtifactId?: string | null;
+        planArtifactId?: string | null;
+        harness?: string;
+      }>('/agent/harness/sessions', {
+        prompt,
+        projectId: 'workspace-agent',
+      });
+      if (!payload?.sessionId) throw new Error('Harness session was not created');
+      harnessSessionIdRef.current = payload.sessionId;
+      setHarnessSession({
+        sessionId: payload.sessionId,
+        goalArtifactId: payload.goalArtifactId || null,
+        planArtifactId: payload.planArtifactId || null,
+        harness: payload.harness || 'research-orchestrator.v1',
+        checkpoints: [{
+          id: newId('harness'),
+          phase: 'system',
+          status: 'success',
+          summary: 'Agent harness session created',
+        }],
+      });
+      return payload.sessionId;
+    } catch (error) {
+      harnessSessionIdRef.current = null;
+      setHarnessSession(null);
+      addMessage({
+        role: 'assistant',
+        title: 'Harness 记录失败',
+        content: `连续 agent 仍会执行，但本次无法写入 runtime harness：${error instanceof Error ? error.message : String(error)}`,
+        status: 'error',
+      });
+      return null;
+    }
+  }, [addMessage, postJson]);
+
+  const recordHarnessCheckpoint = useCallback(async ({
+    phase: checkpointPhase,
+    status,
+    agent,
+    toolName,
+    summary,
+    details,
+    artifact,
+    payload,
+  }: {
+    phase: WorkflowPhase | 'system';
+    status: ToolStatus | 'info' | 'waiting';
+    agent: string;
+    toolName: string;
+    summary: string;
+    details?: string[];
+    artifact?: {
+      kind: string;
+      summary: string;
+      payload: Record<string, any>;
+      preview?: Record<string, any>;
+      producedBySkill?: string;
+    };
+    payload?: Record<string, any>;
+  }) => {
+    const sessionId = harnessSessionIdRef.current;
+    if (!sessionId) return;
+
+    const checkpointId = newId('harness');
+    appendHarnessCheckpoint({
+      id: checkpointId,
+      phase: checkpointPhase,
+      status,
+      summary,
+      artifact: artifact ? { id: 'pending', kind: artifact.kind, summary: artifact.summary } : undefined,
+    });
+
+    try {
+      const result = await postJson<{ success: boolean; artifactId?: string | null }>('/agent/harness/events', {
+        sessionId,
+        phase: checkpointPhase,
+        status,
+        agent,
+        toolName,
+        summary,
+        details: details || [],
+        payload: payload || {},
+        artifact,
+      });
+      if (artifact && result?.artifactId) {
+        setHarnessSession((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            checkpoints: prev.checkpoints.map((item) => (
+              item.id === checkpointId && item.artifact
+                ? { ...item, artifact: { ...item.artifact, id: result.artifactId || item.artifact.id } }
+                : item
+            )),
+          };
+        });
+      }
+    } catch (error) {
+      appendHarnessCheckpoint({
+        id: newId('harness-error'),
+        phase: checkpointPhase,
+        status: 'error',
+        summary: `Harness write failed: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }, [appendHarnessCheckpoint, postJson]);
+
   const fetchProfiles = useCallback(async () => {
     const toolId = addTool({
       name: 'compute.profiles',
@@ -677,6 +852,8 @@ const AgentWorkspace: React.FC = () => {
 
   const runRetrieval = useCallback(async (prompt: string) => {
     setPhase('retrieving');
+    harnessSessionIdRef.current = null;
+    setHarnessSession(null);
     setResearch(null);
     setSelectedIdeaId(null);
     setModelIntent(null);
@@ -686,6 +863,18 @@ const AgentWorkspace: React.FC = () => {
     setComputeResult(null);
     setPptUrl(null);
     setPptQa(null);
+
+    const sessionId = await startHarnessSession(prompt);
+    if (sessionId) {
+      void recordHarnessCheckpoint({
+        phase: 'retrieving',
+        status: 'running',
+        agent: 'Orchestrator',
+        toolName: 'agent.retrieve',
+        summary: 'Started literature and database retrieval',
+        details: [prompt],
+      });
+    }
 
     addMessage({
       role: 'assistant',
@@ -708,8 +897,8 @@ const AgentWorkspace: React.FC = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/agent/retrieve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(withUserPayload({ prompt })),
       });
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
 
@@ -767,6 +956,24 @@ const AgentWorkspace: React.FC = () => {
                 '是否使用这个推荐模型？也可以直接在输入框写你想改成的模型、晶面、吸附物或材料。'
               ].join('\n'),
             });
+            void recordHarnessCheckpoint({
+              phase: 'await_model',
+              status: 'success',
+              agent: 'Retrieval + Database',
+              toolName: 'agent.retrieve',
+              summary: 'Research bundle ready; waiting for model choice',
+              details: [
+                `${data.papers?.length || 0} papers`,
+                `${data.structures?.length || 0} structures`,
+                `${data.idea_cards?.length || 0} model ideas`,
+              ],
+              artifact: {
+                kind: 'research_bundle',
+                summary: `Research bundle for ${prompt}`,
+                producedBySkill: 'retrieve_literature_and_structures',
+                payload: data as unknown as Record<string, any>,
+              },
+            });
             setPhase('await_model');
           }
         }
@@ -781,7 +988,7 @@ const AgentWorkspace: React.FC = () => {
       });
       setPhase('error');
     }
-  }, [addMessage, addTool, updateTool]);
+  }, [addMessage, addTool, getAuthHeaders, recordHarnessCheckpoint, startHarnessSession, updateTool, withUserPayload]);
 
   const buildModel = useCallback(async (customPrompt?: string) => {
     const prompt = customPrompt?.trim()
@@ -805,17 +1012,16 @@ const AgentWorkspace: React.FC = () => {
     });
 
     try {
-      const parseResponse = await fetch(`${API_BASE_URL}/modeling/parse-intent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, providerPreferences: ['mp', 'ase', 'builtin'] }),
+      const parsePayload = await postJson<{ success: boolean; intent: Record<string, any> }>('/modeling/parse-intent', {
+        prompt,
+        providerPreferences: ['mp', 'ase', 'builtin'],
       });
-      const parsePayload = await parseResponse.json();
-      if (!parseResponse.ok || !parsePayload?.success) throw new Error(parsePayload?.error || 'Modeling intent parse failed');
-      const intent = {
-        ...parsePayload.intent,
-        provider_preferences: parsePayload.intent?.provider_preferences?.length
-          ? parsePayload.intent.provider_preferences
+      if (!parsePayload?.success) throw new Error('Modeling intent parse failed');
+      const parsedIntent = parsePayload.intent || {};
+      const intent: Record<string, any> = {
+        ...parsedIntent,
+        provider_preferences: parsedIntent.provider_preferences?.length
+          ? parsedIntent.provider_preferences
           : ['mp', 'ase', 'builtin'],
       };
       setModelIntent(intent);
@@ -827,6 +1033,23 @@ const AgentWorkspace: React.FC = () => {
           `providers: ${(intent.provider_preferences || []).join(', ')}`,
         ],
       });
+      void recordHarnessCheckpoint({
+        phase: 'modeling',
+        status: 'success',
+        agent: 'Modeling',
+        toolName: 'modeling.parse-intent',
+        summary: 'Structured modeling intent parsed',
+        details: [
+          `task_type=${intent.task_type || 'unknown'}`,
+          `providers=${(intent.provider_preferences || []).join(', ')}`,
+        ],
+        artifact: {
+          kind: 'modeling_intent',
+          summary: `Modeling intent for ${intent.task_type || 'structure'}`,
+          producedBySkill: 'modeling_build_structure',
+          payload: intent,
+        },
+      });
 
       const buildToolId = addTool({
         name: 'modeling.build',
@@ -837,7 +1060,7 @@ const AgentWorkspace: React.FC = () => {
       });
       const buildResponse = await fetch(`${API_BASE_URL}/modeling/build`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(intent),
       });
       const buildPayload = await buildResponse.json();
@@ -865,6 +1088,32 @@ const AgentWorkspace: React.FC = () => {
           '下一步请选择计算软件。我建议周期性催化/表面吸附体系先用 VASP relaxation，之后可追加 static/DOS。'
         ].join('\n'),
       });
+      void recordHarnessCheckpoint({
+        phase: 'await_software',
+        status: 'success',
+        agent: 'Modeling',
+        toolName: 'modeling.build',
+        summary: 'Deterministic structure generated; waiting for software choice',
+        details: [
+          `${structure.atoms.length} atoms`,
+          `${structure.bonds.length} bonds`,
+          structure.filename,
+        ],
+        artifact: {
+          kind: 'structure',
+          summary: structure.filename,
+          producedBySkill: 'modeling_build_structure',
+          payload: {
+            filename: structure.filename,
+            atomCount: structure.atoms.length,
+            bondCount: structure.bonds.length,
+            atoms: structure.atoms.map((atom) => ({ element: atom.element, position: atom.position })),
+            bonds: structure.bonds,
+            latticeVectors: structure.latticeVectors,
+            intent,
+          },
+        },
+      });
       setPhase('await_software');
     } catch (error) {
       addMessage({
@@ -875,7 +1124,7 @@ const AgentWorkspace: React.FC = () => {
       });
       setPhase('error');
     }
-  }, [addMessage, addTool, research, selectedIdea, setMolecularData, setShowBonds, updateTool]);
+  }, [addMessage, addTool, getAuthHeaders, postJson, recordHarnessCheckpoint, research, selectedIdea, setMolecularData, setShowBonds, updateTool]);
 
   const compileInputs = useCallback(async (nextIntent: ComputeIntent) => {
     if (!modelStructure) {
@@ -892,16 +1141,11 @@ const AgentWorkspace: React.FC = () => {
       details: [`quality=${nextIntent.quality}`, `vdw=${nextIntent.vdw}`, `spin=${nextIntent.spin_mode}`],
     });
     try {
-      const response = await fetch(`${API_BASE_URL}/compute/compile`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          structure: structurePayloadFromModel(modelStructure, nextIntent),
-          intent: nextIntent,
-        }),
+      const payload = await postJson<any>('/compute/compile', {
+        structure: structurePayloadFromModel(modelStructure, nextIntent),
+        intent: nextIntent,
       });
-      const payload = await response.json();
-      if (!response.ok || !payload?.success || !payload?.files) {
+      if (!payload?.success || !payload?.files) {
         throw new Error(payload?.error || 'Compute input compilation failed');
       }
       const nextCompiled: CompiledInputs = {
@@ -923,6 +1167,29 @@ const AgentWorkspace: React.FC = () => {
           '是否使用推荐输入文件？如果要改，请直接告诉我具体修改，例如：ENCUT=520, quality=high, workflow=static。'
         ].join('\n'),
       });
+      void recordHarnessCheckpoint({
+        phase: 'await_input',
+        status: 'success',
+        agent: 'Compute',
+        toolName: 'compute.compile',
+        summary: 'Compute input set compiled; waiting for user review',
+        details: Object.keys(nextCompiled.files),
+        artifact: {
+          kind: 'compute_input_set',
+          summary: `${nextIntent.engine} ${nextIntent.workflow} input set`,
+          producedBySkill: 'compile_input_set',
+          payload: {
+            files: nextCompiled.files,
+            normalizedIntent: payload.normalizedIntent,
+            intent: nextIntent,
+            sourceStructure: {
+              filename: modelStructure.filename,
+              atomCount: modelStructure.atoms.length,
+              latticeVectors: modelStructure.latticeVectors,
+            },
+          },
+        },
+      });
       setPhase('await_input');
     } catch (error) {
       updateTool(toolId, { status: 'error', details: [error instanceof Error ? error.message : String(error)] });
@@ -934,7 +1201,7 @@ const AgentWorkspace: React.FC = () => {
       });
       setPhase('error');
     }
-  }, [addMessage, addTool, modelStructure, updateTool]);
+  }, [addMessage, addTool, modelStructure, postJson, recordHarnessCheckpoint, updateTool]);
 
   const selectEngine = useCallback((engine: EngineType) => {
     const nextIntent = { ...computeIntent, engine };
@@ -943,8 +1210,16 @@ const AgentWorkspace: React.FC = () => {
       role: 'user',
       content: `选择计算软件：${engineOptions.find((item) => item.id === engine)?.label || engine}`,
     });
+    void recordHarnessCheckpoint({
+      phase: 'await_software',
+      status: 'success',
+      agent: 'Orchestrator',
+      toolName: 'human.choose_software',
+      summary: `User selected ${engine}`,
+      details: [engineOptions.find((item) => item.id === engine)?.summary || engine],
+    });
     void compileInputs(nextIntent);
-  }, [addMessage, compileInputs, computeIntent]);
+  }, [addMessage, compileInputs, computeIntent, recordHarnessCheckpoint]);
 
   const applyInputModification = useCallback((text: string) => {
     const params = parseCustomParams(text);
@@ -961,11 +1236,28 @@ const AgentWorkspace: React.FC = () => {
     delete nextIntent.custom_params?.quality;
     setComputeIntent(nextIntent);
     addMessage({ role: 'user', content: `修改输入文件：${text}` });
+    void recordHarnessCheckpoint({
+      phase: 'await_input',
+      status: 'success',
+      agent: 'Orchestrator',
+      toolName: 'human.modify_inputs',
+      summary: 'User requested input-file changes',
+      details: [text],
+      payload: { parsedParams: params },
+    });
     void compileInputs(nextIntent);
-  }, [addMessage, compileInputs, computeIntent]);
+  }, [addMessage, compileInputs, computeIntent, recordHarnessCheckpoint]);
 
   const acceptInputs = useCallback(() => {
     if (!compiledInputs) return;
+    void recordHarnessCheckpoint({
+      phase: 'await_input',
+      status: 'success',
+      agent: 'Orchestrator',
+      toolName: 'human.accept_inputs',
+      summary: 'User accepted the recommended input files',
+      details: Object.keys(compiledInputs.files),
+    });
     addMessage({
       role: 'assistant',
       title: '选择提交位置',
@@ -974,7 +1266,7 @@ const AgentWorkspace: React.FC = () => {
         : '当前没有配置真实集群，仍可使用 Local Demo Runner 物化输入文件并跑通流程。',
     });
     setPhase('await_submit');
-  }, [addMessage, compiledInputs, configuredProfiles]);
+  }, [addMessage, compiledInputs, configuredProfiles, recordHarnessCheckpoint]);
 
   const fetchResults = useCallback(async (jobId: string) => {
     try {
@@ -992,13 +1284,37 @@ const AgentWorkspace: React.FC = () => {
             '是否输出结果并用 nature-paper2ppt 生成 PPT？'
           ].join('\n'),
         });
+        void recordHarnessCheckpoint({
+          phase: 'await_ppt',
+          status: 'success',
+          agent: 'Compute',
+          toolName: 'compute.results',
+          summary: 'Compute result bundle ready; waiting for presentation choice',
+          details: [
+            `converged=${String(payload.metrics?.converged ?? 'unknown')}`,
+            `energy=${payload.metrics?.totalEnergyEv ?? 'N/A'}`,
+            `maxForce=${payload.metrics?.maxForceEvPerA ?? 'N/A'}`,
+          ],
+          artifact: {
+            kind: 'result_bundle',
+            summary: `Results for job ${jobId}`,
+            producedBySkill: 'harvest_local_result',
+            payload: {
+              jobId,
+              metrics: payload.metrics || null,
+              warnings: payload.warnings || [],
+              hasContcar: Boolean(payload.hasContcar),
+              contcar: payload.contcar || null,
+            },
+          },
+        });
         setPhase('await_ppt');
       }
     } catch (error) {
       addMessage({ role: 'assistant', title: '结果读取失败', content: error instanceof Error ? error.message : String(error), status: 'error' });
       setPhase('error');
     }
-  }, [addMessage]);
+  }, [addMessage, recordHarnessCheckpoint]);
 
   const startPolling = useCallback((jobId: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -1047,18 +1363,21 @@ const AgentWorkspace: React.FC = () => {
       details: [profile.summary],
     });
     try {
-      const response = await fetch(`${API_BASE_URL}/compute/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          profileId: profile.id,
-          structure: { meta: { formula: modelStructure.filename } },
-          intent: computeIntent,
-          compiledFiles: compiledInputs.files,
-        }),
+      void recordHarnessCheckpoint({
+        phase: 'await_submit',
+        status: 'success',
+        agent: 'Orchestrator',
+        toolName: 'human.choose_submit_target',
+        summary: `User selected submit target ${profile.label}`,
+        details: [profile.summary],
       });
-      const payload = await response.json();
-      if (!response.ok || !payload?.success) throw new Error(payload?.error || 'Job submission failed');
+      const payload = await postJson<any>('/compute/submit', {
+        profileId: profile.id,
+        structure: { meta: { formula: modelStructure.filename } },
+        intent: computeIntent,
+        compiledFiles: compiledInputs.files,
+      });
+      if (!payload?.success) throw new Error(payload?.error || 'Job submission failed');
       const job: JobStatus = {
         id: payload.jobId,
         status: 'queued',
@@ -1079,13 +1398,27 @@ const AgentWorkspace: React.FC = () => {
         title: '作业已提交',
         content: `已提交到 ${profile.label}。我会继续轮询状态，完成后询问是否生成 PPT。`,
       });
+      void recordHarnessCheckpoint({
+        phase: 'monitoring',
+        status: 'success',
+        agent: 'Compute',
+        toolName: 'compute.submit',
+        summary: `Job submitted to ${profile.label}`,
+        details: [`jobId=${payload.jobId}`, `external=${payload.externalJobId || 'local'}`, `mode=${payload.submissionMode || profile.mode}`],
+        payload: {
+          jobId: payload.jobId,
+          externalJobId: payload.externalJobId || null,
+          profileId: profile.id,
+          submissionMode: payload.submissionMode || profile.mode,
+        },
+      });
       startPolling(payload.jobId);
     } catch (error) {
       updateTool(toolId, { status: 'error', details: [error instanceof Error ? error.message : String(error)] });
       addMessage({ role: 'assistant', title: '提交失败', content: error instanceof Error ? error.message : String(error), status: 'error' });
       setPhase('error');
     }
-  }, [addMessage, addTool, compiledInputs, computeIntent, modelStructure, profiles, selectedProfile, startPolling, updateTool]);
+  }, [addMessage, addTool, compiledInputs, computeIntent, modelStructure, postJson, profiles, recordHarnessCheckpoint, selectedProfile, startPolling, updateTool]);
 
   const generatePpt = useCallback(async () => {
     setPhase('ppt');
@@ -1097,28 +1430,23 @@ const AgentWorkspace: React.FC = () => {
       details: ['Collecting papers, model, compute inputs and results...'],
     });
     try {
-      const response = await fetch(`${API_BASE_URL}/agent/presentation/nature-ppt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: messages.find((message) => message.role === 'user')?.content || '',
-          research,
-          selectedIdea,
-          modelIntent,
-          modelStructure: modelStructure ? {
-            filename: modelStructure.filename,
-            atomCount: modelStructure.atoms.length,
-            bondCount: modelStructure.bonds.length,
-            latticeVectors: modelStructure.latticeVectors,
-          } : null,
-          computeIntent,
-          compiledFiles: compiledInputs?.files || {},
-          jobStatus,
-          computeResult,
-        }),
+      const payload = await postJson<any>('/agent/presentation/nature-ppt', {
+        prompt: messages.find((message) => message.role === 'user')?.content || '',
+        research,
+        selectedIdea,
+        modelIntent,
+        modelStructure: modelStructure ? {
+          filename: modelStructure.filename,
+          atomCount: modelStructure.atoms.length,
+          bondCount: modelStructure.bonds.length,
+          latticeVectors: modelStructure.latticeVectors,
+        } : null,
+        computeIntent,
+        compiledFiles: compiledInputs?.files || {},
+        jobStatus,
+        computeResult,
       });
-      const payload = await response.json();
-      if (!response.ok || !payload?.success) throw new Error(payload?.error || 'PPT generation failed');
+      if (!payload?.success) throw new Error(payload?.error || 'PPT generation failed');
       setPptUrl(payload.downloadUrl);
       setPptQa(payload.qa || null);
       updateTool(toolId, {
@@ -1130,13 +1458,32 @@ const AgentWorkspace: React.FC = () => {
         title: 'PPT 已生成',
         content: `已生成可下载 PPT：${payload.filename}`,
       });
+      void recordHarnessCheckpoint({
+        phase: 'done',
+        status: 'success',
+        agent: 'Presentation',
+        toolName: 'presentation.nature-paper2ppt',
+        summary: 'Presentation generated',
+        details: [payload.filename, payload.qa || 'PPTX package generated'],
+        artifact: {
+          kind: 'presentation',
+          summary: payload.filename,
+          producedBySkill: 'create_nature_presentation',
+          payload: {
+            filename: payload.filename,
+            downloadUrl: payload.downloadUrl,
+            qa: payload.qa || null,
+            skillSource: payload.skillSource || null,
+          },
+        },
+      });
       setPhase('done');
     } catch (error) {
       updateTool(toolId, { status: 'error', details: [error instanceof Error ? error.message : String(error)] });
       addMessage({ role: 'assistant', title: 'PPT 生成失败', content: error instanceof Error ? error.message : String(error), status: 'error' });
       setPhase('error');
     }
-  }, [addMessage, addTool, compiledInputs, computeIntent, computeResult, jobStatus, messages, modelIntent, modelStructure, research, selectedIdea, updateTool]);
+  }, [addMessage, addTool, compiledInputs, computeIntent, computeResult, jobStatus, messages, modelIntent, modelStructure, postJson, recordHarnessCheckpoint, research, selectedIdea, updateTool]);
 
   const resetTask = () => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -1158,6 +1505,8 @@ const AgentWorkspace: React.FC = () => {
     setComputeResult(null);
     setPptUrl(null);
     setPptQa(null);
+    setHarnessSession(null);
+    harnessSessionIdRef.current = null;
     setPhase('idle');
   };
 
@@ -1170,6 +1519,14 @@ const AgentWorkspace: React.FC = () => {
 
     if (phase === 'await_model') {
       addMessage({ role: 'user', content });
+      void recordHarnessCheckpoint({
+        phase: 'await_model',
+        status: 'success',
+        agent: 'Orchestrator',
+        toolName: 'human.custom_model',
+        summary: 'User provided a custom model instruction',
+        details: [content],
+      });
       void buildModel(content);
       return;
     }
@@ -1227,6 +1584,14 @@ const AgentWorkspace: React.FC = () => {
               type="button"
               onClick={() => {
                 addMessage({ role: 'user', content: '使用推荐模型' });
+                void recordHarnessCheckpoint({
+                  phase: 'await_model',
+                  status: 'success',
+                  agent: 'Orchestrator',
+                  toolName: 'human.accept_model',
+                  summary: `User accepted recommended model: ${selectedIdea?.title || 'recommended model'}`,
+                  details: selectedIdea ? [selectedIdea.fit_reason] : [],
+                });
                 void buildModel();
               }}
               className="h-9 rounded-lg bg-[#0A1128] px-4 text-xs font-semibold text-white hover:bg-[#17213D]"
@@ -1331,6 +1696,13 @@ const AgentWorkspace: React.FC = () => {
               onClick={() => {
                 addMessage({ role: 'user', content: '不生成 PPT，结束对话' });
                 addMessage({ role: 'assistant', title: '已结束', content: '计算结果已保留在当前会话中。' });
+                void recordHarnessCheckpoint({
+                  phase: 'done',
+                  status: 'success',
+                  agent: 'Orchestrator',
+                  toolName: 'human.skip_presentation',
+                  summary: 'User ended the workflow without generating a PPT',
+                });
                 setPhase('done');
               }}
               className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:border-slate-300"
@@ -1690,6 +2062,54 @@ const AgentWorkspace: React.FC = () => {
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-5 custom-scrollbar">
+                <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck size={16} className="text-slate-600" />
+                    <p className="text-sm font-bold">Agent Harness</p>
+                  </div>
+                  {harnessSession ? (
+                    <div className="mt-3 space-y-3">
+                      <div className="rounded-md border border-slate-200 bg-white p-2">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Session</p>
+                        <p className="mt-1 truncate font-mono text-[11px] text-slate-700" title={harnessSession.sessionId}>{harnessSession.sessionId}</p>
+                        <p className="mt-1 text-[10px] text-slate-400">{harnessSession.harness}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-md border border-slate-200 bg-white p-2">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Checkpoints</p>
+                          <p className="mt-1 font-bold">{harnessSession.checkpoints.length}</p>
+                        </div>
+                        <div className="rounded-md border border-slate-200 bg-white p-2">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Artifacts</p>
+                          <p className="mt-1 font-bold">{harnessSession.checkpoints.filter((item) => item.artifact && item.artifact.id !== 'pending').length}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {harnessSession.checkpoints.slice(-5).map((checkpoint) => (
+                          <div key={checkpoint.id} className="rounded-md border border-slate-200 bg-white p-2">
+                            <div className="flex items-center gap-2">
+                              <span className={cx(
+                                'h-2 w-2 rounded-full',
+                                checkpoint.status === 'success' ? 'bg-emerald-500' : checkpoint.status === 'running' ? 'bg-sky-500' : checkpoint.status === 'error' ? 'bg-rose-500' : 'bg-slate-300'
+                              )} />
+                              <p className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-700">{checkpoint.summary}</p>
+                            </div>
+                            {checkpoint.artifact && (
+                              <p className="mt-1 truncate font-mono text-[10px] text-slate-400" title={checkpoint.artifact.id}>
+                                {checkpoint.artifact.kind}: {checkpoint.artifact.id}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs leading-5 text-slate-500">
+                      新任务开始后会创建 runtime session，记录工具调用、用户确认和关键 artifact。
+                    </p>
+                  )}
+                </div>
+
                 <div className="mb-5">
                   <div className="mb-3 flex items-center gap-2">
                     <Database size={16} className="text-slate-500" />
