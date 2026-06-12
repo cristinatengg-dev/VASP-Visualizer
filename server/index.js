@@ -175,8 +175,12 @@ function fallbackChatReply(message, memories) {
 
 async function loadChatSession(sessionId, ownerId) {
     if (sessionId) {
-        const existing = await ChatSession.findById(sessionId);
-        if (existing) return existing.toObject ? existing.toObject() : existing;
+        try {
+            const existing = await ChatSession.findById(sessionId);
+            if (existing) return existing.toObject ? existing.toObject() : existing;
+        } catch (_error) {
+            // Ignore stale mock ids or malformed ObjectIds and start a fresh session.
+        }
     }
     const created = await ChatSession.create({
         ownerId,
@@ -265,7 +269,7 @@ app.post('/api/agent/chat', async (req, res) => {
 
         return res.json({
             success: true,
-            sessionId: session._id,
+            sessionId: String(session._id),
             reply,
             memories: refreshedMemories.slice(-12).map((item) => ({ id: item._id, text: item.text })),
             llmConfigured: isTextChatConfigured(),
