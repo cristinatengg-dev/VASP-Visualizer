@@ -3,6 +3,7 @@
 const { geminiChat } = require('../rendering/parse-science');
 const https = require('https');
 const http = require('http');
+const { execFile } = require('child_process');
 const { proxyAgent } = require('../proxy-agent');
 
 // ─── HTTP helpers ────────────────────────────────────────────────────────────
@@ -82,6 +83,41 @@ function httpGet(url, headers = {}, requestOptions = {}) {
     });
 
     req.end();
+  });
+}
+
+function pythonHttpGet(url, headers = {}, timeoutMs = 15000) {
+  const script = `
+import json
+import sys
+import urllib.request
+
+url = sys.argv[1]
+timeout = max(1, float(sys.argv[2]) / 1000.0)
+headers = json.loads(sys.argv[3])
+request = urllib.request.Request(url, headers=headers)
+try:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        body = response.read().decode("utf-8", "replace")
+        print(json.dumps({"ok": 200 <= response.status < 400, "status": response.status, "body": body}))
+except Exception as exc:
+    print(json.dumps({"ok": False, "status": 0, "body": "", "error": f"{type(exc).__name__}: {exc}"}))
+`.trim();
+
+  return new Promise((resolve) => {
+    execFile(
+      'python3',
+      ['-c', script, url, String(timeoutMs), JSON.stringify(headers)],
+      { timeout: timeoutMs + 3000, maxBuffer: 5 * 1024 * 1024 },
+      (error, stdout) => {
+        if (error) {
+          resolve({ ok: false, status: 0, body: '', error: error.message });
+          return;
+        }
+        const parsed = safeJson(stdout);
+        resolve(parsed || { ok: false, status: 0, body: '', error: 'python fallback parse failed' });
+      }
+    );
   });
 }
 
@@ -471,7 +507,13 @@ async function searchMaterialsProject(formula) {
 
 async function searchOQMD(formula, limit = 4) {
   const url = `https://oqmd.org/oqmdapi/formationenergy?composition=${encodeURIComponent(formula)}&fields=name,entry_id,spacegroup,delta_e,stability,band_gap&limit=${limit}`;
-  const res = await httpGet(url, {}, { timeoutMs: 8000 });
+  let res = await httpGet(url, {}, { timeoutMs: 12000, proxy: false });
+  if (!res.ok && proxyAgent) {
+    res = await httpGet(url, {}, { timeoutMs: 12000 });
+  }
+  if (!res.ok && res.status === 0) {
+    res = await pythonHttpGet(url, { 'User-Agent': 'VASP-IdeaAgent/1.0', Accept: 'application/json' }, 20000);
+  }
   if (!res.ok) return { success: false, error: `OQMD API ${res.status}` };
 
   const parsed = safeJson(res.body);
