@@ -325,12 +325,12 @@ const agents: WorkspaceAgent[] = [
   {
     id: 'export',
     name: '结果汇报',
-    subtitle: 'nature-paper2ppt',
+    subtitle: '可下载 PPTX',
     status: 'ready',
     accent: 'bg-rose-600 text-white',
     icon: Archive,
     tools: ['pptx', 'QA', 'download'],
-    output: '按 nature-paper2ppt 逻辑输出中文汇报 PPT。',
+    output: '生成可下载中文汇报 PPT。',
   },
 ];
 
@@ -1739,7 +1739,7 @@ const AgentWorkspace: React.FC = () => {
             `状态：${payload.metrics?.converged ? 'converged' : 'finished / check warnings'}`,
             `能量：${payload.metrics?.totalEnergyEv != null ? `${payload.metrics.totalEnergyEv} eV` : 'N/A'}`,
             `最大力：${payload.metrics?.maxForceEvPerA != null ? `${payload.metrics.maxForceEvPerA} eV/A` : 'N/A'}`,
-            '是否输出结果并用 nature-paper2ppt 生成 PPT？'
+            '是否输出结果并生成可下载中文 PPT？'
           ].join('\n'),
         });
         void recordHarnessCheckpoint({
@@ -1881,10 +1881,10 @@ const AgentWorkspace: React.FC = () => {
   const generatePpt = useCallback(async () => {
     setPhase('ppt');
     const toolId = addTool({
-      name: 'presentation.nature-paper2ppt',
+      name: 'presentation.generate-ppt',
       agent: 'Presentation',
       status: 'running',
-      summary: '按 nature-paper2ppt 证据链生成中文 PPTX',
+      summary: '生成可下载中文 PPTX',
       details: ['Collecting papers, model, compute inputs and results...'],
     });
     try {
@@ -1905,11 +1905,14 @@ const AgentWorkspace: React.FC = () => {
         computeResult,
       });
       if (!payload?.success) throw new Error(payload?.error || 'PPT generation failed');
+      if (!payload?.downloadUrl || !payload?.downloadVerified) {
+        throw new Error('PPT was generated but the downloadable file could not be verified');
+      }
       setPptUrl(payload.downloadUrl);
       setPptQa(payload.qa || null);
       updateTool(toolId, {
         status: 'success',
-        details: [payload.filename, payload.qa || 'PPTX package generated'],
+        details: [payload.filename, payload.fileSize ? `${payload.fileSize} bytes` : 'PPTX package generated'],
       });
       addMessage({
         role: 'assistant',
@@ -1920,18 +1923,19 @@ const AgentWorkspace: React.FC = () => {
         phase: 'done',
         status: 'success',
         agent: 'Presentation',
-        toolName: 'presentation.nature-paper2ppt',
-        summary: 'Presentation generated',
-        details: [payload.filename, payload.qa || 'PPTX package generated'],
+        toolName: 'presentation.generate_ppt',
+        summary: 'Downloadable PPT generated',
+        details: [payload.filename, payload.fileSize ? `${payload.fileSize} bytes` : 'PPTX package generated'],
         artifact: {
           kind: 'presentation',
           summary: payload.filename,
-          producedBySkill: 'create_nature_presentation',
+          producedBySkill: 'create_presentation',
           payload: {
             filename: payload.filename,
             downloadUrl: payload.downloadUrl,
             qa: payload.qa || null,
-            skillSource: payload.skillSource || null,
+            downloadVerified: Boolean(payload.downloadVerified),
+            fileSize: payload.fileSize || null,
           },
         },
       });

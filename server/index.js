@@ -2028,12 +2028,27 @@ app.post('/api/agent/retrieve', requireAgentAccess('retrieval'), async (req, res
 // ── Route: POST /api/agent/presentation/nature-ppt ───────────────────────────
 // Phase 7: Create a downloadable PPTX report from the completed orchestrator run.
 const PRESENTATION_OUTPUT_DIR = path.join(__dirname, 'data', 'presentations');
-const NATURE_PAPER2PPT_SKILL_SOURCE = 'https://github.com/Yuan1z0825/nature-skills/tree/main/skills/nature-paper2ppt';
 
 const sanitizePresentationFilename = (value) => String(value || 'agent-report')
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 90) || 'agent-report';
+
+const verifyPptxFile = (filePath) => {
+    if (!fs.existsSync(filePath)) return { ok: false, reason: 'file_missing' };
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile() || stat.size < 1024) return { ok: false, reason: 'file_empty_or_too_small', size: stat.size };
+    const fd = fs.openSync(filePath, 'r');
+    const header = Buffer.alloc(4);
+    try {
+        fs.readSync(fd, header, 0, 4, 0);
+    } finally {
+        fs.closeSync(fd);
+    }
+    const isZipPackage = header[0] === 0x50 && header[1] === 0x4b && header[2] === 0x03 && header[3] === 0x04;
+    if (!isZipPackage) return { ok: false, reason: 'invalid_pptx_header', size: stat.size };
+    return { ok: true, size: stat.size };
+};
 
 app.post('/api/agent/presentation/nature-ppt', requireAgentAccess('rendering'), async (req, res) => {
     try {
@@ -2063,6 +2078,11 @@ app.post('/api/agent/presentation/nature-ppt', requireAgentAccess('rendering'), 
             throw new Error(stderr || `PPT generator exited with ${exitCode}`);
         }
 
+        const pptxCheck = verifyPptxFile(outPath);
+        if (!pptxCheck.ok) {
+            throw new Error(`PPTX file verification failed: ${pptxCheck.reason}`);
+        }
+
         let qa = null;
         try {
             qa = JSON.parse(stdout || '{}')?.qa || null;
@@ -2075,7 +2095,8 @@ app.post('/api/agent/presentation/nature-ppt', requireAgentAccess('rendering'), 
             filename,
             downloadUrl: `/api/agent/presentation/${encodeURIComponent(filename)}`,
             qa,
-            skillSource: NATURE_PAPER2PPT_SKILL_SOURCE,
+            downloadVerified: true,
+            fileSize: pptxCheck.size,
         });
     } catch (err) {
         console.error('[agent/presentation/nature-ppt]', err.message);

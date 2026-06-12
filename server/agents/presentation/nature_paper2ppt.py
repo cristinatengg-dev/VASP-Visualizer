@@ -112,7 +112,7 @@ def generate(payload, out_path):
     add_metric(slide, 6.0, 3.0, "Input files", str(len(compiled_files)), RGBColor(217, 119, 6))
     add_metric(slide, 8.65, 3.0, "Job", clean(job_status.get("status"), "-"), RGBColor(190, 18, 60))
     add_textbox(slide, 0.7, 6.65, 6.5, 0.3, f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')}", size=9, color=GRAY)
-    add_textbox(slide, 8.8, 6.55, 3.9, 0.35, "nature-paper2ppt aligned workflow", size=9, color=GRAY, align=PP_ALIGN.RIGHT)
+    add_textbox(slide, 8.8, 6.55, 3.9, 0.35, "Evidence-backed PPT workflow", size=9, color=GRAY, align=PP_ALIGN.RIGHT)
 
     # 2 Workflow thinking summary
     slide = prs.slides.add_slide(prs.slide_layouts[6])
