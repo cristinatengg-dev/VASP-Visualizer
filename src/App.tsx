@@ -16,6 +16,7 @@ import SupercapacitorMaterialsExplorer from './pages/SupercapacitorMaterialsExpl
 import HydrogenStorageMaterialsExplorer from './pages/HydrogenStorageMaterialsExplorer';
 import ThermalStorageMaterialsExplorer from './pages/ThermalStorageMaterialsExplorer';
 import FlowBatteryMaterialsExplorer from './pages/FlowBatteryMaterialsExplorer';
+import MaterialsLibrary from './pages/MaterialsLibrary';
 import RenderingAgent from './agents/rendering';
 import ModelingAgent from './agents/modeling';
 import ComputeAgent from './agents/compute';
@@ -132,7 +133,7 @@ function App() {
       <Route path="/explore" element={<Explore />} />
       <Route path="/workspace" element={<AgentRoute><AgentWorkspace /></AgentRoute>} />
       <Route path="/agent" element={<AgentRoute><AgentWorkspace /></AgentRoute>} />
-      <Route path="/materials" element={<MaterialsExplorer />} />
+      <Route path="/materials" element={<MaterialsLibrary />} />
       <Route path="/materials/battery" element={<MaterialsExplorer />} />
       <Route path="/materials/nuclear" element={<NuclearMaterialsExplorer />} />
       <Route path="/materials/supercapacitor" element={<SupercapacitorMaterialsExplorer />} />

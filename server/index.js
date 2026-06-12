@@ -38,7 +38,10 @@ const {
     searchOQMD,
     searchAFLOW,
     searchJARVIS,
+    searchAlexandria,
     searchNOMAD,
+    listStructureSources,
+    searchStructureDatabases,
 } = require('./src/retrieval/agent');
 const { createCatalystRouter } = require('./src/catalyst/router');
 const { compileComputeInputSet } = require('./src/compute/compile-input-set');
@@ -2091,26 +2094,35 @@ app.get('/api/agent/presentation/:filename', (req, res) => {
 
 // ── Route: GET /api/materials/search — Battery Materials Explorer ─────────────
 app.get('/api/materials/search', async (req, res) => {
-    const { formula } = req.query;
+    const { formula, sources } = req.query;
     if (!formula) return res.status(400).json({ error: 'formula query parameter is required' });
 
-    const results = { mp: [], oqmd: [], aflow: [], jarvis: [], nomad: [] };
+    const sourceIds = typeof sources === 'string'
+        ? sources.split(',').map((item) => item.trim()).filter(Boolean)
+        : null;
+    const bundle = await searchStructureDatabases(String(formula), 6, sourceIds);
 
-    const [mpRes, oqmdRes, aflowRes, jarvisRes, nomadRes] = await Promise.allSettled([
-        searchMaterialsProject(formula),
-        searchOQMD(formula, 6),
-        searchAFLOW(formula, 6),
-        searchJARVIS(formula, 6),
-        searchNOMAD(formula, 6),
-    ]);
+    res.json({ success: true, ...bundle });
+});
 
-    if (mpRes.status === 'fulfilled' && mpRes.value.success) results.mp = mpRes.value.results;
-    if (oqmdRes.status === 'fulfilled' && oqmdRes.value.success) results.oqmd = oqmdRes.value.results;
-    if (aflowRes.status === 'fulfilled' && aflowRes.value.success) results.aflow = aflowRes.value.results;
-    if (jarvisRes.status === 'fulfilled' && jarvisRes.value.success) results.jarvis = jarvisRes.value.results;
-    if (nomadRes.status === 'fulfilled' && nomadRes.value.success) results.nomad = nomadRes.value.results;
+app.get('/api/materials/sources', (_req, res) => {
+    res.json({ success: true, sources: listStructureSources() });
+});
 
-    res.json({ success: true, formula, results });
+app.get('/api/agent/structure-sources', requireAgentAccess('retrieval'), (_req, res) => {
+    res.json({ success: true, sources: listStructureSources() });
+});
+
+app.get('/api/agent/structures/search', requireAgentAccess('retrieval'), async (req, res) => {
+    const { formula, sources, limit } = req.query;
+    if (!formula) return res.status(400).json({ success: false, error: 'formula query parameter is required' });
+    const sourceIds = typeof sources === 'string'
+        ? sources.split(',').map((item) => item.trim()).filter(Boolean)
+        : null;
+    const perSourceLimit = Math.max(1, Math.min(20, Number(limit) || 6));
+    const bundle = await searchStructureDatabases(String(formula), perSourceLimit, sourceIds);
+
+    res.json({ success: true, ...bundle });
 });
 
 const imageGenerationJobs = new Map();

@@ -26,18 +26,19 @@ interface MaterialEntry {
   selection_reason: string;
 }
 
-type SourceKey = 'mp' | 'oqmd' | 'aflow' | 'jarvis' | 'nomad';
+type SourceKey = 'mp' | 'oqmd' | 'aflow' | 'jarvis' | 'alexandria' | 'nomad';
 
 interface SearchResults {
   mp: MaterialEntry[];
   oqmd: MaterialEntry[];
   aflow: MaterialEntry[];
   jarvis?: MaterialEntry[];
+  alexandria?: MaterialEntry[];
   nomad?: MaterialEntry[];
   [key: string]: MaterialEntry[] | undefined;
 }
 
-const SOURCE_ORDER: SourceKey[] = ['mp', 'oqmd', 'aflow', 'jarvis', 'nomad'];
+const SOURCE_ORDER: SourceKey[] = ['mp', 'oqmd', 'aflow', 'jarvis', 'alexandria', 'nomad'];
 
 const describeResult = (entry: MaterialEntry) => {
   if (entry.energy_above_hull !== 'N/A') {
@@ -174,8 +175,9 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex items-center gap-3">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/materials')}
             className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-white"
+            title="返回资料库"
           >
             <ArrowLeft size={16} />
           </button>

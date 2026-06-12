@@ -14,6 +14,7 @@ import {
   Cpu,
   Database,
   Download,
+  ExternalLink,
   FileText,
   FlaskConical,
   FolderOpen,
@@ -26,6 +27,7 @@ import {
   Mic,
   Paperclip,
   Play,
+  RefreshCw,
   Search,
   Server,
   Settings2,
@@ -148,6 +150,9 @@ interface Paper {
   source: string;
   source_type: 'peer-reviewed' | 'preprint';
   ablesci_url?: string;
+  evidence_url?: string | null;
+  source_label?: string;
+  verified_source?: boolean;
 }
 
 interface StructureCandidate {
@@ -161,6 +166,40 @@ interface StructureCandidate {
   source?: string;
   formation_energy?: string | null;
   band_gap?: string | null;
+}
+
+interface StructureSourceEntry {
+  id: string;
+  label: string;
+  kind: string;
+  liveSearch: boolean;
+  access: string;
+  homepage?: string;
+  endpoint?: string;
+  notes?: string;
+}
+
+interface StructureSourceRegistry {
+  live: StructureSourceEntry[];
+  datasets: StructureSourceEntry[];
+}
+
+interface SourceProbeState {
+  sourceId: string;
+  label: string;
+  formula: string;
+  status: 'idle' | 'running' | 'success' | 'error';
+  summary: string;
+  results: StructureCandidate[];
+  registryEntry?: StructureSourceEntry;
+}
+
+interface AttachedFileDigest {
+  name: string;
+  kind: 'pdf' | 'structure' | 'text' | 'unsupported';
+  summary: string;
+  context?: string;
+  structure?: MolecularStructure;
 }
 
 interface Blueprint {
@@ -222,21 +261,21 @@ interface CompleteData {
 type AgentEvent = StageEvent | { type: 'error'; content: string } | { type: 'complete'; data: CompleteData };
 
 const navItems = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'agent', label: 'Agent AI', icon: Bot },
-  { id: 'experts', label: 'Experts', icon: BriefcaseBusiness },
-  { id: 'skills', label: 'Skills', icon: WandSparkles },
-  { id: 'explore', label: 'Explore', icon: Search },
-  { id: 'connectors', label: 'Connectors', icon: Link2 },
-  { id: 'library', label: 'Library', icon: Library },
-  { id: 'automation', label: 'Automation', icon: Activity },
+  { id: 'home', label: '首页', icon: Home },
+  { id: 'agent', label: '科研流程', icon: Bot },
+  { id: 'experts', label: '专家库', icon: BriefcaseBusiness },
+  { id: 'skills', label: '技能', icon: WandSparkles },
+  { id: 'explore', label: '数据探索', icon: Search },
+  { id: 'connectors', label: '连接器', icon: Link2 },
+  { id: 'library', label: '资料库', icon: Library },
+  { id: 'automation', label: '自动化', icon: Activity },
 ];
 
 const agents: WorkspaceAgent[] = [
   {
     id: 'orchestrator',
-    name: 'Orchestrator',
-    subtitle: 'single conversation',
+    name: '总控流程',
+    subtitle: '单轮连续执行',
     status: 'active',
     accent: 'bg-[#0A1128] text-white',
     icon: BrainCircuit,
@@ -245,8 +284,8 @@ const agents: WorkspaceAgent[] = [
   },
   {
     id: 'retrieval',
-    name: 'Literature',
-    subtitle: 'paper evidence',
+    name: '文献证据',
+    subtitle: '真实来源',
     status: 'ready',
     accent: 'bg-emerald-600 text-white',
     icon: FileText,
@@ -255,18 +294,18 @@ const agents: WorkspaceAgent[] = [
   },
   {
     id: 'database',
-    name: 'Databases',
-    subtitle: 'six sources',
+    name: '结构数据库',
+    subtitle: '六类来源',
     status: 'active',
     accent: 'bg-indigo-600 text-white',
     icon: Database,
-    tools: ['MP', 'PubChem', 'COD', 'JARVIS', 'ICSD', 'OPTIMADE'],
-    output: '统一呈现六类结构与材料数据源。',
+    tools: ['JARVIS', 'Alexandria', 'MPtrj', 'Matbench', 'OMat24', 'NOMAD'],
+    output: '统一呈现实时结构源和大规模训练/评测数据集。',
   },
   {
     id: 'modeling',
-    name: 'Modeling',
-    subtitle: 'deterministic structure',
+    name: '确定性建模',
+    subtitle: '结构可视化',
     status: 'ready',
     accent: 'bg-sky-600 text-white',
     icon: AtomIcon,
@@ -275,8 +314,8 @@ const agents: WorkspaceAgent[] = [
   },
   {
     id: 'compute',
-    name: 'Compute',
-    subtitle: 'inputs and jobs',
+    name: '计算输入',
+    subtitle: '文件可编辑',
     status: 'handoff',
     accent: 'bg-amber-600 text-white',
     icon: Cpu,
@@ -285,7 +324,7 @@ const agents: WorkspaceAgent[] = [
   },
   {
     id: 'export',
-    name: 'Presentation',
+    name: '结果汇报',
     subtitle: 'nature-paper2ppt',
     status: 'ready',
     accent: 'bg-rose-600 text-white',
@@ -297,58 +336,58 @@ const agents: WorkspaceAgent[] = [
 
 const databaseAgents: DatabaseAgent[] = [
   {
-    id: 'materials-project',
-    name: 'Materials Project',
-    shortName: 'MP',
-    status: 'active',
-    scope: 'Computed crystal structures, stability, energies, symmetry, and materials metadata.',
-    agentRole: 'Primary crystal source',
-    sources: ['bulk', 'slab', 'stability'],
-  },
-  {
-    id: 'pubchem-3d',
-    name: 'PubChem 3D',
-    shortName: 'PubChem',
-    status: 'active',
-    scope: 'Small molecules, adsorbates, formula identity, and conformer references.',
-    agentRole: 'Molecule identity',
-    sources: ['SDF', 'formula', 'bonds'],
-  },
-  {
-    id: 'cod',
-    name: 'Crystallography Open Database',
-    shortName: 'COD',
-    status: 'ready',
-    scope: 'Open experimental CIF structures for crystal and phase cross-checking.',
-    agentRole: 'Experimental CIF',
-    sources: ['CIF', 'open', 'experimental'],
-  },
-  {
     id: 'jarvis',
     name: 'JARVIS',
     shortName: 'JARVIS',
+    status: 'active',
+    scope: 'NIST JARVIS-DFT structures and property metadata through the JARVIS OPTIMADE endpoint.',
+    agentRole: 'Live OPTIMADE structure source',
+    sources: ['structure', 'properties', 'OPTIMADE'],
+  },
+  {
+    id: 'alexandria',
+    name: 'Alexandria',
+    shortName: 'ALX',
+    status: 'active',
+    scope: 'Alexandria PBE structures exposed through an OPTIMADE-compatible endpoint.',
+    agentRole: 'Live OPTIMADE structure source',
+    sources: ['PBE', 'structure', 'OPTIMADE'],
+  },
+  {
+    id: 'mptrj',
+    name: 'MPtrj',
+    shortName: 'MPtrj',
     status: 'ready',
-    scope: 'DFT structures, surfaces, spectra, and NIST materials records.',
-    agentRole: 'DFT expansion',
-    sources: ['DFT', 'surfaces', 'NIST'],
+    scope: 'Materials Project relaxation trajectory dataset for training and benchmarking.',
+    agentRole: 'Dataset registry',
+    sources: ['trajectories', 'training', 'MP'],
   },
   {
-    id: 'icsd-csd',
-    name: 'ICSD / CSD',
-    shortName: 'ICSD+CSD',
-    status: 'gated',
-    scope: 'Curated inorganic and molecular crystal references behind licensed access.',
-    agentRole: 'Licensed source',
-    sources: ['license', 'curated', 'enterprise'],
+    id: 'matbench-discovery',
+    name: 'Matbench Discovery',
+    shortName: 'MBD',
+    status: 'ready',
+    scope: 'Benchmark and discovery registry for stability prediction workflows.',
+    agentRole: 'Benchmark registry',
+    sources: ['benchmark', 'leaderboard', 'discovery'],
   },
   {
-    id: 'optimade-atomly',
-    name: 'OPTIMADE / Atomly',
-    shortName: 'OPTIMADE',
-    status: 'handoff',
-    scope: 'Federated materials API connector and third-party source aggregation.',
-    agentRole: 'Federation',
-    sources: ['connector', 'federated', 'provider chain'],
+    id: 'omat24',
+    name: 'OMat24',
+    shortName: 'OMat24',
+    status: 'ready',
+    scope: 'Large-scale Open Materials 2024 training data from FAIRChem/Hugging Face.',
+    agentRole: 'Dataset registry',
+    sources: ['LMDB', 'training', 'FAIRChem'],
+  },
+  {
+    id: 'nomad',
+    name: 'NOMAD',
+    shortName: 'NOMAD',
+    status: 'active',
+    scope: 'NOMAD Archive structures and provenance-rich metadata through OPTIMADE.',
+    agentRole: 'Live OPTIMADE structure source',
+    sources: ['archive', 'provenance', 'OPTIMADE'],
   },
 ];
 
@@ -378,27 +417,27 @@ const recentTasks = [
 ];
 
 const statusMeta: Record<AgentStatus, { label: string; className: string }> = {
-  active: { label: 'Active', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  ready: { label: 'Ready', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  handoff: { label: 'Handoff', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  gated: { label: 'Gated', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+  active: { label: '运行中', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  ready: { label: '就绪', className: 'bg-sky-50 text-sky-700 border-sky-200' },
+  handoff: { label: '待确认', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  gated: { label: '需授权', className: 'bg-rose-50 text-rose-700 border-rose-200' },
 };
 
 const phaseLabel: Record<WorkflowPhase, string> = {
-  idle: 'Ready',
-  retrieving: 'Retrieving',
-  await_model: 'Model choice',
-  modeling: 'Modeling',
-  await_software: 'Software choice',
-  compiling: 'Compiling inputs',
-  await_input: 'Review inputs',
-  await_submit: 'Submit choice',
-  submitting: 'Submitting',
-  monitoring: 'Monitoring',
-  await_ppt: 'Report choice',
-  ppt: 'Creating PPT',
-  done: 'Done',
-  error: 'Needs attention',
+  idle: '待开始',
+  retrieving: '检索文献与数据库',
+  await_model: '确认模型',
+  modeling: '生成结构',
+  await_software: '选择计算软件',
+  compiling: '生成输入文件',
+  await_input: '检查输入文件',
+  await_submit: '选择提交位置',
+  submitting: '提交作业',
+  monitoring: '等待计算',
+  await_ppt: '确认汇报输出',
+  ppt: '生成 PPT',
+  done: '已完成',
+  error: '需要处理',
 };
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
@@ -521,11 +560,174 @@ const parseCustomParams = (text: string) => {
   return params;
 };
 
-const topPaperLines = (papers: Paper[], limit = 5) => papers.slice(0, limit).map((paper, index) => {
-  const title = paper.title || 'Untitled';
+const paperEvidenceUrl = (paper: Paper) => paper.evidence_url || paper.url || (paper.doi && !/^arXiv:/i.test(paper.doi) ? `https://doi.org/${paper.doi}` : null);
+
+const isSourceBackedPaper = (paper: Paper) => {
+  const title = String(paper.title || '').trim();
+  return title.length > 5 && !/^untitled$/i.test(title) && Boolean(paperEvidenceUrl(paper) || paper.doi);
+};
+
+const getVerifiedPapers = (papers: Paper[] = []) => papers.filter(isSourceBackedPaper);
+
+const topPaperLines = (papers: Paper[], limit = 5) => getVerifiedPapers(papers).slice(0, limit).map((paper, index) => {
   const year = paper.year ? ` (${paper.year})` : '';
-  return `${index + 1}. ${title}${year} · ${paper.source}${paper.doi ? ` · DOI ${paper.doi}` : ''}`;
+  const source = paper.source_label || paper.source || 'scholarly index';
+  const evidence = paper.doi ? `DOI ${paper.doi}` : paperEvidenceUrl(paper);
+  return `${index + 1}. ${paper.title}${year} · ${source}${evidence ? ` · ${evidence}` : ''}`;
 });
+
+const sourceRegistryId = (id: string) => id === 'matbench-discovery' ? 'matbench_discovery' : id;
+
+const isPdfFile = (file: File) => /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
+const isStructureFile = (file: File) => /\.(vasp|poscar|contcar|cif|xyz)$/i.test(file.name) || /^(POSCAR|CONTCAR)$/i.test(file.name);
+const isXyzFile = (file: File) => /\.xyz$/i.test(file.name);
+
+const summarizeParsedScience = (data: any) => {
+  const parts = [
+    data?.core_theme && `theme=${data.core_theme}`,
+    data?.central_object && `central=${data.central_object}`,
+    data?.support_or_substrate && `substrate=${data.support_or_substrate}`,
+    Array.isArray(data?.reactants) && data.reactants.length ? `reactants=${data.reactants.map((item: any) => item.formula_en || item.name_cn || item.name).filter(Boolean).join(', ')}` : '',
+    Array.isArray(data?.products) && data.products.length ? `products=${data.products.map((item: any) => item.formula_en || item.name_cn || item.name).filter(Boolean).join(', ')}` : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join('; ') : 'PDF parsed into a scientific brief';
+};
+
+const parsedScienceContext = (data: any) => [
+  data?.core_theme ? `Core theme: ${data.core_theme}` : '',
+  data?.central_object ? `Central object: ${data.central_object}` : '',
+  data?.support_or_substrate ? `Support/substrate: ${data.support_or_substrate}` : '',
+  data?.active_site ? `Active site: ${data.active_site}` : '',
+  Array.isArray(data?.reactants) && data.reactants.length
+    ? `Reactants: ${data.reactants.map((item: any) => item.formula_en || item.name_cn || item.name).filter(Boolean).join(', ')}`
+    : '',
+  Array.isArray(data?.intermediates) && data.intermediates.length
+    ? `Intermediates: ${data.intermediates.map((item: any) => item.formula_en || item.name_cn || item.name).filter(Boolean).join(', ')}`
+    : '',
+  Array.isArray(data?.products) && data.products.length
+    ? `Products: ${data.products.map((item: any) => item.formula_en || item.name_cn || item.name).filter(Boolean).join(', ')}`
+    : '',
+  data?.key_mechanism ? `Mechanism: ${data.key_mechanism}` : '',
+].filter(Boolean).join('\n');
+
+const parseXyzStructure = async (file: File): Promise<MolecularStructure> => {
+  const text = await file.text();
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const declaredCount = Number(lines[0]);
+  const atomLines = Number.isFinite(declaredCount) && declaredCount > 0
+    ? lines.slice(2, 2 + declaredCount)
+    : lines;
+  const atoms: Atom[] = atomLines.map((line, index) => {
+    const [elementRaw, xRaw, yRaw, zRaw] = line.split(/\s+/);
+    const element = String(elementRaw || 'C').replace(/[^A-Za-z]/g, '') || 'C';
+    const props = getAtomProperties(element);
+    return {
+      id: `atom-${index}`,
+      element,
+      position: {
+        x: Number(xRaw) || 0,
+        y: Number(yRaw) || 0,
+        z: Number(zRaw) || 0,
+      },
+      radius: props.radius,
+      color: props.color,
+    };
+  }).filter((atom) => atom.element && Number.isFinite(atom.position.x) && Number.isFinite(atom.position.y) && Number.isFinite(atom.position.z));
+
+  if (!atoms.length) throw new Error('XYZ 文件没有可解析的原子坐标');
+  return {
+    id: `xyz-${Date.now()}`,
+    filename: file.name,
+    atoms,
+    bonds: [],
+    boundingBox: computeBoundingBox(atoms),
+  };
+};
+
+const StructurePreview: React.FC<{ structure: MolecularStructure; onOpenModeling: () => void }> = ({ structure, onOpenModeling }) => {
+  const atoms = structure.atoms || [];
+  const bonds = structure.bonds || [];
+  const atomById = new Map(atoms.map((atom) => [atom.id, atom]));
+  const minX = Math.min(...atoms.map((atom) => atom.position.x), -1);
+  const maxX = Math.max(...atoms.map((atom) => atom.position.x), 1);
+  const minY = Math.min(...atoms.map((atom) => atom.position.y), -1);
+  const maxY = Math.max(...atoms.map((atom) => atom.position.y), 1);
+  const spanX = Math.max(maxX - minX, 1);
+  const spanY = Math.max(maxY - minY, 1);
+  const width = 720;
+  const height = 360;
+  const pad = 34;
+  const project = (atom: Atom) => ({
+    x: pad + ((atom.position.x - minX) / spanX) * (width - pad * 2),
+    y: height - pad - ((atom.position.y - minY) / spanY) * (height - pad * 2),
+  });
+
+  return (
+    <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-bold text-[#0A1128]">结构预览</p>
+          <p className="mt-1 text-xs text-gray-500">{structure.filename} · {atoms.length} atoms · {bonds.length} bonds</p>
+        </div>
+        <button
+          type="button"
+          onClick={onOpenModeling}
+          className="rounded-[32px] border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+        >
+          打开完整建模页
+        </button>
+      </div>
+      <div className="overflow-hidden rounded-[16px] border border-gray-100 bg-[#0A1128]">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-[260px] w-full">
+          <rect width={width} height={height} fill="#0A1128" />
+          <g opacity="0.9">
+            {bonds.map((bond) => {
+              const left = atomById.get(bond.atom1Id);
+              const right = atomById.get(bond.atom2Id);
+              if (!left || !right) return null;
+              const a = project(left);
+              const b = project(right);
+              return (
+                <line
+                  key={bond.id}
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke="#D7DEE8"
+                  strokeWidth={bond.order && bond.order > 1 ? 5 : 3}
+                  strokeLinecap="round"
+                  opacity="0.72"
+                />
+              );
+            })}
+          </g>
+          <g>
+            {atoms.map((atom) => {
+              const point = project(atom);
+              const props = getAtomProperties(atom.element);
+              const radius = Math.max(7, Math.min(17, (atom.radius || props.radius) * 10));
+              return (
+                <g key={atom.id}>
+                  <circle cx={point.x + 2} cy={point.y + 3} r={radius + 2} fill="rgba(0,0,0,0.24)" />
+                  <circle cx={point.x} cy={point.y} r={radius} fill={atom.color || props.color} stroke="rgba(255,255,255,0.85)" strokeWidth="1.5" />
+                  {atoms.length <= 80 && (
+                    <text x={point.x} y={point.y + 3.5} textAnchor="middle" className="fill-white text-[10px] font-bold">
+                      {atom.element}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+        </svg>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-gray-500">
+        这是确定性构建器返回结构的投影预览，计算输入和完整三维画布使用同一份原子坐标。
+      </p>
+    </div>
+  );
+};
 
 const shouldReplaceIrrelevantCatalystFallback = (prompt: string, data: CompleteData) => {
   const text = `${prompt} ${data.user_goal?.interpreted_goal || ''}`.toLowerCase();
@@ -540,20 +742,20 @@ const applyChemistryAwareRecommendation = (prompt: string, data: CompleteData): 
   const evidencePaper = (data.papers || []).find((paper) => /CuZn|ZrO2|methanol|hydrogenation|加氢|甲醇/i.test(`${paper.title} ${paper.abstract}`));
   const catalystIdea: IdeaCard = {
     id: 'co2-hydrogenation-cuzn-zro2-starter',
-    title: 'Cu(111)+CO2/H2 literature-guided starter model',
+    title: evidencePaper ? 'Cu(111)+CO2/H2 可核验文献起始模型' : 'Cu(111)+CO2/H2 启发式起始模型',
     material_family: 'Cu / CuZn-ZrO2 CO2 hydrogenation catalyst',
     fit_reason: evidencePaper
       ? `检索到与 CO2 加氢相关的铜基/氧化物界面文献，因此推荐先用 Cu(111)+CO2/H2 作为可计算 starter model，而不是使用无关的电池材料 fallback。`
       : '目标是 CO2 加氢催化，优先使用铜基表面和 CO2/H2 吸附物作为 starter model，避免把无关电池材料传入建模。',
     literature_basis: evidencePaper
       ? `${evidencePaper.title} (${evidencePaper.year || 'n.d.'})`
-      : 'CO2 hydrogenation catalyst screening starter model',
+      : '本轮没有返回带 DOI 或可打开来源链接的 CO2 加氢文献。',
     recommended_model_type: 'slab + adsorbates',
     target_properties: ['adsorption energy', 'surface relaxation', 'CO2 activation'],
     starter_friendly: true,
     difficulty: 'starter',
     confidence: evidencePaper ? 'medium' : 'low',
-    directly_supported: true,
+    directly_supported: Boolean(evidencePaper),
     blueprint: {
       why_this_idea: 'CO2 加氢通常需要表面位点和 CO2/H2 吸附构型；先用铜基表面 starter model 能保证建模和计算链路化学相关。',
       what_can_be_calculated: 'CO2/H2 adsorption energy, relaxed geometry, charge transfer, initial activation descriptors.',
@@ -573,7 +775,7 @@ const applyChemistryAwareRecommendation = (prompt: string, data: CompleteData): 
       },
       literature_rationale: evidencePaper
         ? `Evidence anchor: ${evidencePaper.title}.`
-        : 'Copper-based surfaces are a safer starter path for CO2 hydrogenation than battery oxides.',
+        : 'This is a chemistry heuristic rather than a literature claim: copper-based surfaces are a safer starter path for CO2 hydrogenation than battery oxides.',
       caution_notes: ['This is a starter model. Validate exact catalyst phase/interface against target papers before publication-grade conclusions.'],
       first_step: 'Build and relax Cu(111)+CO2/H2 adsorbate structure.',
       second_step: 'Compare CO2, H2, COOH/formate intermediates on the same surface model.',
@@ -610,8 +812,8 @@ const AgentWorkspace: React.FC = () => {
     {
       id: 'welcome',
       role: 'assistant',
-      title: 'Orchestrator ready',
-      content: '把检索、论文证据、模型选择、计算输入、集群提交和 PPT 输出放在同一个对话里执行。你可以直接输入：检索 CO2 加氢催化剂文章。',
+      title: '流程已就绪',
+      content: '可以直接输入一个科研任务。我会先检索可核验文献和结构数据库，再让你确认模型、检查输入文件、选择提交位置，最后决定是否生成 PPT。',
       createdAt: Date.now(),
     },
   ]);
@@ -624,12 +826,15 @@ const AgentWorkspace: React.FC = () => {
   const [profiles, setProfiles] = useState<ServerComputeProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string>('local_demo');
   const [compiledInputs, setCompiledInputs] = useState<CompiledInputs | null>(null);
+  const [selectedInputFileName, setSelectedInputFileName] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [computeResult, setComputeResult] = useState<ComputeResult | null>(null);
   const [pptUrl, setPptUrl] = useState<string | null>(null);
   const [pptQa, setPptQa] = useState<string | null>(null);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [harnessSession, setHarnessSession] = useState<HarnessSessionState | null>(null);
+  const [structureSources, setStructureSources] = useState<StructureSourceRegistry | null>(null);
+  const [sourceProbe, setSourceProbe] = useState<SourceProbeState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -645,6 +850,37 @@ const AgentWorkspace: React.FC = () => {
   const filteredRecentTasks = recentTasks.filter((task) => task.toLowerCase().includes(taskSearch.trim().toLowerCase()));
   const configuredProfiles = profiles.filter((profile) => profile.configured);
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) || configuredProfiles[0] || profiles[0] || null;
+  const compiledFileNames = useMemo(() => Object.keys(compiledInputs?.files || {}), [compiledInputs]);
+  const selectedInputContent = selectedInputFileName && compiledInputs?.files[selectedInputFileName]
+    ? compiledInputs.files[selectedInputFileName]
+    : '';
+  const sourceRegistryById = useMemo(() => {
+    const entries = [...(structureSources?.live || []), ...(structureSources?.datasets || [])];
+    return new Map(entries.map((entry) => [entry.id, entry]));
+  }, [structureSources]);
+  const activeSourceFormula = useMemo(() => {
+    const formula = selectedIdea?.blueprint?.structure_source?.formula
+      || research?.handoff?.formula
+      || modelIntent?.substrate?.material
+      || modelIntent?.material
+      || '';
+    return String(formula || '').trim() || 'Si';
+  }, [modelIntent, research?.handoff?.formula, selectedIdea]);
+
+  useEffect(() => {
+    if (!compiledInputs) {
+      setSelectedInputFileName(null);
+      return;
+    }
+    const names = Object.keys(compiledInputs.files || {});
+    if (!names.length) {
+      setSelectedInputFileName(null);
+      return;
+    }
+    if (!selectedInputFileName || !names.includes(selectedInputFileName)) {
+      setSelectedInputFileName(names[0]);
+    }
+  }, [compiledInputs, selectedInputFileName]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -666,6 +902,19 @@ const AgentWorkspace: React.FC = () => {
 
   const updateTool = useCallback((id: string, patch: Partial<ToolEvent>) => {
     setToolEvents((prev) => prev.map((event) => (event.id === id ? { ...event, ...patch } : event)));
+  }, []);
+
+  const updateCompiledInputFile = useCallback((fileName: string, content: string) => {
+    setCompiledInputs((prev) => {
+      if (!prev || !prev.files[fileName]) return prev;
+      return {
+        ...prev,
+        files: {
+          ...prev.files,
+          [fileName]: content,
+        },
+      };
+    });
   }, []);
 
   const getAuthHeaders = useCallback((extra?: Record<string, string>) => {
@@ -696,6 +945,34 @@ const AgentWorkspace: React.FC = () => {
     }
     return data as T;
   }, [getAuthHeaders, withUserPayload]);
+
+  const fetchStructureSources = useCallback(async () => {
+    const load = async (path: string) => {
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        headers: getAuthHeaders(),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.success || !payload?.sources) {
+        throw new Error(payload?.error || `HTTP ${response.status}`);
+      }
+      return payload.sources as StructureSourceRegistry;
+    };
+
+    try {
+      const sources = await load('/agent/structure-sources');
+      setStructureSources(sources);
+      return sources;
+    } catch {
+      try {
+        const sources = await load('/materials/sources');
+        setStructureSources(sources);
+        return sources;
+      } catch {
+        setStructureSources(null);
+        return null;
+      }
+    }
+  }, [getAuthHeaders]);
 
   const appendHarnessCheckpoint = useCallback((checkpoint: HarnessCheckpoint) => {
     setHarnessSession((prev) => {
@@ -730,7 +1007,7 @@ const AgentWorkspace: React.FC = () => {
           id: newId('harness'),
           phase: 'system',
           status: 'success',
-          summary: 'Agent harness session created',
+          summary: '运行记录已创建',
         }],
       });
       return payload.sessionId;
@@ -819,14 +1096,14 @@ const AgentWorkspace: React.FC = () => {
     }
   }, [appendHarnessCheckpoint, postJson]);
 
-  const fetchProfiles = useCallback(async () => {
-    const toolId = addTool({
+  const fetchProfiles = useCallback(async (options: { log?: boolean } = {}) => {
+    const toolId = options.log ? addTool({
       name: 'compute.profiles',
       agent: 'Compute',
       status: 'running',
       summary: '读取可提交的本地/集群 profile',
       details: [],
-    });
+    }) : null;
     try {
       const response = await fetch(`${API_BASE_URL}/compute/profiles`);
       const payload = await response.json();
@@ -835,13 +1112,13 @@ const AgentWorkspace: React.FC = () => {
       setProfiles(nextProfiles);
       const firstConfigured = nextProfiles.find((profile) => profile.configured);
       if (firstConfigured) setSelectedProfileId(firstConfigured.id);
-      updateTool(toolId, {
+      if (toolId) updateTool(toolId, {
         status: 'success',
         details: nextProfiles.map((profile) => `${profile.label}: ${profile.configured ? 'configured' : 'not configured'}`),
       });
       return nextProfiles;
     } catch (error) {
-      updateTool(toolId, { status: 'error', details: [error instanceof Error ? error.message : String(error)] });
+      if (toolId) updateTool(toolId, { status: 'error', details: [error instanceof Error ? error.message : String(error)] });
       return [];
     }
   }, [addTool, updateTool]);
@@ -849,6 +1126,185 @@ const AgentWorkspace: React.FC = () => {
   useEffect(() => {
     void fetchProfiles();
   }, [fetchProfiles]);
+
+  useEffect(() => {
+    void fetchStructureSources();
+  }, [fetchStructureSources]);
+
+  const processAttachedFiles = useCallback(async (files: File[]): Promise<AttachedFileDigest[]> => {
+    if (!files.length) return [];
+    const toolId = addTool({
+      name: 'workspace.attachments',
+      agent: 'Orchestrator',
+      status: 'running',
+      summary: '解析上传文件并写入当前科研任务上下文',
+      details: files.map((file) => `${file.name} (${Math.round(file.size / 1024)} KB)`),
+    });
+    const digests: AttachedFileDigest[] = [];
+
+    for (const file of files) {
+      try {
+        if (isPdfFile(file)) {
+          const formData = new FormData();
+          formData.append('file', file);
+          const response = await fetch(`${API_BASE_URL}/agent/parse-pdf`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: formData,
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok || !payload?.success) throw new Error(payload?.error || `PDF parse failed (${response.status})`);
+          const summary = summarizeParsedScience(payload.data);
+          digests.push({
+            name: file.name,
+            kind: 'pdf',
+            summary,
+            context: parsedScienceContext(payload.data),
+          });
+          continue;
+        }
+
+        if (isStructureFile(file)) {
+          const structure = isXyzFile(file)
+            ? await parseXyzStructure(file)
+            : await (await import('../utils/fileParser')).parseVASPFile(file);
+          setModelStructure(structure);
+          setMolecularData(structure);
+          setShowBonds(Boolean(structure.bonds?.length));
+          digests.push({
+            name: file.name,
+            kind: 'structure',
+            summary: `${structure.atoms.length} atoms${structure.latticeVectors ? ' · periodic cell' : ''}`,
+            structure,
+            context: `Uploaded structure ${file.name}: ${structure.atoms.length} atoms, ${structure.bonds.length} bonds.`,
+          });
+          continue;
+        }
+
+        if (/\.(txt|md|csv)$/i.test(file.name) && file.size <= 1024 * 1024) {
+          const text = await file.text();
+          digests.push({
+            name: file.name,
+            kind: 'text',
+            summary: `${text.trim().length.toLocaleString()} chars read`,
+            context: text.slice(0, 4000),
+          });
+          continue;
+        }
+
+        digests.push({
+          name: file.name,
+          kind: 'unsupported',
+          summary: '文件已附加，但当前工作台不会假装读取该格式；请改传 PDF、POSCAR/CONTCAR/CIF/VASP/XYZ 或文本文件。',
+        });
+      } catch (error) {
+        digests.push({
+          name: file.name,
+          kind: 'unsupported',
+          summary: `解析失败：${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+    }
+
+    updateTool(toolId, {
+      status: digests.some((digest) => digest.summary.startsWith('解析失败')) ? 'error' : 'success',
+      details: digests.map((digest) => `${digest.name}: ${digest.summary}`),
+    });
+
+    addMessage({
+      role: 'tool',
+      title: '附件解析',
+      content: digests.map((digest) => `${digest.name}：${digest.summary}`).join('\n'),
+      status: digests.some((digest) => digest.summary.startsWith('解析失败')) ? 'error' : 'success',
+    });
+
+    return digests;
+  }, [addMessage, addTool, getAuthHeaders, setMolecularData, setShowBonds, updateTool]);
+
+  const probeStructureSource = useCallback(async (db: DatabaseAgent) => {
+    const registryId = sourceRegistryId(db.id);
+    const registryEntry = sourceRegistryById.get(registryId);
+    const formula = activeSourceFormula;
+
+    if (registryEntry && !registryEntry.liveSearch) {
+      const summary = registryEntry.notes || `${registryEntry.label} 是后台登记的数据集来源，不伪装成实时结构搜索。`;
+      setSourceProbe({
+        sourceId: registryId,
+        label: registryEntry.label,
+        formula,
+        status: 'success',
+        summary,
+        results: [],
+        registryEntry,
+      });
+      addMessage({
+        role: 'assistant',
+        title: `${registryEntry.label} 数据源`,
+        content: `${summary}\n主页：${registryEntry.homepage || 'N/A'}`,
+      });
+      return;
+    }
+
+    setSourceProbe({
+      sourceId: registryId,
+      label: registryEntry?.label || db.name,
+      formula,
+      status: 'running',
+      summary: `正在用 ${registryEntry?.label || db.name} 查询 ${formula}`,
+      results: [],
+      registryEntry,
+    });
+    const toolId = addTool({
+      name: `structures.${registryId}`,
+      agent: 'Database',
+      status: 'running',
+      summary: `查询 ${registryEntry?.label || db.name} 结构源`,
+      details: [`formula=${formula}`],
+    });
+
+    try {
+      const query = `formula=${encodeURIComponent(formula)}&sources=${encodeURIComponent(registryId)}&limit=4`;
+      let response = await fetch(`${API_BASE_URL}/agent/structures/search?${query}`, {
+        headers: getAuthHeaders(),
+      });
+      if (response.status === 401 || response.status === 403) {
+        response = await fetch(`${API_BASE_URL}/materials/search?${query}`);
+      }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.success) throw new Error(payload?.error || `HTTP ${response.status}`);
+      const results: StructureCandidate[] = payload.results?.[registryId] || [];
+      const summary = results.length
+        ? `返回 ${results.length} 个 ${formula} 结构候选`
+        : `${registryEntry?.label || db.name} 没有返回 ${formula} 的可用结构`;
+      setSourceProbe({
+        sourceId: registryId,
+        label: registryEntry?.label || db.name,
+        formula,
+        status: 'success',
+        summary,
+        results,
+        registryEntry,
+      });
+      updateTool(toolId, {
+        status: 'success',
+        details: results.length
+          ? results.map((item) => `${item.material_id} · ${item.formula} · ${item.crystal_system || 'unknown'}`)
+          : [summary],
+      });
+    } catch (error) {
+      const summary = error instanceof Error ? error.message : String(error);
+      setSourceProbe({
+        sourceId: registryId,
+        label: registryEntry?.label || db.name,
+        formula,
+        status: 'error',
+        summary,
+        results: [],
+        registryEntry,
+      });
+      updateTool(toolId, { status: 'error', details: [summary] });
+    }
+  }, [activeSourceFormula, addMessage, addTool, getAuthHeaders, sourceRegistryById, updateTool]);
 
   const runRetrieval = useCallback(async (prompt: string) => {
     setPhase('retrieving');
@@ -931,12 +1387,13 @@ const AgentWorkspace: React.FC = () => {
           }
           if (event.type === 'complete') {
             const data = applyChemistryAwareRecommendation(prompt, event.data);
+            const verifiedPapers = getVerifiedPapers(data.papers || []);
             setResearch(data);
             setSelectedIdeaId(data.recommended_idea_id || data.idea_cards?.[0]?.id || null);
             updateTool(toolId, {
               status: 'success',
               details: [
-                `${data.papers?.length || 0} papers collected`,
+                `${verifiedPapers.length} 篇可核验文献`,
                 `${data.structures?.length || 0} structures collected`,
                 `recommended: ${data.idea_cards?.find((idea) => idea.id === data.recommended_idea_id)?.title || data.idea_cards?.[0]?.title || 'none'}`,
               ],
@@ -947,8 +1404,8 @@ const AgentWorkspace: React.FC = () => {
               content: [
                 `目标理解：${data.user_goal?.interpreted_goal || prompt}`,
                 '',
-                '具体文章：',
-                ...(topPaperLines(data.papers || [], 6).length ? topPaperLines(data.papers || [], 6) : ['没有返回可用文章，请换一个检索表达。']),
+                '可核验文献：',
+                ...(topPaperLines(data.papers || [], 6).length ? topPaperLines(data.papers || [], 6) : ['没有返回带 DOI 或来源链接的文献。本轮不会把不可追溯条目当作证据。']),
                 '',
                 `推荐模型：${data.idea_cards?.find((idea) => idea.id === data.recommended_idea_id)?.title || data.idea_cards?.[0]?.title || '暂无推荐'}`,
                 `推荐原因：${data.idea_cards?.find((idea) => idea.id === data.recommended_idea_id)?.fit_reason || data.summary || '基于当前检索结果生成。'}`,
@@ -963,9 +1420,9 @@ const AgentWorkspace: React.FC = () => {
               toolName: 'agent.retrieve',
               summary: 'Research bundle ready; waiting for model choice',
               details: [
-                `${data.papers?.length || 0} papers`,
+                `${verifiedPapers.length} 篇可核验文献`,
                 `${data.structures?.length || 0} structures`,
-                `${data.idea_cards?.length || 0} model ideas`,
+                `${data.idea_cards?.length || 0} 个模型建议`,
               ],
               artifact: {
                 kind: 'research_bundle',
@@ -1154,6 +1611,7 @@ const AgentWorkspace: React.FC = () => {
         success: true,
       };
       setCompiledInputs(nextCompiled);
+      setSelectedInputFileName(Object.keys(nextCompiled.files)[0] || null);
       updateTool(toolId, {
         status: 'success',
         details: Object.keys(nextCompiled.files).map((fileName) => fileName),
@@ -1491,8 +1949,8 @@ const AgentWorkspace: React.FC = () => {
     setMessages([{
       id: 'welcome',
       role: 'assistant',
-      title: 'New task',
-      content: '新的连续 Agent 对话已准备好。',
+      title: '新任务',
+      content: '新的连续科研流程已准备好。',
       createdAt: Date.now(),
     }]);
     setToolEvents([]);
@@ -1510,12 +1968,23 @@ const AgentWorkspace: React.FC = () => {
     setPhase('idle');
   };
 
-  const handleComposerSubmit = () => {
+  const handleComposerSubmit = async () => {
     const prompt = workspacePrompt.trim();
-    const fileNames = attachedFiles.map((file) => file.name);
+    const filesToProcess = attachedFiles;
+    const fileNames = filesToProcess.map((file) => file.name);
     if (!prompt && !fileNames.length) return;
-    const content = [prompt || 'Process attached files.', fileNames.length ? `附件：${fileNames.join(', ')}` : ''].filter(Boolean).join('\n');
     setWorkspacePrompt('');
+    setAttachedFiles([]);
+
+    const digests = filesToProcess.length ? await processAttachedFiles(filesToProcess) : [];
+    const attachmentContext = digests
+      .map((digest) => digest.context ? `### ${digest.name}\n${digest.context}` : `### ${digest.name}\n${digest.summary}`)
+      .join('\n\n');
+    const content = [
+      prompt || (digests.some((digest) => digest.kind === 'structure') ? '基于上传结构继续科研流程' : '处理上传附件'),
+      fileNames.length ? `附件：${fileNames.join(', ')}` : '',
+      attachmentContext ? `附件解析上下文：\n${attachmentContext}` : '',
+    ].filter(Boolean).join('\n\n');
 
     if (phase === 'await_model') {
       addMessage({ role: 'user', content });
@@ -1571,14 +2040,56 @@ const AgentWorkspace: React.FC = () => {
   };
 
   const handleNavItem = (itemId: string) => {
-    if (itemId === 'home') navigate('/');
-    if (itemId === 'explore') navigate('/explore');
+    if (itemId === 'home') {
+      navigate('/');
+      return;
+    }
+    if (itemId === 'agent') {
+      navigate('/workspace');
+      return;
+    }
+    if (itemId === 'explore') {
+      navigate('/explore');
+      return;
+    }
+    if (itemId === 'library') {
+      navigate('/materials');
+      return;
+    }
+    if (itemId === 'skills' || itemId === 'automation') {
+      navigate('/agent/runtime');
+      return;
+    }
+    if (itemId === 'experts') {
+      addMessage({
+        role: 'assistant',
+        title: '专家库',
+        content: agents.map((agent) => `${agent.name}：${agent.output}`).join('\n'),
+      });
+      return;
+    }
+    if (itemId === 'connectors') {
+      void (async () => {
+        const nextProfiles = await fetchProfiles({ log: true });
+        const nextSources = await fetchStructureSources();
+        const liveSources = (nextSources?.live || structureSources?.live || []).map((source) => source.label).join('、') || '后台结构源 registry';
+        addMessage({
+          role: 'assistant',
+          title: '连接器状态',
+          content: [
+            `计算提交位置：${nextProfiles.length ? nextProfiles.map((profile) => `${profile.label}${profile.configured ? '(已配置)' : '(未配置)'}`).join('、') : '暂无 profile'}`,
+            `结构数据源：${liveSources}`,
+            '需要真实提交时，请先走到“输入文件检查”并选择提交位置。',
+          ].join('\n'),
+        });
+      })();
+    }
   };
 
   const renderDecisionPanel = () => {
     if (phase === 'await_model' && research) {
       return (
-        <div className="border-t border-slate-200 bg-white px-4 py-3">
+        <div className="border-t border-gray-200 bg-white px-4 py-3">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
             <button
               type="button"
@@ -1594,7 +2105,7 @@ const AgentWorkspace: React.FC = () => {
                 });
                 void buildModel();
               }}
-              className="h-9 rounded-lg bg-[#0A1128] px-4 text-xs font-semibold text-white hover:bg-[#17213D]"
+              className="h-9 rounded-[32px] bg-[#0A1128] px-4 text-xs font-semibold text-white hover:bg-[#162044]"
             >
               使用推荐模型
             </button>
@@ -1604,14 +2115,14 @@ const AgentWorkspace: React.FC = () => {
                 type="button"
                 onClick={() => setSelectedIdeaId(idea.id)}
                 className={cx(
-                  'h-9 rounded-lg border px-3 text-xs font-semibold transition',
-                  selectedIdeaId === idea.id ? 'border-slate-900 bg-slate-50 text-slate-900' : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                  'h-9 rounded-[32px] border px-3 text-xs font-semibold transition',
+                  selectedIdeaId === idea.id ? 'border-[#0A1128] bg-[#F5F5F0] text-[#0A1128]' : 'border-gray-200 text-gray-600 hover:border-gray-300'
                 )}
               >
                 {idea.blueprint?.structure_source?.formula || idea.material_family || idea.title.slice(0, 24)}
               </button>
             ))}
-            <span className="text-xs text-slate-400">也可以直接输入自定义模型。</span>
+            <span className="text-xs text-gray-400">也可以直接输入自定义模型。</span>
           </div>
         </div>
       );
@@ -1619,7 +2130,7 @@ const AgentWorkspace: React.FC = () => {
 
     if (phase === 'await_software') {
       return (
-        <div className="border-t border-slate-200 bg-white px-4 py-3">
+        <div className="border-t border-gray-200 bg-white px-4 py-3">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
             {engineOptions.map((engine) => (
               <button
@@ -1627,8 +2138,8 @@ const AgentWorkspace: React.FC = () => {
                 type="button"
                 onClick={() => selectEngine(engine.id)}
                 className={cx(
-                  'h-9 rounded-lg border px-3 text-xs font-semibold transition',
-                  engine.id === 'vasp' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                  'h-9 rounded-[32px] border px-3 text-xs font-semibold transition',
+                  engine.id === 'vasp' ? 'border-[#0A1128] bg-[#0A1128] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'
                 )}
                 title={engine.summary}
               >
@@ -1642,16 +2153,16 @@ const AgentWorkspace: React.FC = () => {
 
     if (phase === 'await_input') {
       return (
-        <div className="border-t border-slate-200 bg-white px-4 py-3">
+        <div className="border-t border-gray-200 bg-white px-4 py-3">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={acceptInputs}
-              className="h-9 rounded-lg bg-[#0A1128] px-4 text-xs font-semibold text-white hover:bg-[#17213D]"
+              className="h-9 rounded-[32px] bg-[#0A1128] px-4 text-xs font-semibold text-white hover:bg-[#162044]"
             >
               使用推荐输入文件
             </button>
-            <span className="text-xs text-slate-400">需要更改就直接输入参数，例如 ENCUT=520, workflow=static。</span>
+            <span className="text-xs text-gray-400">需要更改就直接输入参数，例如 ENCUT=520, workflow=static。</span>
           </div>
         </div>
       );
@@ -1659,7 +2170,7 @@ const AgentWorkspace: React.FC = () => {
 
     if (phase === 'await_submit') {
       return (
-        <div className="border-t border-slate-200 bg-white px-4 py-3">
+        <div className="border-t border-gray-200 bg-white px-4 py-3">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
             {(profiles.length ? profiles : [{ id: 'local_demo', label: 'Local Demo Runner', configured: true } as ServerComputeProfile]).map((profile) => (
               <button
@@ -1668,8 +2179,8 @@ const AgentWorkspace: React.FC = () => {
                 onClick={() => void submitJob(profile.id)}
                 disabled={!profile.configured}
                 className={cx(
-                  'h-9 rounded-lg border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40',
-                  profile.configured ? 'border-slate-900 bg-slate-900 text-white hover:bg-[#17213D]' : 'border-slate-200 text-slate-500'
+                  'h-9 rounded-[32px] border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40',
+                  profile.configured ? 'border-[#0A1128] bg-[#0A1128] text-white hover:bg-[#162044]' : 'border-gray-200 text-gray-500'
                 )}
               >
                 提交到 {profile.label}
@@ -1682,12 +2193,12 @@ const AgentWorkspace: React.FC = () => {
 
     if (phase === 'await_ppt') {
       return (
-        <div className="border-t border-slate-200 bg-white px-4 py-3">
+        <div className="border-t border-gray-200 bg-white px-4 py-3">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => void generatePpt()}
-              className="h-9 rounded-lg bg-[#0A1128] px-4 text-xs font-semibold text-white hover:bg-[#17213D]"
+              className="h-9 rounded-[32px] bg-[#0A1128] px-4 text-xs font-semibold text-white hover:bg-[#162044]"
             >
               输出结果并生成 PPT
             </button>
@@ -1705,7 +2216,7 @@ const AgentWorkspace: React.FC = () => {
                 });
                 setPhase('done');
               }}
-              className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:border-slate-300"
+              className="h-9 rounded-[32px] border border-gray-200 px-3 text-xs font-semibold text-gray-600 hover:border-gray-300"
             >
               不需要 PPT
             </button>
@@ -1718,28 +2229,28 @@ const AgentWorkspace: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#F7F8FA] text-[#101828]">
+    <div className="h-screen w-screen overflow-hidden bg-[#F5F5F0] text-[#101828]">
       <div className="flex h-full min-w-0">
-        <aside className="hidden h-full w-[280px] shrink-0 border-r border-slate-200 bg-white lg:flex lg:flex-col">
-          <div className="border-b border-slate-200 px-5 py-5">
+        <aside className="hidden h-full w-[280px] shrink-0 border-r border-gray-200 bg-white lg:flex lg:flex-col">
+          <div className="border-b border-gray-200 px-5 py-5">
             <button type="button" onClick={() => navigate('/workspace')} className="flex w-full items-center gap-3 text-left">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#0A1128] text-white">
+              <div className="flex h-10 w-10 items-center justify-center rounded-[16px] bg-[#0A1128] text-white">
                 <Bot size={20} />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold">SCI Agent AI</p>
-                <p className="truncate text-[11px] text-slate-500">Research workspace</p>
+                <p className="truncate text-sm font-bold">科研工作台</p>
+                <p className="truncate text-[11px] text-gray-500">Research workflow</p>
               </div>
             </button>
-            <div className="mt-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              <Search size={15} className="text-slate-400" />
+            <div className="mt-4 flex items-center gap-2 rounded-[24px] border border-gray-200 bg-[#F5F5F0] px-3 py-2">
+              <Search size={15} className="text-gray-400" />
               <input
                 value={taskSearch}
                 onChange={(event) => setTaskSearch(event.target.value)}
-                className="min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400"
-                placeholder="Search tasks"
+                className="min-w-0 flex-1 bg-transparent text-xs text-gray-700 outline-none placeholder:text-gray-400"
+                placeholder="搜索任务"
               />
-              <Settings2 size={15} className="text-slate-400" />
+              <Settings2 size={15} className="text-gray-400" />
             </div>
           </div>
 
@@ -1747,10 +2258,10 @@ const AgentWorkspace: React.FC = () => {
             <button
               type="button"
               onClick={resetTask}
-              className="mb-3 flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold shadow-sm transition hover:border-slate-300"
+              className="mb-3 flex w-full items-center gap-2 rounded-[32px] border border-gray-200 bg-white px-4 py-2.5 text-left text-sm font-semibold shadow-[0_4px_30px_rgba(0,0,0,0.04)] transition hover:border-gray-300"
             >
               <MessageSquarePlus size={16} />
-              New task
+              新任务
             </button>
             <nav className="space-y-1">
               {navItems.map((item) => {
@@ -1760,7 +2271,7 @@ const AgentWorkspace: React.FC = () => {
                     key={item.id}
                     type="button"
                     onClick={() => handleNavItem(item.id)}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                    className="flex w-full items-center gap-3 rounded-[16px] px-3 py-2.5 text-left text-sm text-gray-600 transition hover:bg-[#F5F5F0] hover:text-[#0A1128]"
                   >
                     <Icon size={17} />
                     <span className="min-w-0 truncate">{item.label}</span>
@@ -1770,7 +2281,7 @@ const AgentWorkspace: React.FC = () => {
             </nav>
 
             <div className="mt-6">
-              <p className="px-3 text-[11px] font-semibold uppercase text-slate-400">Tasks</p>
+              <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">近期任务</p>
               <div className="mt-2 space-y-1">
                 {filteredRecentTasks.map((task, index) => (
                   <button
@@ -1778,63 +2289,63 @@ const AgentWorkspace: React.FC = () => {
                     type="button"
                     onClick={() => setWorkspacePrompt(task)}
                     className={cx(
-                      'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition',
-                      index === 0 ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50'
+                      'flex w-full items-center gap-2 rounded-[16px] px-3 py-2 text-left text-xs transition',
+                      index === 0 ? 'bg-[#F5F5F0] text-[#0A1128]' : 'text-gray-500 hover:bg-[#F5F5F0]'
                     )}
                   >
-                    {index === 0 ? <Zap size={14} className="text-emerald-600" /> : <Check size={14} className="text-slate-400" />}
+                    {index === 0 ? <Zap size={14} className="text-emerald-600" /> : <Check size={14} className="text-gray-400" />}
                     <span className="min-w-0 flex-1 truncate">{task}</span>
-                    {index === 0 && <span className="text-[10px] text-slate-400">live</span>}
+                    {index === 0 && <span className="text-[10px] text-gray-400">模板</span>}
                   </button>
                 ))}
               </div>
             </div>
           </div>
 
-          <div className="border-t border-slate-200 px-5 py-4">
+          <div className="border-t border-gray-200 px-5 py-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-700">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[16px] bg-[#F5F5F0] text-xs font-bold text-gray-700">
                 {accountLabel.slice(0, 1).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold">{accountLabel}</p>
-                <p className="truncate text-[11px] text-slate-400">Agent workspace</p>
+                <p className="truncate text-[11px] text-gray-400">科研工作区</p>
               </div>
             </div>
           </div>
         </aside>
 
         <main className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-[72px] shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-4 md:px-6">
+          <header className="flex h-[72px] shrink-0 items-center gap-4 border-b border-gray-200 bg-white px-4 md:px-6">
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+              className="flex h-10 items-center gap-2 rounded-[32px] border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 transition hover:border-gray-300"
             >
               <Home size={16} />
-              Home
+              首页
             </button>
             <div className="hidden min-w-0 flex-1 md:block">
-              <p className="truncate text-sm font-semibold">连续科研 Agent</p>
-              <p className="truncate text-[11px] text-slate-400">检索 &gt; 模型确认 &gt; 输入文件确认 &gt; 集群提交 &gt; 结果/PPT</p>
+              <p className="truncate text-sm font-semibold">连续科研流程</p>
+              <p className="truncate text-[11px] text-gray-400">检索 &gt; 模型确认 &gt; 输入文件检查 &gt; 提交计算 &gt; 结果汇报</p>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <span className="hidden h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 sm:flex">
+              <span className="hidden h-9 items-center gap-2 rounded-[32px] border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 sm:flex">
                 <ShieldCheck size={14} />
-                Tools ON
+                来源校验
               </span>
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setIsModelMenuOpen((value) => !value)}
-                  className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                  className="h-9 rounded-[32px] border border-gray-200 px-3 text-xs font-semibold text-gray-600 hover:border-gray-300"
                 >
                   deepseek-v4-pro
                 </button>
                 {isModelMenuOpen && (
-                  <div className="absolute right-0 top-11 z-30 w-[240px] rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg">
-                    <p className="font-semibold text-slate-900">文本 Orchestrator</p>
-                    <p className="mt-1 leading-5 text-slate-500">当前文本规划和对话入口绑定 deepseek-v4-pro；工具调用走后端 API。</p>
+                  <div className="absolute right-0 top-11 z-30 w-[260px] rounded-[16px] border border-gray-200 bg-white p-3 text-xs shadow-[0_4px_30px_rgba(0,0,0,0.08)]">
+                    <p className="font-semibold text-[#0A1128]">文本规划模型</p>
+                    <p className="mt-1 leading-5 text-gray-500">对话规划使用 deepseek-v4-pro；检索、建模、计算和 PPT 由后端工具执行。</p>
                   </div>
                 )}
               </div>
@@ -1843,51 +2354,51 @@ const AgentWorkspace: React.FC = () => {
 
           <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px]">
             <section className="flex min-h-0 flex-col overflow-hidden">
-              <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 md:px-6">
+              <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-3 md:px-6">
                 <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
                   {agents.map((agent) => {
                     const Icon = agent.icon;
                     return (
-                      <div key={agent.id} className="min-h-[78px] w-[168px] shrink-0 rounded-lg border border-slate-200 bg-white p-3 text-left">
+                      <div key={agent.id} className="min-h-[78px] w-[168px] shrink-0 rounded-[16px] border border-gray-200 bg-white p-3 text-left">
                         <div className="flex items-center gap-2">
-                          <span className={cx('flex h-8 w-8 items-center justify-center rounded-md', agent.accent)}>
+                          <span className={cx('flex h-8 w-8 items-center justify-center rounded-[12px]', agent.accent)}>
                             <Icon size={16} />
                           </span>
                           <StatusPill status={agent.status} />
                         </div>
                         <p className="mt-2 truncate text-xs font-bold">{agent.name}</p>
-                        <p className="truncate text-[11px] text-slate-500">{agent.subtitle}</p>
+                        <p className="truncate text-[11px] text-gray-500">{agent.subtitle}</p>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto bg-[#F7F8FA] px-4 py-5 custom-scrollbar md:px-6">
+              <div className="min-h-0 flex-1 overflow-y-auto bg-[#F5F5F0] px-4 py-5 custom-scrollbar md:px-6">
                 <div className="mx-auto max-w-5xl space-y-4">
-                  <div className="rounded-lg border border-slate-200 bg-white p-4">
+                  <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
                     <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#0A1128] text-white">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-[16px] bg-[#0A1128] text-white">
                         {phase === 'retrieving' || phase === 'modeling' || phase === 'compiling' || phase === 'submitting' || phase === 'monitoring' || phase === 'ppt'
                           ? <Loader2 size={18} className="animate-spin" />
                           : <BrainCircuit size={18} />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold">Workflow: {phaseLabel[phase]}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {research ? `${research.papers?.length || 0} papers · ${research.idea_cards?.length || 0} model ideas` : 'No active research bundle yet'}
-                          {modelStructure ? ` · ${modelStructure.atoms.length} atoms` : ''}
-                          {compiledInputs ? ` · ${Object.keys(compiledInputs.files).length} input files` : ''}
-                          {jobStatus ? ` · job ${jobStatus.status}` : ''}
+                        <p className="text-sm font-bold">流程进度：{phaseLabel[phase]}</p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {research ? `${getVerifiedPapers(research.papers || []).length} 篇可核验文献 · ${research.idea_cards?.length || 0} 个模型建议` : '等待新的科研任务'}
+                          {modelStructure ? ` · ${modelStructure.atoms.length} 个原子` : ''}
+                          {compiledInputs ? ` · ${compiledFileNames.length} 个输入文件` : ''}
+                          {jobStatus ? ` · 作业 ${jobStatus.status}` : ''}
                         </p>
                       </div>
                       {pptUrl && (
                         <a
                           href={pptUrl}
-                          className="flex h-9 items-center gap-2 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white hover:bg-emerald-700"
+                          className="flex h-9 items-center gap-2 rounded-[32px] bg-emerald-600 px-4 text-xs font-semibold text-white hover:bg-emerald-700"
                         >
                           <Download size={14} />
-                          Download PPT
+                          下载 PPT
                         </a>
                       )}
                     </div>
@@ -1897,13 +2408,13 @@ const AgentWorkspace: React.FC = () => {
                     <div
                       key={message.id}
                       className={cx(
-                        'rounded-lg border p-4 shadow-sm',
-                        message.role === 'user' ? 'ml-auto max-w-3xl border-slate-900 bg-slate-900 text-white' : 'max-w-4xl border-slate-200 bg-white text-slate-800',
+                        'rounded-[24px] border p-4 shadow-[0_4px_30px_rgba(0,0,0,0.04)]',
+                        message.role === 'user' ? 'ml-auto max-w-3xl border-[#0A1128] bg-[#0A1128] text-white' : 'max-w-4xl border-gray-100 bg-white text-gray-800',
                         message.status === 'error' && 'border-rose-200 bg-rose-50 text-rose-800'
                       )}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={cx('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md', message.role === 'user' ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-600')}>
+                        <div className={cx('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px]', message.role === 'user' ? 'bg-white/10 text-white' : 'bg-[#F5F5F0] text-gray-600')}>
                           {message.role === 'user' ? <MessageSquarePlus size={15} /> : <Bot size={15} />}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -1914,25 +2425,125 @@ const AgentWorkspace: React.FC = () => {
                     </div>
                   ))}
 
-                  {toolEvents.length > 0 && (
-                    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                  {research && (
+                    <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
                       <div className="mb-3 flex items-center gap-2">
-                        <Play size={15} className="text-slate-500" />
-                        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Tool Calls</p>
+                        <Library size={16} className="text-gray-500" />
+                        <p className="text-sm font-bold text-[#0A1128]">可核验文献</p>
+                      </div>
+                      {getVerifiedPapers(research.papers || []).length ? (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {getVerifiedPapers(research.papers || []).slice(0, 6).map((paper) => {
+                            const evidenceUrl = paperEvidenceUrl(paper);
+                            return (
+                              <a
+                                key={`${paper.source}-${paper.doi || paper.url || paper.title}`}
+                                href={evidenceUrl || paper.ablesci_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded-[16px] border border-gray-200 bg-[#F8F8F4] p-3 text-left transition hover:border-gray-300 hover:bg-white"
+                              >
+                                <div className="mb-2 flex flex-wrap items-center gap-2">
+                                  <span className="rounded-[32px] border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                    {paper.source_label || paper.source}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400">{paper.year || 'n.d.'}</span>
+                                  {paper.doi && <span className="truncate font-mono text-[10px] text-gray-400">DOI {paper.doi}</span>}
+                                </div>
+                                <p className="line-clamp-2 text-xs font-bold leading-5 text-[#0A1128]">{paper.title}</p>
+                                {paper.abstract && <p className="mt-2 line-clamp-3 text-[11px] leading-5 text-gray-500">{paper.abstract}</p>}
+                              </a>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs leading-5 text-gray-500">本轮没有返回带 DOI 或可打开来源链接的文献，因此不会把检索结果当作论文证据。</p>
+                      )}
+                    </div>
+                  )}
+
+                  {modelStructure && (
+                    <StructurePreview structure={modelStructure} onOpenModeling={() => navigate('/agent/modeling')} />
+                  )}
+
+                  {compiledInputs && (
+                    <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
+                      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-[#0A1128]">输入文件检查</p>
+                          <p className="mt-1 text-xs text-gray-500">这些内容可直接编辑；提交计算和生成 PPT 会使用编辑后的版本。</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={acceptInputs}
+                          className="rounded-[32px] bg-[#0A1128] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#162044]"
+                        >
+                          确认输入文件
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {compiledFileNames.map((name) => (
+                          <button
+                            key={name}
+                            type="button"
+                            onClick={() => setSelectedInputFileName(name)}
+                            className={cx(
+                              'rounded-[32px] border px-3 py-1.5 text-xs font-semibold transition',
+                              selectedInputFileName === name
+                                ? 'border-[#0A1128] bg-[#0A1128] text-white'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                            )}
+                          >
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+                      {selectedInputFileName && (
+                        <div className="mt-3 overflow-hidden rounded-[16px] border border-gray-200 bg-[#F8F8F4]">
+                          <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
+                            <span className="font-mono text-xs font-semibold text-gray-700">{selectedInputFileName}</span>
+                            <span className="text-[11px] text-gray-400">{selectedInputContent.length.toLocaleString()} chars</span>
+                          </div>
+                          <textarea
+                            value={selectedInputContent}
+                            onChange={(event) => updateCompiledInputFile(selectedInputFileName, event.target.value)}
+                            onBlur={() => {
+                              void recordHarnessCheckpoint({
+                                phase: 'await_input',
+                                status: 'success',
+                                agent: 'Orchestrator',
+                                toolName: 'human.edit_input_file',
+                                summary: `User edited ${selectedInputFileName}`,
+                                details: [`${selectedInputContent.length} chars`],
+                              });
+                            }}
+                            spellCheck={false}
+                            className="min-h-[260px] w-full resize-y border-0 bg-transparent p-3 font-mono text-xs leading-5 text-gray-800 outline-none"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {toolEvents.length > 0 && (
+                    <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
+                      <div className="mb-3 flex items-center gap-2">
+                        <Play size={15} className="text-gray-500" />
+                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-gray-500">执行记录</p>
                       </div>
                       <div className="space-y-3">
                         {toolEvents.map((event) => (
-                          <div key={event.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                          <div key={event.id} className="rounded-[16px] border border-gray-100 bg-[#F8F8F4] p-3">
                             <div className="flex items-center gap-2">
                               {event.status === 'running' ? <Loader2 size={14} className="animate-spin text-sky-600" /> : event.status === 'success' ? <Check size={14} className="text-emerald-600" /> : <CircleDot size={14} className="text-rose-600" />}
-                              <p className="text-xs font-bold text-slate-800">{event.name}</p>
-                              <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">{event.agent}</span>
+                              <p className="text-xs font-bold text-gray-800">{event.name}</p>
+                              <span className="rounded-[12px] border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500">{event.agent}</span>
                             </div>
-                            <p className="mt-2 text-xs text-slate-600">{event.summary}</p>
+                            <p className="mt-2 text-xs text-gray-600">{event.summary}</p>
                             {event.details.length > 0 && (
                               <div className="mt-2 space-y-1">
                                 {event.details.slice(-8).map((detail, index) => (
-                                  <p key={`${event.id}-${index}`} className="truncate font-mono text-[10px] text-slate-400" title={detail}>
+                                  <p key={`${event.id}-${index}`} className="truncate font-mono text-[10px] text-gray-400" title={detail}>
                                     {detail}
                                   </p>
                                 ))}
@@ -1949,9 +2560,9 @@ const AgentWorkspace: React.FC = () => {
 
               {renderDecisionPanel()}
 
-              <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-4 md:px-6">
-                <div className="mx-auto max-w-5xl rounded-lg border border-slate-200 bg-white shadow-sm">
-                  <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
+              <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-4 md:px-6">
+                <div className="mx-auto max-w-5xl rounded-[24px] border border-gray-200 bg-white shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
+                  <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2">
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -1963,31 +2574,31 @@ const AgentWorkspace: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-50"
-                      title="Attach files"
+                      className="flex h-8 w-8 items-center justify-center rounded-[12px] text-gray-500 hover:bg-[#F5F5F0]"
+                      title="添加文件"
                     >
                       <Paperclip size={16} />
                     </button>
                     <button
                       type="button"
-                      onClick={() => navigate('/materials/battery')}
-                      className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-50"
-                      title="Open database explorer"
+                      onClick={() => navigate('/materials')}
+                      className="flex h-8 w-8 items-center justify-center rounded-[12px] text-gray-500 hover:bg-[#F5F5F0]"
+                      title="打开材料库"
                     >
                       <FolderOpen size={16} />
                     </button>
-                    <div className="ml-auto text-[11px] font-semibold text-slate-400">
-                      {attachedFiles.length ? `${attachedFiles.length} attachments` : phaseLabel[phase]}
+                    <div className="ml-auto text-[11px] font-semibold text-gray-400">
+                      {attachedFiles.length ? `${attachedFiles.length} 个附件` : phaseLabel[phase]}
                     </div>
                   </div>
                   {attachedFiles.length > 0 && (
-                    <div className="flex flex-wrap gap-2 border-b border-slate-100 px-4 py-2">
+                    <div className="flex flex-wrap gap-2 border-b border-gray-100 px-4 py-2">
                       {attachedFiles.map((file) => (
                         <button
                           key={`${file.name}-${file.size}`}
                           type="button"
                           onClick={() => setAttachedFiles((prev) => prev.filter((item) => item !== file))}
-                          className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:border-rose-200 hover:text-rose-600"
+                          className="rounded-[32px] border border-gray-200 bg-[#F5F5F0] px-2 py-1 text-[10px] font-semibold text-gray-600 hover:border-rose-200 hover:text-rose-600"
                         >
                           {file.name}
                         </button>
@@ -2001,27 +2612,27 @@ const AgentWorkspace: React.FC = () => {
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' && !event.shiftKey) {
                           event.preventDefault();
-                          handleComposerSubmit();
+                          void handleComposerSubmit();
                         }
                       }}
                       rows={2}
-                      className="min-h-[54px] flex-1 resize-none border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+                      className="min-h-[54px] flex-1 resize-none border-0 bg-transparent text-sm outline-none placeholder:text-gray-400"
                       placeholder="输入任务或修改，例如：检索 CO2 加氢催化剂文章；ENCUT=520；使用 CP2K..."
                     />
                     <button
                       type="button"
                       onClick={startVoiceInput}
-                      className={cx('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border text-slate-500 hover:bg-slate-50', isListening ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-200')}
-                      title="Voice input"
+                      className={cx('flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border text-gray-500 hover:bg-[#F5F5F0]', isListening ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-gray-200')}
+                      title="语音输入"
                     >
                       <Mic size={16} />
                     </button>
                     <button
                       type="button"
-                      onClick={handleComposerSubmit}
+                      onClick={() => void handleComposerSubmit()}
                       disabled={phase === 'retrieving' || phase === 'modeling' || phase === 'compiling' || phase === 'submitting' || phase === 'ppt'}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#0A1128] text-white hover:bg-[#17213D] disabled:cursor-not-allowed disabled:bg-slate-300"
-                      title="Send"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] bg-[#0A1128] text-white hover:bg-[#162044] disabled:cursor-not-allowed disabled:bg-gray-300"
+                      title="发送"
                     >
                       <ArrowRight size={18} />
                     </button>
@@ -2030,72 +2641,72 @@ const AgentWorkspace: React.FC = () => {
               </div>
             </section>
 
-            <aside className="hidden min-h-0 border-l border-slate-200 bg-white xl:flex xl:flex-col">
-              <div className="border-b border-slate-200 p-5">
+            <aside className="hidden min-h-0 border-l border-gray-200 bg-white xl:flex xl:flex-col">
+              <div className="border-b border-gray-200 p-5">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#0A1128] text-white">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-[#0A1128] text-white">
                     <BrainCircuit size={20} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold">Run Inspector</p>
-                    <p className="truncate text-xs text-slate-500">{phaseLabel[phase]}</p>
+                    <p className="truncate text-sm font-bold">运行检查</p>
+                    <p className="truncate text-xs text-gray-500">{phaseLabel[phase]}</p>
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Papers</p>
-                    <p className="mt-1 font-bold">{research?.papers?.length || 0}</p>
+                  <div className="rounded-[16px] border border-gray-200 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">文献</p>
+                    <p className="mt-1 font-bold">{getVerifiedPapers(research?.papers || []).length}</p>
                   </div>
-                  <div className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Atoms</p>
+                  <div className="rounded-[16px] border border-gray-200 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">原子</p>
                     <p className="mt-1 font-bold">{modelStructure?.atoms.length || 0}</p>
                   </div>
-                  <div className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Inputs</p>
-                    <p className="mt-1 font-bold">{compiledInputs ? Object.keys(compiledInputs.files).length : 0}</p>
+                  <div className="rounded-[16px] border border-gray-200 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">输入</p>
+                    <p className="mt-1 font-bold">{compiledFileNames.length}</p>
                   </div>
-                  <div className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Job</p>
+                  <div className="rounded-[16px] border border-gray-200 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">作业</p>
                     <p className="mt-1 truncate font-bold">{jobStatus?.status || '-'}</p>
                   </div>
                 </div>
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-5 custom-scrollbar">
-                <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-5 rounded-[24px] border border-gray-100 bg-[#F8F8F4] p-4">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck size={16} className="text-slate-600" />
-                    <p className="text-sm font-bold">Agent Harness</p>
+                    <ShieldCheck size={16} className="text-gray-600" />
+                    <p className="text-sm font-bold">过程记录</p>
                   </div>
                   {harnessSession ? (
                     <div className="mt-3 space-y-3">
-                      <div className="rounded-md border border-slate-200 bg-white p-2">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Session</p>
-                        <p className="mt-1 truncate font-mono text-[11px] text-slate-700" title={harnessSession.sessionId}>{harnessSession.sessionId}</p>
-                        <p className="mt-1 text-[10px] text-slate-400">{harnessSession.harness}</p>
+                      <div className="rounded-[16px] border border-gray-200 bg-white p-2">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">Session</p>
+                        <p className="mt-1 truncate font-mono text-[11px] text-gray-700" title={harnessSession.sessionId}>{harnessSession.sessionId}</p>
+                        <p className="mt-1 text-[10px] text-gray-400">{harnessSession.harness}</p>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="rounded-md border border-slate-200 bg-white p-2">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Checkpoints</p>
+                        <div className="rounded-[16px] border border-gray-200 bg-white p-2">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">节点</p>
                           <p className="mt-1 font-bold">{harnessSession.checkpoints.length}</p>
                         </div>
-                        <div className="rounded-md border border-slate-200 bg-white p-2">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Artifacts</p>
+                        <div className="rounded-[16px] border border-gray-200 bg-white p-2">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">产物</p>
                           <p className="mt-1 font-bold">{harnessSession.checkpoints.filter((item) => item.artifact && item.artifact.id !== 'pending').length}</p>
                         </div>
                       </div>
                       <div className="space-y-2">
                         {harnessSession.checkpoints.slice(-5).map((checkpoint) => (
-                          <div key={checkpoint.id} className="rounded-md border border-slate-200 bg-white p-2">
+                          <div key={checkpoint.id} className="rounded-[16px] border border-gray-200 bg-white p-2">
                             <div className="flex items-center gap-2">
                               <span className={cx(
                                 'h-2 w-2 rounded-full',
                                 checkpoint.status === 'success' ? 'bg-emerald-500' : checkpoint.status === 'running' ? 'bg-sky-500' : checkpoint.status === 'error' ? 'bg-rose-500' : 'bg-slate-300'
                               )} />
-                              <p className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-700">{checkpoint.summary}</p>
+                              <p className="min-w-0 flex-1 truncate text-[11px] font-semibold text-gray-700">{checkpoint.summary}</p>
                             </div>
                             {checkpoint.artifact && (
-                              <p className="mt-1 truncate font-mono text-[10px] text-slate-400" title={checkpoint.artifact.id}>
+                              <p className="mt-1 truncate font-mono text-[10px] text-gray-400" title={checkpoint.artifact.id}>
                                 {checkpoint.artifact.kind}: {checkpoint.artifact.id}
                               </p>
                             )}
@@ -2104,46 +2715,104 @@ const AgentWorkspace: React.FC = () => {
                       </div>
                     </div>
                   ) : (
-                    <p className="mt-3 text-xs leading-5 text-slate-500">
-                      新任务开始后会创建 runtime session，记录工具调用、用户确认和关键 artifact。
+                    <p className="mt-3 text-xs leading-5 text-gray-500">
+                      新任务开始后会创建运行记录，保存工具调用、用户确认和关键产物。
                     </p>
                   )}
                 </div>
 
                 <div className="mb-5">
-                  <div className="mb-3 flex items-center gap-2">
-                    <Database size={16} className="text-slate-500" />
-                    <p className="text-sm font-bold">Six Databases</p>
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Database size={16} className="text-gray-500" />
+                      <div>
+                        <p className="text-sm font-bold">数据来源</p>
+                        <p className="mt-0.5 text-[10px] text-gray-400">当前查询式：{activeSourceFormula}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void fetchStructureSources()}
+                      className="flex h-8 w-8 items-center justify-center rounded-[12px] border border-gray-200 text-gray-500 transition hover:bg-[#F5F5F0]"
+                      title="刷新后台数据源登记"
+                    >
+                      <RefreshCw size={14} />
+                    </button>
                   </div>
                   <div className="space-y-2">
-                    {databaseAgents.map((db) => (
-                      <div key={db.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                    {databaseAgents.map((db) => {
+                      const registryEntry = sourceRegistryById.get(sourceRegistryId(db.id));
+                      const isLiveSearch = registryEntry?.liveSearch ?? db.status === 'active';
+                      return (
+                      <div key={db.id} className="rounded-[16px] border border-gray-200 bg-white p-3">
                         <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-900 text-[9px] font-bold text-white">{db.shortName.slice(0, 3)}</span>
+                          <span className="flex h-7 w-7 items-center justify-center rounded-[12px] bg-[#0A1128] text-[9px] font-bold text-white">{db.shortName.slice(0, 3)}</span>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-xs font-bold">{db.name}</p>
-                            <p className="truncate text-[11px] text-slate-400">{db.agentRole}</p>
+                            <p className="truncate text-[11px] text-gray-400">{registryEntry?.kind || db.agentRole}</p>
                           </div>
                           <StatusPill status={db.status} />
                         </div>
+                        <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-gray-500">{registryEntry?.notes || db.scope}</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void probeStructureSource(db)}
+                            className="rounded-[32px] border border-gray-200 px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 transition hover:border-gray-300 hover:bg-[#F5F5F0]"
+                          >
+                            {isLiveSearch ? '查当前体系' : '查看登记'}
+                          </button>
+                          {registryEntry?.homepage && (
+                            <a
+                              href={registryEntry.homepage}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex h-7 w-7 items-center justify-center rounded-[12px] text-gray-400 hover:bg-[#F5F5F0] hover:text-[#0A1128]"
+                              title="打开来源主页"
+                            >
+                              <ExternalLink size={13} />
+                            </a>
+                          )}
+                        </div>
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
+                  {sourceProbe && (
+                    <div className="mt-3 rounded-[16px] border border-gray-200 bg-[#F8F8F4] p-3">
+                      <div className="flex items-center gap-2">
+                        {sourceProbe.status === 'running' ? <Loader2 size={14} className="animate-spin text-sky-600" /> : sourceProbe.status === 'error' ? <CircleDot size={14} className="text-rose-600" /> : <Check size={14} className="text-emerald-600" />}
+                        <p className="min-w-0 flex-1 truncate text-xs font-bold text-[#0A1128]">{sourceProbe.label}</p>
+                        <span className="rounded-[12px] border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-[9px] text-gray-500">{sourceProbe.formula}</span>
+                      </div>
+                      <p className="mt-2 text-[11px] leading-5 text-gray-600">{sourceProbe.summary}</p>
+                      {sourceProbe.results.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {sourceProbe.results.slice(0, 4).map((item) => (
+                            <div key={`${sourceProbe.sourceId}-${item.material_id}`} className="rounded-[12px] border border-gray-200 bg-white px-2 py-1.5">
+                              <p className="truncate font-mono text-[10px] font-semibold text-gray-700">{item.material_id}</p>
+                              <p className="mt-0.5 truncate text-[10px] text-gray-400">{item.formula} · {item.crystal_system || 'unknown'} · hull {item.energy_above_hull || 'N/A'}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {selectedIdea && (
-                  <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-5 rounded-[24px] border border-gray-100 bg-[#F8F8F4] p-4">
                     <div className="flex items-center gap-2">
-                      <FlaskConical size={16} className="text-slate-600" />
-                      <p className="text-xs font-bold">Selected Model</p>
+                      <FlaskConical size={16} className="text-gray-600" />
+                      <p className="text-xs font-bold">当前模型建议</p>
                     </div>
                     <p className="mt-3 text-sm font-bold">{selectedIdea.title}</p>
-                    <p className="mt-2 text-xs leading-5 text-slate-600">{selectedIdea.fit_reason}</p>
+                    <p className="mt-2 text-xs leading-5 text-gray-600">{selectedIdea.fit_reason}</p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
-                      <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-500">
+                      <span className="rounded-[32px] border border-gray-200 bg-white px-2 py-1 text-[10px] font-semibold text-gray-500">
                         {selectedIdea.blueprint?.structure_source?.formula || selectedIdea.material_family}
                       </span>
-                      <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-500">
+                      <span className="rounded-[32px] border border-gray-200 bg-white px-2 py-1 text-[10px] font-semibold text-gray-500">
                         {selectedIdea.recommended_model_type}
                       </span>
                     </div>
@@ -2151,26 +2820,22 @@ const AgentWorkspace: React.FC = () => {
                 )}
 
                 {compiledInputs && (
-                  <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-5 rounded-[24px] border border-gray-100 bg-[#F8F8F4] p-4">
                     <div className="flex items-center gap-2">
-                      <FileText size={16} className="text-slate-600" />
-                      <p className="text-xs font-bold">Input Preview</p>
+                      <FileText size={16} className="text-gray-600" />
+                      <p className="text-xs font-bold">输入文件</p>
                     </div>
-                    <div className="mt-3 space-y-2">
-                      {Object.entries(compiledInputs.files).slice(0, 4).map(([name, content]) => (
-                        <details key={name} className="rounded-md border border-slate-200 bg-white p-2">
-                          <summary className="cursor-pointer text-xs font-bold text-slate-700">{name}</summary>
-                          <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap text-[10px] leading-4 text-slate-500">{content.slice(0, 1200)}</pre>
-                        </details>
-                      ))}
+                    <div className="mt-3 space-y-2 text-xs text-gray-600">
+                      <p>中间区域已经提供完整编辑器。</p>
+                      <p>{compiledFileNames.join('、')}</p>
                     </div>
                   </div>
                 )}
 
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="rounded-[24px] border border-gray-100 bg-[#F8F8F4] p-4">
                   <div className="flex items-center gap-2">
-                    <Server size={16} className="text-slate-600" />
-                    <p className="text-xs font-bold">Compute Profiles</p>
+                    <Server size={16} className="text-gray-600" />
+                    <p className="text-xs font-bold">提交位置</p>
                   </div>
                   <div className="mt-3 space-y-2">
                     {profiles.map((profile) => (
@@ -2179,24 +2844,24 @@ const AgentWorkspace: React.FC = () => {
                         type="button"
                         onClick={() => setSelectedProfileId(profile.id)}
                         className={cx(
-                          'w-full rounded-md border p-2 text-left text-xs transition',
-                          selectedProfileId === profile.id ? 'border-slate-900 bg-white text-slate-900' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          'w-full rounded-[16px] border p-2 text-left text-xs transition',
+                          selectedProfileId === profile.id ? 'border-[#0A1128] bg-white text-[#0A1128]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                         )}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-bold">{profile.label}</span>
-                          <span className={cx('rounded px-1.5 py-0.5 text-[9px] font-bold', profile.configured ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400')}>
-                            {profile.configured ? 'configured' : 'missing'}
+                          <span className={cx('rounded-[12px] px-1.5 py-0.5 text-[9px] font-bold', profile.configured ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400')}>
+                            {profile.configured ? '已配置' : '未配置'}
                           </span>
                         </div>
-                        <p className="mt-1 line-clamp-2 text-[11px] text-slate-400">{profile.summary}</p>
+                        <p className="mt-1 line-clamp-2 text-[11px] text-gray-400">{profile.summary}</p>
                       </button>
                     ))}
                   </div>
                 </div>
 
                 {pptQa && (
-                  <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="mt-5 rounded-[24px] border border-emerald-200 bg-emerald-50 p-4">
                     <p className="text-xs font-bold text-emerald-800">PPT QA</p>
                     <p className="mt-2 text-xs leading-5 text-emerald-700">{pptQa}</p>
                   </div>

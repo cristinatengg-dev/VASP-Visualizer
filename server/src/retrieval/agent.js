@@ -125,6 +125,69 @@ function withLiteratureLookup(paper) {
   };
 }
 
+function normalizeDoi(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  if (/^arXiv:/i.test(raw)) return raw.replace(/^arxiv:/i, 'arXiv:');
+  return raw
+    .replace(/^https?:\/\/(dx\.)?doi\.org\//i, '')
+    .replace(/^doi:\s*/i, '')
+    .trim() || null;
+}
+
+function normalizePaperUrl(value, doi) {
+  const raw = String(value || '').trim();
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (doi && !/^arXiv:/i.test(doi)) return `https://doi.org/${doi}`;
+  return null;
+}
+
+function isPlaceholderTitle(title) {
+  const text = String(title || '').trim();
+  return !text || /^untitled$/i.test(text) || text.length < 6;
+}
+
+function normalizeEvidencePaper(paper) {
+  const title = String(paper?.title || '').replace(/\s+/g, ' ').trim();
+  if (isPlaceholderTitle(title)) return null;
+
+  const doi = normalizeDoi(paper?.doi);
+  const url = normalizePaperUrl(paper?.url, doi);
+  if (!doi && !url) return null;
+
+  const source = String(paper?.source || '').trim() || 'Scholarly index';
+  const normalized = {
+    ...paper,
+    title,
+    authors: String(paper?.authors || '').replace(/\s+/g, ' ').trim(),
+    year: paper?.year || 'n.d.',
+    doi,
+    url,
+    abstract: paper?.abstract ? truncate(stripHtml(paper.abstract), 300) : null,
+    source,
+    source_label: source,
+    source_type: paper?.source_type === 'preprint' ? 'preprint' : 'peer-reviewed',
+    evidence_url: url || (doi ? `https://doi.org/${doi}` : null),
+    verified_source: true,
+  };
+
+  return withLiteratureLookup(normalized);
+}
+
+function dedupeVerifiedPapers(input, limit = 10) {
+  const seen = new Set();
+  const papers = [];
+  for (const rawPaper of Array.isArray(input) ? input : []) {
+    const paper = normalizeEvidencePaper(rawPaper);
+    if (!paper) continue;
+    const key = (paper.doi || paper.url || paper.title).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    papers.push(paper);
+  }
+  return papers.slice(0, limit);
+}
+
 // ─── Literature sources ──────────────────────────────────────────────────────
 
 async function searchCrossRef(query, rows = 4) {
@@ -367,17 +430,7 @@ async function searchAllLiterature(query) {
     ...gather(pubmed),
   ];
 
-  const seen = new Set();
-  const deduped = [];
-  for (const paper of all) {
-    const key = paper.doi || paper.title.slice(0, 80).toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      deduped.push(paper);
-    }
-  }
-
-  return deduped.slice(0, 10);
+  return dedupeVerifiedPapers(all, 10);
 }
 
 // ─── Materials Project ───────────────────────────────────────────────────────
@@ -537,11 +590,54 @@ function formatOptionalNumber(value, digits = 3) {
   return Number.isFinite(number) ? number.toFixed(digits) : 'N/A';
 }
 
-function buildOptimadeUrl(baseUrl, formula, limit) {
+const STANDARD_OPTIMADE_FIELDS = [
+  'id',
+  'chemical_formula_reduced',
+  'chemical_formula_descriptive',
+  'chemical_formula_hill',
+  'nperiodic_dimensions',
+  'lattice_vectors',
+  'cartesian_site_positions',
+  'species_at_sites',
+  'nsites',
+  'space_group_symbol',
+  'space_group_it_number',
+].join(',');
+
+const JARVIS_OPTIMADE_FIELDS = [
+  STANDARD_OPTIMADE_FIELDS,
+  '_jarvis_jid',
+  '_jarvis_crys',
+  '_jarvis_spg',
+  '_jarvis_spg_symbol',
+  '_jarvis_ehull',
+  '_jarvis_formation_energy_peratom',
+  '_jarvis_optb88vdw_bandgap',
+].join(',');
+
+const ALEXANDRIA_OPTIMADE_FIELDS = [
+  'id',
+  'chemical_formula_reduced',
+  'chemical_formula_descriptive',
+  'lattice_vectors',
+  'cartesian_site_positions',
+  'species_at_sites',
+  'nperiodic_dimensions',
+].join(',');
+
+const NOMAD_OPTIMADE_FIELDS = [
+  'id',
+  'chemical_formula_reduced',
+  'chemical_formula_descriptive',
+].join(',');
+
+function buildOptimadeUrl(source, formula, limit) {
   const reduced = formulaToOptimadeReduced(formula);
   if (!reduced) return null;
-  const filter = `chemical_formula_reduced=${encodeURIComponent(`"${reduced}"`)}`;
-  return `${baseUrl}?filter=${filter}&page_limit=${limit}`;
+  const value = source.quoteFormula === false ? reduced : `"${reduced}"`;
+  const filter = `chemical_formula_reduced=${encodeURIComponent(value)}`;
+  const responseFields = source.responseFields || STANDARD_OPTIMADE_FIELDS;
+  return `${source.endpoint}?filter=${filter}&page_limit=${limit}&response_fields=${encodeURIComponent(responseFields)}`;
 }
 
 function mapOptimadeStructure(doc, source, fallbackFormula) {
@@ -559,35 +655,59 @@ function mapOptimadeStructure(doc, source, fallbackFormula) {
     (attrs.nperiodic_dimensions ? `${attrs.nperiodic_dimensions}D periodic` : 'Structure');
   const spaceGroup =
     attrs._jarvis_spg ||
+    attrs._jarvis_spg_symbol ||
     attrs.space_group_symbol ||
     attrs.space_group_it_number ||
     null;
-  const hullEnergy = attrs._jarvis_ehull !== undefined
-    ? formatOptionalNumber(attrs._jarvis_ehull, 3)
+  const rawHullEnergy = attrs._jarvis_ehull ?? attrs._alexandria_hull_distance;
+  const hullEnergy = rawHullEnergy !== undefined
+    ? formatOptionalNumber(rawHullEnergy, 3)
     : 'N/A';
+  const rawFormationEnergy = attrs._jarvis_formation_energy_peratom ?? attrs._alexandria_formation_energy_per_atom;
+  const formationEnergy = rawFormationEnergy !== undefined
+    ? formatOptionalNumber(rawFormationEnergy, 3)
+    : null;
+  const rawBandGap = attrs._jarvis_optb88vdw_bandgap ?? attrs._alexandria_band_gap;
+  const bandGap = rawBandGap !== undefined
+    ? formatOptionalNumber(rawBandGap, 3)
+    : null;
+  const materialId = source.key === 'jarvis'
+    ? jarvisId
+    : source.key === 'alexandria'
+      ? `alexandria-${doc.id}`
+      : doc.id;
+  const selectionReason = source.key === 'jarvis'
+    ? `JARVIS OPTIMADE entry${hullEnergy !== 'N/A' ? ` — ${hullEnergy} eV/atom above hull` : ''}`
+    : source.key === 'alexandria'
+      ? `Alexandria PBE OPTIMADE entry${hullEnergy !== 'N/A' ? ` — ${hullEnergy} eV/atom hull distance` : ''}`
+      : `${source.label} OPTIMADE entry with provenance-backed structure metadata`;
 
   return {
-    material_id: source.key === 'jarvis' ? jarvisId : doc.id,
+    material_id: materialId,
     formula,
     crystal_system: crystalSystem,
     space_group: spaceGroup ? String(spaceGroup) : null,
     energy_above_hull: hullEnergy,
+    formation_energy: formationEnergy,
+    band_gap: bandGap,
     theoretical: null,
     source: source.label,
+    source_id: source.key,
     source_url: source.homepage,
-    selection_reason: source.key === 'jarvis'
-      ? `JARVIS OPTIMADE entry${hullEnergy !== 'N/A' ? ` — ${hullEnergy} eV/atom above hull` : ''}`
-      : `${source.label} OPTIMADE entry with provenance-backed structure metadata`,
+    nsites: attrs.nsites || (Array.isArray(attrs.species_at_sites) ? attrs.species_at_sites.length : null),
+    has_lattice_vectors: Array.isArray(attrs.lattice_vectors),
+    has_cartesian_positions: Array.isArray(attrs.cartesian_site_positions),
+    selection_reason: selectionReason,
   };
 }
 
 async function searchOptimadeStructures(source, formula, limit = 4) {
-  const url = buildOptimadeUrl(source.endpoint, formula, limit);
+  const url = buildOptimadeUrl(source, formula, limit);
   if (!url) return { success: false, error: 'Could not normalize formula for OPTIMADE.' };
 
-  let res = await httpGet(url, { Accept: 'application/json' }, { proxy: false, timeoutMs: 8000 });
+  let res = await httpGet(url, { Accept: 'application/json' }, { proxy: false, timeoutMs: source.timeoutMs || 8000 });
   if (!res.ok && proxyAgent) {
-    res = await httpGet(url, { Accept: 'application/json' }, { timeoutMs: 8000 });
+    res = await httpGet(url, { Accept: 'application/json' }, { timeoutMs: source.timeoutMs || 8000 });
   }
   if (!res.ok) return { success: false, error: `${source.label} OPTIMADE API ${res.status}` };
 
@@ -607,8 +727,20 @@ async function searchJARVIS(formula, limit = 4) {
   return searchOptimadeStructures({
     key: 'jarvis',
     label: 'JARVIS',
-    endpoint: 'https://jarvis.nist.gov/optimade/jarvisdft/v1/structures',
+    endpoint: 'https://jarvis.nist.gov/optimade/jarvisdft/v1/structures/',
     homepage: 'https://jarvis.nist.gov/',
+    quoteFormula: false,
+    responseFields: JARVIS_OPTIMADE_FIELDS,
+  }, formula, limit);
+}
+
+async function searchAlexandria(formula, limit = 4) {
+  return searchOptimadeStructures({
+    key: 'alexandria',
+    label: 'Alexandria',
+    endpoint: 'https://alexandria.icams.rub.de/pbe/v1/structures',
+    homepage: 'https://alexandria.icams.rub.de/',
+    responseFields: ALEXANDRIA_OPTIMADE_FIELDS,
   }, formula, limit);
 }
 
@@ -618,7 +750,141 @@ async function searchNOMAD(formula, limit = 4) {
     label: 'NOMAD',
     endpoint: 'https://nomad-lab.eu/prod/v1/optimade/v1/structures',
     homepage: 'https://nomad-lab.eu/nomad-lab/',
+    responseFields: NOMAD_OPTIMADE_FIELDS,
+    timeoutMs: 12000,
   }, formula, limit);
+}
+
+const STRUCTURE_SOURCE_REGISTRY = {
+  live: [
+    {
+      id: 'mp',
+      label: 'Materials Project',
+      kind: 'structure_api',
+      liveSearch: true,
+      access: process.env.MP_API_KEY ? 'configured' : 'requires MP_API_KEY',
+      homepage: 'https://materialsproject.org/',
+      endpoint: 'https://api.materialsproject.org/materials/summary/',
+    },
+    {
+      id: 'oqmd',
+      label: 'OQMD',
+      kind: 'structure_api',
+      liveSearch: true,
+      access: 'public',
+      homepage: 'https://oqmd.org/',
+      endpoint: 'https://oqmd.org/oqmdapi/formationenergy',
+    },
+    {
+      id: 'aflow',
+      label: 'AFLOW',
+      kind: 'structure_api',
+      liveSearch: true,
+      access: 'public',
+      homepage: 'https://aflow.org/',
+      endpoint: 'https://aflow.org/API/aflux/',
+    },
+    {
+      id: 'jarvis',
+      label: 'JARVIS',
+      kind: 'optimade',
+      liveSearch: true,
+      access: 'public',
+      homepage: 'https://jarvis.nist.gov/',
+      endpoint: 'https://jarvis.nist.gov/optimade/jarvisdft/v1/structures/',
+    },
+    {
+      id: 'alexandria',
+      label: 'Alexandria',
+      kind: 'optimade',
+      liveSearch: true,
+      access: 'public',
+      homepage: 'https://alexandria.icams.rub.de/',
+      endpoint: 'https://alexandria.icams.rub.de/pbe/v1/structures',
+    },
+    {
+      id: 'nomad',
+      label: 'NOMAD',
+      kind: 'optimade',
+      liveSearch: true,
+      access: 'public',
+      homepage: 'https://nomad-lab.eu/nomad-lab/',
+      endpoint: 'https://nomad-lab.eu/prod/v1/optimade/v1/structures',
+    },
+  ],
+  datasets: [
+    {
+      id: 'mptrj',
+      label: 'MPtrj',
+      kind: 'trajectory_dataset',
+      liveSearch: false,
+      access: 'dataset download / training metadata',
+      homepage: 'https://matbench-discovery.materialsproject.org/',
+      notes: 'Materials Project relaxation trajectories. Registry-only until a local mirror is configured.',
+    },
+    {
+      id: 'matbench_discovery',
+      label: 'Matbench Discovery',
+      kind: 'benchmark_registry',
+      liveSearch: false,
+      access: 'public leaderboard and dataset registry',
+      homepage: 'https://matbench-discovery.materialsproject.org/',
+      notes: 'Benchmark and data registry, not a formula-search structure API.',
+    },
+    {
+      id: 'omat24',
+      label: 'OMat24',
+      kind: 'large_training_dataset',
+      liveSearch: false,
+      access: 'Hugging Face / FAIRChem dataset files',
+      homepage: 'https://huggingface.co/datasets/facebook/OMAT24',
+      notes: 'Large LMDB/ASE dataset. Registry-only here; use a local mirror for direct structure pulls.',
+    },
+  ],
+};
+
+const STRUCTURE_SEARCHERS = {
+  mp: searchMaterialsProject,
+  oqmd: searchOQMD,
+  aflow: searchAFLOW,
+  jarvis: searchJARVIS,
+  alexandria: searchAlexandria,
+  nomad: searchNOMAD,
+};
+
+function listStructureSources() {
+  return STRUCTURE_SOURCE_REGISTRY;
+}
+
+async function searchStructureDatabases(formula, limit = 6, sourceIds = null) {
+  const requested = Array.isArray(sourceIds) && sourceIds.length
+    ? sourceIds.map((id) => String(id).toLowerCase()).filter((id) => STRUCTURE_SEARCHERS[id])
+    : Object.keys(STRUCTURE_SEARCHERS);
+  const settled = await Promise.allSettled(requested.map(async (id) => {
+    const result = await STRUCTURE_SEARCHERS[id](formula, limit);
+    return { id, result };
+  }));
+  const results = {};
+  const errors = {};
+
+  for (const id of requested) results[id] = [];
+  for (const item of settled) {
+    if (item.status === 'fulfilled' && item.value?.result?.success) {
+      results[item.value.id] = item.value.result.results || [];
+    } else if (item.status === 'fulfilled') {
+      errors[item.value.id] = item.value.result?.error || 'search failed';
+    } else {
+      errors.unknown = item.reason?.message || String(item.reason);
+    }
+  }
+
+  return {
+    formula,
+    sources: listStructureSources(),
+    results,
+    errors,
+    structures: Object.values(results).flat(),
+  };
 }
 
 // ─── LLM helpers ─────────────────────────────────────────────────────────────
@@ -673,9 +939,37 @@ function inferFallbackFormula(prompt) {
   return null;
 }
 
+function buildHeuristicLiteratureQuery(prompt) {
+  const text = String(prompt || '').trim();
+  if (!text) return '';
+  const formulas = (text.match(/[A-Z][a-z]?(?:\d+)?(?:[A-Z][a-z]?(?:\d+)?)*/g) || [])
+    .filter((item) => item.length > 1);
+  if (!/[\u4e00-\u9fff]/.test(text)) return text;
+
+  const lower = text.toLowerCase();
+  if (/(co2|二氧化碳).*(加氢|hydrogenation|催化|catalyst)|加氢.*(co2|二氧化碳)/i.test(text)) {
+    return `${formulas.join(' ')} CO2 hydrogenation catalyst DFT surface adsorption methanol`.trim();
+  }
+  if (/(吸附|表面|晶面|催化)/.test(text)) {
+    return `${formulas.join(' ')} catalyst surface adsorption DFT`.trim();
+  }
+  if (/(电池|正极|负极|脱锂|脱钠|储锂|储钠)/.test(text)) {
+    return `${formulas.join(' ')} battery electrode DFT calculation`.trim();
+  }
+  if (/(扩散|迁移|neb)/i.test(lower)) {
+    return `${formulas.join(' ')} diffusion migration NEB DFT`.trim();
+  }
+  return `${formulas.join(' ')} materials science DFT calculation`.trim();
+}
+
+function numericHullEnergy(structure) {
+  const value = Number(structure?.energy_above_hull);
+  return Number.isFinite(value) ? value : 999;
+}
+
 function chooseBestStructure(structures) {
   if (!Array.isArray(structures) || structures.length === 0) return null;
-  return [...structures].sort((a, b) => Number(a.energy_above_hull || 999) - Number(b.energy_above_hull || 999))[0];
+  return [...structures].sort((a, b) => numericHullEnergy(a) - numericHullEnergy(b))[0];
 }
 
 function fallbackRecipeForType(researchType, formula, bestStructure) {
@@ -769,8 +1063,9 @@ function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
     general: ['stability', 'structure screening'],
   };
 
+  const bestSourceLabel = bestStructure?.source || 'a structure database';
   const sourceReason = bestStructure
-    ? `Selected ${bestStructure.material_id} because it is the lowest-energy candidate returned by Materials Project (${bestStructure.selection_reason}).`
+    ? `Selected ${bestStructure.material_id} because it is the lowest-energy candidate returned by ${bestSourceLabel} (${bestStructure.selection_reason}).`
     : 'No robust MP structure was available, so this fallback uses a heuristic literature-style starter recommendation.';
 
   const literatureBasis = papers.length > 0
@@ -842,7 +1137,7 @@ function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
       formula,
       phase: blueprint.structure_source.phase_or_polymorph || null,
       material_id: blueprint.structure_source.material_id || null,
-      source: bestStructure ? 'Materials Project' : 'Heuristic fallback',
+      source: bestStructure ? bestSourceLabel : 'Heuristic fallback',
       model_type: modelType,
       supercell: recipe.supercell || null,
       target_property: ideaCard.target_properties[0] || null,
@@ -884,10 +1179,7 @@ async function runRetrievalAgentStream(userPrompt, onChunk) {
 
     // Heuristic: extract formulas and build a quick English query immediately
     const heuristicFormula = inferFallbackFormula(userPrompt);
-    const hasChinese = /[\u4e00-\u9fff]/.test(userPrompt);
-    const heuristicQuery = hasChinese
-      ? (userPrompt.match(/[A-Z][a-z]?(?:\d+)?(?:[A-Z][a-z]?(?:\d+)?)*/g) || []).join(' ') + ' battery DFT calculation'
-      : userPrompt;
+    const heuristicQuery = buildHeuristicLiteratureQuery(userPrompt);
 
     // Start LLM intent understanding (merged with translation)
     emit({ type: 'stage', stage: 'goal_understanding', title: 'Understanding research goal', status: 'active' });
@@ -939,22 +1231,23 @@ User prompt: "${userPrompt}"`,
 
     const litSearchPromise = Promise.all(literatureSources.map((source) => (
       source.search().then((r) => {
+        const verified = dedupeVerifiedPapers(r, 4);
         emit({
           type: 'stage',
           stage: source.stage,
-          title: `${source.label} — ${r.length} ${source.kind}`,
+          title: `${source.label} — ${verified.length} verified ${source.kind}`,
           status: 'done',
-          content: r.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No results',
-          papers: r,
+          content: verified.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No verifiable results',
+          papers: verified,
         });
-        return r;
+        return verified;
       }).catch(() => {
         emit({ type: 'stage', stage: source.stage, title: `${source.label} — unavailable`, status: 'done' });
         return [];
       })
     )));
 
-    // Start structure database lookups in parallel (MP + OQMD + AFLOW)
+    // Start structure database lookups in parallel (MP + OQMD + AFLOW + OPTIMADE sources)
     const mpFormulas = heuristicFormula ? [heuristicFormula] : [];
     emit({
       type: 'stage', stage: 'structure_lookup',
@@ -963,16 +1256,26 @@ User prompt: "${userPrompt}"`,
     });
     emit({ type: 'stage', stage: 'db_oqmd', title: 'Searching OQMD…', status: 'active' });
     emit({ type: 'stage', stage: 'db_aflow', title: 'Searching AFLOW…', status: 'active' });
+    emit({ type: 'stage', stage: 'db_jarvis', title: 'Searching JARVIS…', status: 'active' });
+    emit({ type: 'stage', stage: 'db_alexandria', title: 'Searching Alexandria…', status: 'active' });
+    emit({ type: 'stage', stage: 'db_nomad', title: 'Searching NOMAD…', status: 'active' });
 
     let oqmdStructures = [];
     let aflowStructures = [];
+    let jarvisStructures = [];
+    let alexandriaStructures = [];
+    let nomadStructures = [];
 
-    const mpSearchPromise = (async () => {
+    const getFinalFormulas = async (limit = 2) => {
       const raceResult = await Promise.race([
-        llmIntentPromise.then(() => intent.candidate_formulas?.slice(0, 2) || []),
+        llmIntentPromise.then(() => intent.candidate_formulas?.slice(0, limit) || []),
         new Promise((resolve) => setTimeout(() => resolve([]), 5000)),
       ]);
-      const finalFormulas = (Array.isArray(raceResult) && raceResult.length > 0) ? raceResult : mpFormulas;
+      return (Array.isArray(raceResult) && raceResult.length > 0) ? raceResult : mpFormulas;
+    };
+
+    const mpSearchPromise = (async () => {
+      const finalFormulas = await getFinalFormulas(2);
 
       for (const formula of finalFormulas.slice(0, 2)) {
         const mpResult = await searchMaterialsProject(formula);
@@ -991,11 +1294,7 @@ User prompt: "${userPrompt}"`,
     })();
 
     const oqmdSearchPromise = (async () => {
-      const raceResult = await Promise.race([
-        llmIntentPromise.then(() => intent.candidate_formulas?.slice(0, 2) || []),
-        new Promise((resolve) => setTimeout(() => resolve([]), 5000)),
-      ]);
-      const finalFormulas = (Array.isArray(raceResult) && raceResult.length > 0) ? raceResult : mpFormulas;
+      const finalFormulas = await getFinalFormulas(2);
 
       for (const formula of finalFormulas.slice(0, 2)) {
         const oqmdResult = await searchOQMD(formula, 4);
@@ -1016,11 +1315,7 @@ User prompt: "${userPrompt}"`,
     });
 
     const aflowSearchPromise = (async () => {
-      const raceResult = await Promise.race([
-        llmIntentPromise.then(() => intent.candidate_formulas?.slice(0, 2) || []),
-        new Promise((resolve) => setTimeout(() => resolve([]), 5000)),
-      ]);
-      const finalFormulas = (Array.isArray(raceResult) && raceResult.length > 0) ? raceResult : mpFormulas;
+      const finalFormulas = await getFinalFormulas(2);
 
       for (const formula of finalFormulas.slice(0, 1)) {
         const aflowResult = await searchAFLOW(formula, 4);
@@ -1040,36 +1335,87 @@ User prompt: "${userPrompt}"`,
       emit({ type: 'stage', stage: 'db_aflow', title: 'AFLOW — unavailable', status: 'done' });
     });
 
-    // ── Wait for all parallel work to complete ──
-    const [litResults] = await Promise.all([litSearchPromise, mpSearchPromise, oqmdSearchPromise, aflowSearchPromise, llmIntentPromise]);
-
-    // Deduplicate papers
-    const allPapers = litResults.flat();
-    const seen = new Set();
-    for (const paper of allPapers) {
-      const key = paper.doi || paper.title.slice(0, 80).toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        papers.push(paper);
+    const jarvisSearchPromise = (async () => {
+      const finalFormulas = await getFinalFormulas(2);
+      for (const formula of finalFormulas.slice(0, 2)) {
+        const result = await searchJARVIS(formula, 4);
+        if (result.success) jarvisStructures.push(...result.results);
       }
-    }
-    papers = papers.slice(0, 10);
+      emit({
+        type: 'stage', stage: 'db_jarvis',
+        title: jarvisStructures.length > 0 ? `JARVIS — ${jarvisStructures.length} entries` : 'JARVIS — no results',
+        status: 'done',
+        content: jarvisStructures.length > 0
+          ? jarvisStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (${s.space_group || s.crystal_system}, E_hull=${s.energy_above_hull})`).join('\n')
+          : 'No JARVIS results.',
+        structures: jarvisStructures,
+      });
+    })().catch(() => {
+      emit({ type: 'stage', stage: 'db_jarvis', title: 'JARVIS — unavailable', status: 'done' });
+    });
 
-    // Merge OQMD + AFLOW structures into allStructures (after MP)
-    allStructures.push(...oqmdStructures, ...aflowStructures);
+    const alexandriaSearchPromise = (async () => {
+      const finalFormulas = await getFinalFormulas(2);
+      for (const formula of finalFormulas.slice(0, 2)) {
+        const result = await searchAlexandria(formula, 4);
+        if (result.success) alexandriaStructures.push(...result.results);
+      }
+      emit({
+        type: 'stage', stage: 'db_alexandria',
+        title: alexandriaStructures.length > 0 ? `Alexandria — ${alexandriaStructures.length} entries` : 'Alexandria — no results',
+        status: 'done',
+        content: alexandriaStructures.length > 0
+          ? alexandriaStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (${s.space_group || s.crystal_system}, E_hull=${s.energy_above_hull})`).join('\n')
+          : 'No Alexandria results.',
+        structures: alexandriaStructures,
+      });
+    })().catch(() => {
+      emit({ type: 'stage', stage: 'db_alexandria', title: 'Alexandria — unavailable', status: 'done' });
+    });
+
+    const nomadSearchPromise = (async () => {
+      const finalFormulas = await getFinalFormulas(2);
+      for (const formula of finalFormulas.slice(0, 2)) {
+        const result = await searchNOMAD(formula, 4);
+        if (result.success) nomadStructures.push(...result.results);
+      }
+      emit({
+        type: 'stage', stage: 'db_nomad',
+        title: nomadStructures.length > 0 ? `NOMAD — ${nomadStructures.length} entries` : 'NOMAD — no results',
+        status: 'done',
+        content: nomadStructures.length > 0
+          ? nomadStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (${s.space_group || s.crystal_system})`).join('\n')
+          : 'No NOMAD results.',
+        structures: nomadStructures,
+      });
+    })().catch(() => {
+      emit({ type: 'stage', stage: 'db_nomad', title: 'NOMAD — unavailable', status: 'done' });
+    });
+
+    // ── Wait for all parallel work to complete ──
+    const [litResults] = await Promise.all([
+      litSearchPromise,
+      mpSearchPromise,
+      oqmdSearchPromise,
+      aflowSearchPromise,
+      jarvisSearchPromise,
+      alexandriaSearchPromise,
+      nomadSearchPromise,
+      llmIntentPromise,
+    ]);
+
+    // Deduplicate and keep only source-backed literature. The UI must not show
+    // placeholder papers as evidence.
+    papers = dedupeVerifiedPapers(litResults.flat(), 10);
+
+    // Merge non-MP structures into allStructures (after MP)
+    allStructures.push(...oqmdStructures, ...aflowStructures, ...jarvisStructures, ...alexandriaStructures, ...nomadStructures);
 
     // If LLM gave us a better literature query and we got few results, do a supplementary search
     const llmQuery = intent.literature_query || '';
     if (llmQuery && llmQuery !== heuristicQuery && papers.length < 3) {
       const extraResults = await searchAllLiterature(llmQuery).catch(() => []);
-      for (const paper of extraResults) {
-        const key = paper.doi || paper.title.slice(0, 80).toLowerCase();
-        if (!seen.has(key)) {
-          seen.add(key);
-          papers.push(paper);
-        }
-      }
-      papers = papers.slice(0, 10);
+      papers = dedupeVerifiedPapers([...papers, ...extraResults], 10);
     }
 
     // Stage 4: idea generation (LLM with deterministic fallback)
@@ -1082,7 +1428,7 @@ User prompt: "${userPrompt}"`,
 
     try {
       const paperSummary = papers.slice(0, 6).map((paper, i) =>
-        `[${i + 1}] "${paper.title}" (${paper.authors}, ${paper.year}, ${paper.source}${paper.source_type === 'preprint' ? ' preprint' : ''})`
+        `[${i + 1}] "${paper.title}" (${paper.authors || 'authors unavailable'}, ${paper.year}, ${paper.source}${paper.source_type === 'preprint' ? ' preprint' : ''}, ${paper.doi || paper.url})`
       ).join('\n');
 
       const structureSummary = allStructures.map((structure) =>
@@ -1092,21 +1438,23 @@ User prompt: "${userPrompt}"`,
       const ideaRaw = await llm([
         {
           role: 'user',
-          content: `You are an expert computational materials science advisor for battery research.
+          content: `You are an expert computational materials science advisor.
 
 User research goal: "${intent.interpreted_goal}"
 User profile: ${intent.user_profile} (depth: ${intent.depth})
 Research type hinted: ${intent.research_type}
 
 Literature evidence (from connected scholarly indexes):
-${paperSummary}
+${paperSummary || 'No source-backed papers were returned. Do not invent paper titles, authors, journals, or DOI values.'}
 
-Materials database structures (Materials Project + OQMD + AFLOW):
+Materials database structures (Materials Project + OQMD + AFLOW + JARVIS + Alexandria + NOMAD):
 ${structureSummary}
 
 Generate 2-3 research idea cards. For each idea, provide concrete literature-grounded modeling advice.
 
 CRITICAL RULES:
+- Use only the literature evidence listed above. If it is empty, say the recommendation is database/heuristic-only.
+- Do not invent citations, paper titles, journals, authors, or DOI values.
 - NEVER present a reduced chemical formula as a simulation-ready model.
 - ALWAYS distinguish: formula label → database polymorph → cell choice → supercell → property-specific modification.
 - ALWAYS justify the supercell choice (e.g. 2×2×1 to avoid dopant self-interaction in a ~16-atom host).
@@ -1251,7 +1599,10 @@ module.exports = {
   searchOQMD,
   searchAFLOW,
   searchJARVIS,
+  searchAlexandria,
   searchNOMAD,
+  listStructureSources,
+  searchStructureDatabases,
   searchSemanticScholar,
   searchEuropePMC,
   searchPubMed,
