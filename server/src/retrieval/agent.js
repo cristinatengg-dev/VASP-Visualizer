@@ -631,18 +631,45 @@ const NOMAD_OPTIMADE_FIELDS = [
   'chemical_formula_descriptive',
 ].join(',');
 
+const MATERIALS_CLOUD_MC3D_FIELDS = [
+  'id',
+  'chemical_formula_reduced',
+  'chemical_formula_descriptive',
+  'nsites',
+  'space_group_symbol',
+  'space_group_it_number',
+  '_mcloud_source_db',
+  '_mcloud_mc3d_id',
+  '_mcloud_band_gap',
+].join(',');
+
+const OMDB_OPTIMADE_FIELDS = [
+  'id',
+  'chemical_formula_reduced',
+  'chemical_formula_descriptive',
+  'chemical_formula_hill',
+  'nsites',
+  'elements',
+  'nelements',
+  'space_group_it_number',
+].join(',');
+
 function buildOptimadeUrl(source, formula, limit) {
   const reduced = formulaToOptimadeReduced(formula);
   if (!reduced) return null;
   const value = source.quoteFormula === false ? reduced : `"${reduced}"`;
   const filter = `chemical_formula_reduced=${encodeURIComponent(value)}`;
+  if (source.responseFields === false) {
+    return `${source.endpoint}?filter=${filter}&page_limit=${limit}`;
+  }
   const responseFields = source.responseFields || STANDARD_OPTIMADE_FIELDS;
   return `${source.endpoint}?filter=${filter}&page_limit=${limit}&response_fields=${encodeURIComponent(responseFields)}`;
 }
 
 function mapOptimadeStructure(doc, source, fallbackFormula) {
   const attrs = doc?.attributes || {};
-  const jarvisId = attrs._jarvis_jid || (doc?.id || '').replace(/^dft_3d_/, '');
+  const docId = String(doc?.id || '');
+  const jarvisId = attrs._jarvis_jid || docId.replace(/^dft_3d_/, '');
   const formula =
     fallbackFormula ||
     attrs.chemical_formula_reduced ||
@@ -674,8 +701,8 @@ function mapOptimadeStructure(doc, source, fallbackFormula) {
   const materialId = source.key === 'jarvis'
     ? jarvisId
     : source.key === 'alexandria'
-      ? `alexandria-${doc.id}`
-      : doc.id;
+      ? `alexandria-${docId}`
+      : docId;
   const selectionReason = source.key === 'jarvis'
     ? `JARVIS OPTIMADE entry${hullEnergy !== 'N/A' ? ` — ${hullEnergy} eV/atom above hull` : ''}`
     : source.key === 'alexandria'
@@ -755,6 +782,28 @@ async function searchNOMAD(formula, limit = 4) {
   }, formula, limit);
 }
 
+async function searchMaterialsCloudMC3D(formula, limit = 4) {
+  return searchOptimadeStructures({
+    key: 'mcloud_mc3d',
+    label: 'Materials Cloud MC3D',
+    endpoint: 'https://optimade.materialscloud.org/main/mc3d-pbe-v1/v1/structures',
+    homepage: 'https://mc3d.materialscloud.org/',
+    responseFields: false,
+    timeoutMs: 10000,
+  }, formula, limit);
+}
+
+async function searchOpenMaterialsDatabase(formula, limit = 4) {
+  return searchOptimadeStructures({
+    key: 'omdb',
+    label: 'Open Materials Database',
+    endpoint: 'https://optimade.openmaterialsdb.se/v1/structures',
+    homepage: 'https://openmaterialsdb.se/',
+    responseFields: false,
+    timeoutMs: 10000,
+  }, formula, limit);
+}
+
 const STRUCTURE_SOURCE_REGISTRY = {
   live: [
     {
@@ -811,8 +860,35 @@ const STRUCTURE_SOURCE_REGISTRY = {
       homepage: 'https://nomad-lab.eu/nomad-lab/',
       endpoint: 'https://nomad-lab.eu/prod/v1/optimade/v1/structures',
     },
+    {
+      id: 'mcloud_mc3d',
+      label: 'Materials Cloud MC3D',
+      kind: 'optimade',
+      liveSearch: true,
+      access: 'public',
+      homepage: 'https://mc3d.materialscloud.org/',
+      endpoint: 'https://optimade.materialscloud.org/main/mc3d-pbe-v1/v1/structures',
+    },
+    {
+      id: 'omdb',
+      label: 'Open Materials Database',
+      kind: 'optimade',
+      liveSearch: true,
+      access: 'public',
+      homepage: 'https://openmaterialsdb.se/',
+      endpoint: 'https://optimade.openmaterialsdb.se/v1/structures',
+    },
   ],
   datasets: [
+    {
+      id: 'cod',
+      label: 'Crystallography Open Database',
+      kind: 'cif_repository',
+      liveSearch: false,
+      access: 'open CIF download / CC0',
+      homepage: 'https://www.crystallography.net/cod/',
+      notes: 'Open experimental CIF repository. Registered as metadata because public formula JSON search is noisy for exact reduced-formula lookup.',
+    },
     {
       id: 'mptrj',
       label: 'MPtrj',
@@ -850,6 +926,8 @@ const STRUCTURE_SEARCHERS = {
   jarvis: searchJARVIS,
   alexandria: searchAlexandria,
   nomad: searchNOMAD,
+  mcloud_mc3d: searchMaterialsCloudMC3D,
+  omdb: searchOpenMaterialsDatabase,
 };
 
 function listStructureSources() {
@@ -1601,6 +1679,8 @@ module.exports = {
   searchJARVIS,
   searchAlexandria,
   searchNOMAD,
+  searchMaterialsCloudMC3D,
+  searchOpenMaterialsDatabase,
   listStructureSources,
   searchStructureDatabases,
   searchSemanticScholar,

@@ -16,6 +16,7 @@ import SupercapacitorMaterialsExplorer from './pages/SupercapacitorMaterialsExpl
 import HydrogenStorageMaterialsExplorer from './pages/HydrogenStorageMaterialsExplorer';
 import ThermalStorageMaterialsExplorer from './pages/ThermalStorageMaterialsExplorer';
 import FlowBatteryMaterialsExplorer from './pages/FlowBatteryMaterialsExplorer';
+import AerospaceMaterialsExplorer from './pages/AerospaceMaterialsExplorer';
 import MaterialsLibrary from './pages/MaterialsLibrary';
 import RenderingAgent from './agents/rendering';
 import ModelingAgent from './agents/modeling';
@@ -140,6 +141,7 @@ function App() {
       <Route path="/materials/hydrogen-storage" element={<HydrogenStorageMaterialsExplorer />} />
       <Route path="/materials/thermal-storage" element={<ThermalStorageMaterialsExplorer />} />
       <Route path="/materials/flow-battery" element={<FlowBatteryMaterialsExplorer />} />
+      <Route path="/materials/aerospace" element={<AerospaceMaterialsExplorer />} />
       <Route path="/manual" element={<Manual />} />
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />

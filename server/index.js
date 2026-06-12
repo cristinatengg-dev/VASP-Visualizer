@@ -17,7 +17,7 @@ const os = require('os');
 const readline = require('readline');
 const { PRICING, IP_LIMIT } = require('./config');
 const { connectDB, getUser, createUser, updateUser, redeemCode, createVerificationCode, verifyCode, getLastCodeTime, InvitationCode, User } = require('./utils/db');
-const { Order } = require('./models');
+const { ChatMemory, ChatSession, Order } = require('./models');
 const { createRuntimeDemoRouter } = require('./src/runtime/http/create-runtime-demo-router');
 const { createRuntimeWorkerRunner } = require('./src/runtime/workers/create-runtime-worker-runner');
 const { createResearchOrchestratorHarnessRouter } = require('./src/agent-harness/research-orchestrator-router');
@@ -27,6 +27,7 @@ const { buildModelingProviderAvailability, normalizeModelingProviderPreferences 
 const { getModelingRuntimeDiagnostics } = require('./src/modeling/health');
 const { parseSciencePdfFile } = require('./src/rendering/parse-pdf');
 const { parseScienceText, geminiChat } = require('./src/rendering/parse-science');
+const { isTextChatConfigured, textChat } = require('./src/llm/text-chat');
 const { validateRenderingImage } = require('./src/rendering/validate-image');
 const { editRenderingImage, generateRenderingImages } = require('./src/rendering/generate-image');
 const { profileFigureData } = require('./src/rendering/profile-figure-data');
@@ -43,6 +44,10 @@ const {
     listStructureSources,
     searchStructureDatabases,
 } = require('./src/retrieval/agent');
+const {
+    getMaterialLibraryProfile,
+    listMaterialLibraryProfiles,
+} = require('./src/materials/library-profiles');
 const { createCatalystRouter } = require('./src/catalyst/router');
 const { compileComputeInputSet } = require('./src/compute/compile-input-set');
 const { listComputeProfiles, getComputeProfile } = require('./src/compute/profiles');
@@ -123,8 +128,154 @@ if (process.env.ENABLE_AGENT_RUNTIME_DEMO === '1') {
 // Computational catalysis toolkit
 app.use('/api/catalyst', createCatalystRouter());
 
+function extractUserMemories(text) {
+    const normalized = String(text || '').trim();
+    if (!normalized) return [];
+    const candidates = [];
+    const rememberMatch = normalized.match(/(?:记住|remember)(?:一下|：|:)?\s*([\s\S]{4,160})/i);
+    if (rememberMatch?.[1]) candidates.push(rememberMatch[1].trim());
+    const explicitNamePatterns = [
+        /^我叫\s*([A-Za-z0-9_\-\u4e00-\u9fff]{2,40})(?:[。.!！]|$)/i,
+        /^我是\s*([A-Za-z0-9_\-\u4e00-\u9fff]{2,40})(?:[。.!！]|$)/i,
+        /^my name is\s*([A-Za-z0-9_\- ]{2,40})(?:[.!]|$)/i,
+        /^(?:记住|remember)(?:一下|：|:)?\s*(?:我叫|我是|my name is)\s*([A-Za-z0-9_\-\u4e00-\u9fff ]{2,40})(?:[。.!！]|$)/i,
+    ];
+    for (const pattern of explicitNamePatterns) {
+        const nameMatch = normalized.match(pattern);
+        if (nameMatch?.[1] && !/(什么|哪|谁|吗|么|\?|\？)/.test(nameMatch[1])) {
+            candidates.push(`用户名字或称呼：${nameMatch[1].trim()}`);
+        }
+    }
+    const explicitPreferencePatterns = [
+        /^我(?:更)?喜欢(?!什么|哪|吗|么)\s*([\s\S]{4,160})$/i,
+        /^以后(?:请|帮我|都|默认)?\s*([\s\S]{4,160})$/i,
+        /^偏好(?:是|为|：|:)?\s*([\s\S]{4,160})$/i,
+        /^prefer(?:ence|red)?(?:\s+is|:)?\s*([\s\S]{4,160})$/i,
+    ];
+    for (const pattern of explicitPreferencePatterns) {
+        const preferenceMatch = normalized.match(pattern);
+        if (preferenceMatch?.[1]) candidates.push(`用户偏好：${preferenceMatch[1].trim()}`);
+    }
+    return [...new Set(candidates)]
+        .map((item) => item.replace(/\s+/g, ' ').trim())
+        .filter((item) => item.length >= 4 && !/[?？]$/.test(item))
+        .slice(0, 3);
+}
+
+function fallbackChatReply(message, memories) {
+    const memoryText = memories.length
+        ? `我还记得这些偏好：${memories.map((item) => item.text).join('；')}。`
+        : '我现在还没有可用的长期记忆。';
+    return [
+        '我可以继续跟你对话，也可以在你明确说“检索、建模、生成计算输入、提交计算、生成PPT”时切换到科研工作流。',
+        memoryText,
+        `刚才这句我理解为：${String(message || '').slice(0, 180)}`,
+    ].join('\n');
+}
+
+async function loadChatSession(sessionId, ownerId) {
+    if (sessionId) {
+        const existing = await ChatSession.findById(sessionId);
+        if (existing) return existing.toObject ? existing.toObject() : existing;
+    }
+    const created = await ChatSession.create({
+        ownerId,
+        title: 'Workspace chat',
+        messages: [],
+    });
+    return created.toObject ? created.toObject() : created;
+}
+
 // Agent access check endpoint
 app.get('/api/agent-access', handleAgentAccessCheck);
+
+app.post('/api/agent/chat', async (req, res) => {
+    try {
+        const ownerId = String(req.body.ownerId || req.body.userId || 'anonymous-researcher').trim() || 'anonymous-researcher';
+        const message = String(req.body.message || '').trim();
+        if (!message) return res.status(400).json({ success: false, error: 'message is required' });
+
+        const session = await loadChatSession(req.body.sessionId, ownerId);
+        const memories = await ChatMemory.find({ ownerId });
+        const recentMessages = Array.isArray(session.messages) ? session.messages.slice(-16) : [];
+        const nextMessages = [
+            ...recentMessages,
+            { role: 'user', content: message, createdAt: new Date().toISOString() },
+        ];
+
+        const newMemoryTexts = extractUserMemories(message);
+        for (const text of newMemoryTexts) {
+            const existing = await ChatMemory.findOne({ ownerId, text });
+            if (!existing) {
+                await ChatMemory.create({
+                    ownerId,
+                    text,
+                    source: 'chat',
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                });
+            }
+        }
+        const refreshedMemories = await ChatMemory.find({ ownerId });
+        const memoryLines = refreshedMemories.slice(-12).map((item) => `- ${item.text}`);
+
+        let reply;
+        let llmError = null;
+        if (isTextChatConfigured()) {
+            try {
+                reply = await textChat([
+                    {
+                        role: 'system',
+                        content: [
+                            '你是 SCI Visualizer 的科研工作台对话助手。',
+                            '你可以像通用大语言模型一样自然对话，但要诚实地区分聊天、材料数据库检索、建模、计算输入和部署操作。',
+                            '如果用户只是闲聊或问概念，直接回答；如果用户明确要求检索、建模、计算、提交或生成PPT，提醒系统会进入对应工作流。',
+                            '回答用用户使用的语言，默认中文，简洁但有帮助。',
+                            memoryLines.length ? `可用长期记忆：\n${memoryLines.join('\n')}` : '当前没有长期记忆。',
+                        ].join('\n'),
+                    },
+                    ...nextMessages.map((item) => ({ role: item.role === 'assistant' ? 'assistant' : 'user', content: item.content })),
+                ], false, { timeoutMs: 45000, maxRetries: 2, temperature: 0.35 });
+            } catch (error) {
+                llmError = error instanceof Error ? error.message : String(error);
+            }
+        }
+
+        if (!reply) {
+            reply = fallbackChatReply(message, refreshedMemories);
+        }
+
+        const savedMessages = [
+            ...nextMessages,
+            { role: 'assistant', content: reply, createdAt: new Date().toISOString() },
+        ].slice(-80);
+
+        await ChatSession.findOneAndUpdate(
+            { _id: session._id },
+            {
+                $set: {
+                    ownerId,
+                    messages: savedMessages,
+                    title: savedMessages.find((item) => item.role === 'user')?.content?.slice(0, 80) || 'Workspace chat',
+                    updatedAt: new Date(),
+                },
+            },
+            { new: true }
+        );
+
+        return res.json({
+            success: true,
+            sessionId: session._id,
+            reply,
+            memories: refreshedMemories.slice(-12).map((item) => ({ id: item._id, text: item.text })),
+            llmConfigured: isTextChatConfigured(),
+            llmError,
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.use('/api/agent/harness', requireAgentAccess('retrieval'), createResearchOrchestratorHarnessRouter());
 
 const upload = multer({ 
@@ -2125,19 +2276,24 @@ app.get('/api/agent/presentation/:filename', (req, res) => {
 
 // ── Route: GET /api/materials/search — Battery Materials Explorer ─────────────
 app.get('/api/materials/search', async (req, res) => {
-    const { formula, sources } = req.query;
+    const { formula, sources, library } = req.query;
     if (!formula) return res.status(400).json({ error: 'formula query parameter is required' });
 
+    const libraryProfile = getMaterialLibraryProfile(library);
     const sourceIds = typeof sources === 'string'
         ? sources.split(',').map((item) => item.trim()).filter(Boolean)
-        : null;
+        : libraryProfile?.liveStructureSources || null;
     const bundle = await searchStructureDatabases(String(formula), 6, sourceIds);
 
-    res.json({ success: true, ...bundle });
+    res.json({ success: true, library: libraryProfile, ...bundle });
 });
 
 app.get('/api/materials/sources', (_req, res) => {
-    res.json({ success: true, sources: listStructureSources() });
+    res.json({ success: true, sources: listStructureSources(), libraries: listMaterialLibraryProfiles() });
+});
+
+app.get('/api/materials/libraries', (_req, res) => {
+    res.json({ success: true, libraries: listMaterialLibraryProfiles() });
 });
 
 app.get('/api/agent/structure-sources', requireAgentAccess('retrieval'), (_req, res) => {

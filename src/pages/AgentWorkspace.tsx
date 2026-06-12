@@ -295,11 +295,11 @@ const agents: WorkspaceAgent[] = [
   {
     id: 'database',
     name: '结构数据库',
-    subtitle: '六类来源',
+    subtitle: '八个结构源',
     status: 'active',
     accent: 'bg-indigo-600 text-white',
     icon: Database,
-    tools: ['JARVIS', 'Alexandria', 'MPtrj', 'Matbench', 'OMat24', 'NOMAD'],
+    tools: ['MP', 'OQMD', 'AFLOW', 'JARVIS', 'Alexandria', 'NOMAD', 'MC3D', 'OMDB'],
     output: '统一呈现实时结构源和大规模训练/评测数据集。',
   },
   {
@@ -389,6 +389,33 @@ const databaseAgents: DatabaseAgent[] = [
     agentRole: 'Live OPTIMADE structure source',
     sources: ['archive', 'provenance', 'OPTIMADE'],
   },
+  {
+    id: 'mcloud_mc3d',
+    name: 'Materials Cloud MC3D',
+    shortName: 'MC3D',
+    status: 'active',
+    scope: 'Materials Cloud MC3D PBE structures exposed through OPTIMADE.',
+    agentRole: 'Live OPTIMADE structure source',
+    sources: ['MC3D', 'structure', 'OPTIMADE'],
+  },
+  {
+    id: 'omdb',
+    name: 'Open Materials Database',
+    shortName: 'OMDB',
+    status: 'active',
+    scope: 'Open Materials Database production endpoint exposed through OPTIMADE.',
+    agentRole: 'Live OPTIMADE structure source',
+    sources: ['structure', 'properties', 'OPTIMADE'],
+  },
+  {
+    id: 'cod',
+    name: 'Crystallography Open Database',
+    shortName: 'COD',
+    status: 'ready',
+    scope: 'Open experimental CIF repository registered as metadata until exact formula search is normalized.',
+    agentRole: 'CIF repository registry',
+    sources: ['CIF', 'experimental', 'CC0'],
+  },
 ];
 
 const engineOptions: Array<{ id: EngineType; label: string; summary: string }> = [
@@ -438,6 +465,13 @@ const phaseLabel: Record<WorkflowPhase, string> = {
   ppt: '生成 PPT',
   done: '已完成',
   error: '需要处理',
+};
+
+const isWorkflowPrompt = (content: string, hasFiles = false) => {
+  if (hasFiles) return true;
+  const text = content.trim();
+  if (!text) return false;
+  return /(检索|搜索|查找|文献|论文|数据库|材料库|建模|模型|结构|晶体|晶面|吸附|计算|VASP|DFT|CP2K|QE|LAMMPS|提交|作业|PPT|汇报|生成|构建|优化|弛豫|能带|态密度|扩散|NEB|催化|电池|储氢|热储能|液流|航天材料|supercapacitor|battery|hydrogen|aerospace|modeling|compute|presentation)/i.test(text);
 };
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
@@ -813,7 +847,7 @@ const AgentWorkspace: React.FC = () => {
       id: 'welcome',
       role: 'assistant',
       title: '流程已就绪',
-      content: '可以直接输入一个科研任务。我会先检索可核验文献和结构数据库，再让你确认模型、检查输入文件、选择提交位置，最后决定是否生成 PPT。',
+      content: '可以像普通助手一样直接聊天；当你明确要求检索、建模、计算、提交作业或生成 PPT 时，我会切换到连续科研流程。',
       createdAt: Date.now(),
     },
   ]);
@@ -839,6 +873,7 @@ const AgentWorkspace: React.FC = () => {
   const endRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const harnessSessionIdRef = useRef<string | null>(null);
+  const chatSessionIdRef = useRef<string | null>(null);
 
   const selectedIdea = useMemo(() => {
     if (!research?.idea_cards?.length) return null;
@@ -1969,8 +2004,57 @@ const AgentWorkspace: React.FC = () => {
     setPptQa(null);
     setHarnessSession(null);
     harnessSessionIdRef.current = null;
+    chatSessionIdRef.current = null;
     setPhase('idle');
   };
+
+  const runChat = useCallback(async (content: string) => {
+    const toolId = addTool({
+      name: 'agent.chat',
+      agent: 'Conversation',
+      status: 'running',
+      summary: '调用对话模型并读取长期记忆',
+      details: ['mode=chat', chatSessionIdRef.current ? `session=${chatSessionIdRef.current}` : 'new session'],
+    });
+
+    try {
+      const payload = await postJson<{
+        success: boolean;
+        sessionId: string;
+        reply: string;
+        memories?: Array<{ id: string; text: string }>;
+        llmConfigured?: boolean;
+        llmError?: string | null;
+      }>('/agent/chat', {
+        sessionId: chatSessionIdRef.current,
+        message: content,
+      });
+
+      chatSessionIdRef.current = payload.sessionId;
+      updateTool(toolId, {
+        status: 'success',
+        details: [
+          payload.llmConfigured ? 'LLM configured' : 'Fallback chat used',
+          `${payload.memories?.length || 0} memories available`,
+          ...(payload.llmError ? [`LLM note: ${payload.llmError}`] : []),
+        ],
+      });
+      addMessage({
+        role: 'assistant',
+        title: payload.memories?.length ? `对话 · 已载入 ${payload.memories.length} 条记忆` : '对话',
+        content: payload.reply || '我在，但这次没有生成有效回复。',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updateTool(toolId, { status: 'error', details: [message] });
+      addMessage({
+        role: 'assistant',
+        title: '对话失败',
+        content: message,
+        status: 'error',
+      });
+    }
+  }, [addMessage, addTool, postJson, updateTool]);
 
   const handleComposerSubmit = async () => {
     const prompt = workspacePrompt.trim();
@@ -2014,6 +2098,10 @@ const AgentWorkspace: React.FC = () => {
     }
 
     addMessage({ role: 'user', content });
+    if (phase === 'idle' && !isWorkflowPrompt(content, filesToProcess.length > 0)) {
+      void runChat(content);
+      return;
+    }
     void runRetrieval(content);
   };
 

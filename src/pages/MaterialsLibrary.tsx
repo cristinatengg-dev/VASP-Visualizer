@@ -28,6 +28,10 @@ const libraryLabels: Record<string, { title: string; note: string }> = {
     title: '液流电池材料库',
     note: '氧化还原分子、电解液与支撑材料。',
   },
+  aerospace: {
+    title: '航天材料库',
+    note: '热防护陶瓷、固体润滑、放气与空间环境数据。',
+  },
 };
 
 const MaterialsLibrary: React.FC = () => {
@@ -64,7 +68,7 @@ const MaterialsLibrary: React.FC = () => {
         <div className="mb-6 rounded-[24px] border border-gray-100 bg-white p-5 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-bold text-[#0A1128]">六个资料库都在这里</p>
+              <p className="text-sm font-bold text-[#0A1128]">七个资料库都在这里</p>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
                 每个资料库进入后都使用同一套后台结构检索源，并保留各自领域的常用公式、建模提示和结果转 Modeling Agent 的路径。
               </p>

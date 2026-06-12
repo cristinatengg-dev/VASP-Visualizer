@@ -26,7 +26,7 @@ interface MaterialEntry {
   selection_reason: string;
 }
 
-type SourceKey = 'mp' | 'oqmd' | 'aflow' | 'jarvis' | 'alexandria' | 'nomad';
+type SourceKey = 'mp' | 'oqmd' | 'aflow' | 'jarvis' | 'alexandria' | 'nomad' | 'mcloud_mc3d' | 'omdb';
 
 interface SearchResults {
   mp: MaterialEntry[];
@@ -35,10 +35,37 @@ interface SearchResults {
   jarvis?: MaterialEntry[];
   alexandria?: MaterialEntry[];
   nomad?: MaterialEntry[];
+  mcloud_mc3d?: MaterialEntry[];
+  omdb?: MaterialEntry[];
   [key: string]: MaterialEntry[] | undefined;
 }
 
-const SOURCE_ORDER: SourceKey[] = ['mp', 'oqmd', 'aflow', 'jarvis', 'alexandria', 'nomad'];
+interface DomainSource {
+  id: string;
+  label: string;
+  mode: string;
+  access?: string;
+  homepage: string;
+}
+
+interface LibraryProfile {
+  id: string;
+  label: string;
+  domainSources?: DomainSource[];
+}
+
+const SOURCE_ORDER: SourceKey[] = ['mp', 'oqmd', 'aflow', 'jarvis', 'alexandria', 'nomad', 'mcloud_mc3d', 'omdb'];
+
+const SOURCE_LABELS: Record<string, string> = {
+  mp: 'Materials Project',
+  oqmd: 'OQMD',
+  aflow: 'AFLOW',
+  jarvis: 'JARVIS',
+  alexandria: 'Alexandria',
+  nomad: 'NOMAD',
+  mcloud_mc3d: 'Materials Cloud',
+  omdb: 'OMDB',
+};
 
 const describeResult = (entry: MaterialEntry) => {
   if (entry.energy_above_hull !== 'N/A') {
@@ -55,8 +82,11 @@ const describeResult = (entry: MaterialEntry) => {
 
 const MaterialCard: React.FC<{
   entry: MaterialEntry;
+  sourceKey: string;
   onViewStructure: (entry: MaterialEntry) => void;
-}> = ({ entry, onViewStructure }) => {
+}> = ({ entry, sourceKey, onViewStructure }) => {
+  const sourceLabel = entry.source || SOURCE_LABELS[sourceKey] || sourceKey;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -69,6 +99,9 @@ const MaterialCard: React.FC<{
           <span className="font-mono text-base font-bold text-[#0A1128]">{entry.formula}</span>
           <span className="rounded-full border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-emerald-700">
             Verified
+          </span>
+          <span className="rounded-full border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-indigo-700">
+            {sourceLabel}
           </span>
         </div>
       </div>
@@ -126,6 +159,7 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResults | null>(null);
+  const [libraryProfile, setLibraryProfile] = useState<LibraryProfile | null>(null);
   const [searchedFormula, setSearchedFormula] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -139,10 +173,14 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
     setSearchedFormula(searchFormula);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/materials/search?formula=${encodeURIComponent(searchFormula)}`);
+      const params = new URLSearchParams();
+      params.set('formula', searchFormula);
+      params.set('library', config.id);
+      const res = await fetch(`${API_BASE_URL}/materials/search?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
         setResults(data.results);
+        setLibraryProfile(data.library || null);
       } else {
         setError(data.error || 'Search failed');
       }
@@ -166,7 +204,7 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
 
   const filtered = !results
     ? []
-    : SOURCE_ORDER.flatMap((key) => results[key] || []);
+    : SOURCE_ORDER.flatMap((key) => (results[key] || []).map((entry) => ({ entry, sourceKey: key })));
 
   const totalCount = filtered.length;
 
@@ -227,6 +265,24 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
               </button>
             ))}
           </div>
+
+          {libraryProfile?.domainSources?.length ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Domain sources</span>
+              {libraryProfile.domainSources.map((source) => (
+                <a
+                  key={source.id}
+                  href={source.homepage}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-semibold text-gray-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                  title={source.access || source.mode}
+                >
+                  {source.label}
+                </a>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {error && (
@@ -255,12 +311,13 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
                     <p className="mt-1 text-xs text-gray-400">Try a different formula</p>
                   </div>
                 )}
-                {filtered.map((entry, index) => (
-                  <MaterialCard
-                    key={`${entry.material_id}-${index}`}
-                    entry={entry}
-                    onViewStructure={handleViewStructure}
-                  />
+                    {filtered.map(({ entry, sourceKey }, index) => (
+                      <MaterialCard
+                        key={`${sourceKey}-${entry.material_id}-${index}`}
+                        entry={entry}
+                        sourceKey={sourceKey}
+                        onViewStructure={handleViewStructure}
+                      />
                 ))}
               </AnimatePresence>
             </div>

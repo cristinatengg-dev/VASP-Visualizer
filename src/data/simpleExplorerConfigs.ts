@@ -132,4 +132,24 @@ export const SIMPLE_EXPLORER_CONFIGS: Record<string, SimpleExplorerConfig> = {
     ctaFormula: 'VO2',
     modelingPromptPrefix: 'Build a flow battery materials starter model for',
   },
+  aerospace: {
+    id: 'aerospace',
+    title: 'Aerospace Materials Explorer',
+    searchPlaceholder: 'Enter a chemical formula (e.g. WO2, WS2, MoS2, SiC)...',
+    popularFormulas: [
+      { formula: 'WO2', label: 'tungsten oxide' },
+      { formula: 'WS2', label: 'solid lubricant' },
+      { formula: 'MoS2', label: 'solid lubricant' },
+      { formula: 'BN', label: 'h-BN lubricant' },
+      { formula: 'SiC', label: 'TPS / CMC' },
+      { formula: 'ZrB2', label: 'UHTC ceramic' },
+      { formula: 'HfC', label: 'high-temp carbide' },
+      { formula: 'ZrO2', label: 'thermal barrier' },
+    ],
+    emptyTitle: 'Search Aerospace Materials',
+    emptyDescription:
+      'Search connected structure sources for solid lubricants, refractory ceramics, thermal-protection materials, coatings, and spacecraft environment candidates.',
+    ctaFormula: 'WO2',
+    modelingPromptPrefix: 'Build an aerospace materials starter model for',
+  },
 };
