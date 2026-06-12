@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { Mail, Lock, ArrowRight, Loader2, ShieldCheck } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import { COMPANY_NAME, SUPPORT_EMAIL, SUPPORT_MAILTO } from '../constants/contact';
 import { useNavigate } from 'react-router-dom';
 
 export const LoginPage: React.FC = () => {
@@ -177,6 +178,8 @@ export const LoginPage: React.FC = () => {
                     <p className="mt-8 text-center text-xs text-gray-400 leading-relaxed">
                         Protected by Enterprise Grade Security. <br/>
                         Device limit: 3 active sessions max. <br/>
+                        Support: <a href={SUPPORT_MAILTO} className="hover:text-gray-600 underline underline-offset-2">{SUPPORT_EMAIL}</a> <br/>
+                        {COMPANY_NAME} <br/>
                         &copy; {new Date().getFullYear()} SCI Visualizer. All rights reserved.
                     </p>
                 </div>

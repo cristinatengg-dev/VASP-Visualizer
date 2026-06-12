@@ -62,6 +62,16 @@ if (missingEnv.length > 0) {
 }
 
 const TOKEN_SECRET = process.env.TOKEN_SECRET;
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
+if (!Number.isInteger(SMTP_PORT)) {
+    console.error(`[FATAL] Invalid SMTP_PORT: ${process.env.SMTP_PORT}`);
+    process.exit(1);
+}
+const parseBooleanEnv = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+const SMTP_SECURE = process.env.SMTP_SECURE === undefined
+    ? [465, 994].includes(SMTP_PORT)
+    : parseBooleanEnv(process.env.SMTP_SECURE);
+const SMTP_FROM = process.env.SMTP_FROM || `"SCI Visualizer" <${process.env.SMTP_USER}>`;
 
 const app = express();
 const PORT = 3000;
@@ -84,8 +94,8 @@ mongoose.connect(MONGO_URI)
 // Email Transporter
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '465'),
-    secure: parseInt(process.env.SMTP_PORT || '465') === 465,
+    port: SMTP_PORT,
+    secure: SMTP_SECURE,
     auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
@@ -946,7 +956,7 @@ app.post('/api/auth/send-email-code', async (req, res) => {
     await createVerificationCode(email, otp);
     
     const mailOptions = {
-        from: `"SCI Visualizer" <${process.env.SMTP_USER}>`,
+        from: SMTP_FROM,
         to: email,
         subject: '[SCI Visualizer] Your Verification Code',
         html: `

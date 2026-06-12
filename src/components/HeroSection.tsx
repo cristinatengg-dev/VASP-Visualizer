@@ -34,6 +34,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { useStore } from "../store/useStore";
+import { COMPANY_NAME, SUPPORT_EMAIL, SUPPORT_MAILTO } from "../constants/contact";
 import { LEGAL_LINKS } from "../constants/legal";
 import { MATERIAL_EXPLORER_CARDS } from "../data/materialExplorerRegistry";
 
@@ -468,7 +469,16 @@ const CopyrightStrip: React.FC = () => (
     <p className="text-[11px] text-gray-400 font-mono">
       © {new Date().getFullYear()} SCI Visualizer. All rights reserved.
     </p>
-    <div className="flex items-center gap-4">
+    <p className="text-[11px] text-gray-400 font-mono text-center">
+      {COMPANY_NAME}
+    </p>
+    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+      <a
+        href={SUPPORT_MAILTO}
+        className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors duration-150 underline-offset-2 hover:underline"
+      >
+        {SUPPORT_EMAIL}
+      </a>
       {LEGAL_LINKS.map((item) => (
         <Link
           key={item.path}

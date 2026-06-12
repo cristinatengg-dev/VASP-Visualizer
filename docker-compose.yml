@@ -10,10 +10,12 @@ services:
     #   - "3000:3000" 
     environment:
       - MONGO_URI=mongodb://mongo:27017/sci_visualizer
-      - SMTP_HOST=smtp.qq.com
-      - SMTP_PORT=465
-      - SMTP_USER=2218114919@qq.com
-      - SMTP_PASS=qztivdbksclieabe
+      - SMTP_HOST=${SMTP_HOST:-smtp.resend.com}
+      - SMTP_PORT=${SMTP_PORT:-465}
+      - SMTP_SECURE=${SMTP_SECURE:-true}
+      - SMTP_USER=${SMTP_USER:-resend}
+      - SMTP_PASS=${SMTP_PASS:?Set SMTP_PASS to the Resend API key}
+      - SMTP_FROM=${SMTP_FROM:-SCI Visualizer <noreply@scivisualizer.com>}
       - TOKEN_SECRET=vasp_token_secret_2026_scivisualizer
       - ADMIN_SECRET=vasp_admin_secret_2026_secure
     volumes:

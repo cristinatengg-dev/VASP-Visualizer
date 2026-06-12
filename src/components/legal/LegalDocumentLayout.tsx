@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { COMPANY_NAME, SUPPORT_EMAIL, SUPPORT_MAILTO } from '../../constants/contact';
 import { LEGAL_LINKS } from '../../constants/legal';
 
 interface LegalDocumentLayoutProps {
@@ -96,6 +97,10 @@ const LegalDocumentLayout: React.FC<LegalDocumentLayoutProps> = ({
         {/* Footer */}
         <footer className="mt-16 pt-6 border-t border-gray-300 text-center text-gray-400 text-xs" style={{ fontFamily: 'system-ui, sans-serif' }}>
           <p>&copy; {new Date().getFullYear()} SCI Visualizer. All rights reserved.</p>
+          <p className="mt-1">
+            Support: <a href={SUPPORT_MAILTO} className="hover:text-gray-600 underline underline-offset-2">{SUPPORT_EMAIL}</a>
+          </p>
+          <p className="mt-1">{COMPANY_NAME}</p>
           <p className="mt-1">This document constitutes a legally binding agreement between you and SCI Visualizer.</p>
         </footer>
       </div>

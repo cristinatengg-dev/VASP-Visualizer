@@ -63,22 +63,53 @@
 ### `.env`（本地开发）
 ```
 VITE_API_URL=http://localhost:3000
-SMTP_HOST=smtp.qq.com
+SMTP_HOST=smtp.resend.com
 SMTP_PORT=465
-SMTP_USER=2218114919@qq.com
-SMTP_PASS=mcjxnwmxvuyueaei
+SMTP_SECURE=true
+SMTP_USER=resend
+SMTP_PASS=<Resend API key>
+SMTP_FROM=SCI Visualizer <noreply@scivisualizer.com>
 ```
 
 ### `.env.production`（生产构建）
 ```
 VITE_API_URL=/api
-SMTP_HOST=smtp.qq.com
+SMTP_HOST=smtp.resend.com
 SMTP_PORT=465
-SMTP_USER=2218114919@qq.com
-SMTP_PASS=qztivdbksclieabe
+SMTP_SECURE=true
+SMTP_USER=resend
+SMTP_PASS=<Resend API key>
+SMTP_FROM=SCI Visualizer <noreply@scivisualizer.com>
 ```
 
 > **注意**: 生产环境 `VITE_API_URL=/api` 使用相对路径，由 Nginx 代理转发到 backend:3000。
+
+### 域名邮箱
+
+- 域名：`scivisualizer.com`
+- DNS 托管：Cloudflare
+- 当前 DNS 状态：Cloudflare Email Routing 已开启，旧网易根域 MX 已删除；Resend 发信用的 `send` MX/TXT 和 `resend._domainkey` DKIM TXT 记录已添加到 Cloudflare
+- 已配置收信地址：`support@scivisualizer.com` 转发到 `cristinatengg@gmail.com`
+- Catch-all：关闭，未创建的域名前缀不会自动转发
+- 推荐项目发信方案：Resend SMTP，域名验证后由 `noreply@scivisualizer.com` 发送验证码
+- 建议项目发信账号：`noreply@scivisualizer.com`
+- 后端发信配置：`SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM`
+
+生产环境切换域名邮箱前，需要先在 Resend 添加并验证 `scivisualizer.com`，按 Resend 给出的 DNS 记录在 Cloudflare 中配置 DKIM/SPF/验证记录，然后在服务器 `/home/deploy/VASP-Visualizer/.env` 或部署 shell 环境中写入：
+
+```
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=resend
+SMTP_PASS=<Resend API key>
+SMTP_FROM=SCI Visualizer <noreply@scivisualizer.com>
+```
+
+DNS 补充检查项：
+- Cloudflare Email Routing 负责收信，根域 MX 应指向 `route*.mx.cloudflare.net`。
+- 添加 Resend DNS 记录时，按 Resend dashboard 生成值配置；若涉及根域 SPF，必须合并为单条 SPF，不能创建多条根域 SPF。
+- 验证邮件发信后，用 `/api/auth/send-email-code` 实测验证码是否能从域名邮箱发出。
 
 ---
 

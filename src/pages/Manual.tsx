@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { COMPANY_NAME, SUPPORT_EMAIL, SUPPORT_MAILTO } from '../constants/contact';
 
 const Manual: React.FC = () => {
   const navigate = useNavigate();
@@ -335,6 +336,10 @@ const Manual: React.FC = () => {
         {/* Footer */}
         <footer className="mt-12 pt-6 border-t border-gray-200 text-center text-gray-500 text-sm">
           <p>&copy; 2026 SCI Visualizer. All rights reserved.</p>
+          <p className="mt-1">
+            Support: <a href={SUPPORT_MAILTO} className="hover:text-gray-700 underline underline-offset-2">{SUPPORT_EMAIL}</a>
+          </p>
+          <p className="mt-1">{COMPANY_NAME}</p>
         </footer>
       </div>
     </div>
