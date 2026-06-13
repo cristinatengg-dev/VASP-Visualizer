@@ -595,6 +595,19 @@ const formatTaskTime = (value: number) => {
   return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 };
 
+const normalizeSnapshotToolEvents = (events: ToolEvent[] = [], phase: WorkflowPhase): ToolEvent[] => {
+  if (phase !== 'error') return events;
+  return events.map((event) => (
+    event.status === 'running'
+      ? {
+          ...event,
+          status: 'error',
+          details: [...event.details, '流程已进入错误状态，此步骤已停止。'],
+        }
+      : event
+  ));
+};
+
 const StatusPill: React.FC<{ status: AgentStatus }> = ({ status }) => {
   const meta = statusMeta[status];
   return (
@@ -1103,7 +1116,7 @@ const AgentWorkspace: React.FC = () => {
     }
     setPhase(snapshot.phase || 'idle');
     setMessages(snapshot.messages?.length ? snapshot.messages : createWelcomeMessages());
-    setToolEvents(snapshot.toolEvents || []);
+    setToolEvents(normalizeSnapshotToolEvents(snapshot.toolEvents || [], snapshot.phase || 'idle'));
     setResearch(snapshot.research || null);
     setSelectedIdeaId(snapshot.selectedIdeaId || null);
     setModelIntent(snapshot.modelIntent || null);
@@ -1214,6 +1227,7 @@ const AgentWorkspace: React.FC = () => {
               ...item.snapshot,
               version: 1,
               modelStructure: cloneWorkflowStructure(item.snapshot.modelStructure || null),
+              toolEvents: normalizeSnapshotToolEvents(item.snapshot.toolEvents || [], item.snapshot.phase || 'idle'),
               chatSessionId: item.snapshot.chatSessionId || null,
             },
           }));
@@ -1462,17 +1476,36 @@ const AgentWorkspace: React.FC = () => {
     };
   }, [user?.email]);
 
-  const postJson = useCallback(async <T,>(path: string, payload: Record<string, any> = {}): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      method: 'POST',
-      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(withUserPayload(payload)),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data?.error || data?.message || `HTTP ${response.status}`);
+  const postJson = useCallback(async <T,>(
+    path: string,
+    payload: Record<string, any> = {},
+    options: { timeoutMs?: number } = {},
+  ): Promise<T> => {
+    const controller = new AbortController();
+    const timeoutMs = Number(options.timeoutMs || 0);
+    const timeoutId = timeoutMs > 0
+      ? window.setTimeout(() => controller.abort(), timeoutMs)
+      : null;
+    try {
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(withUserPayload(payload)),
+        signal: controller.signal,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || data?.message || `HTTP ${response.status}`);
+      }
+      return data as T;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error(`请求超时：${path} 在 ${Math.round(timeoutMs / 1000)} 秒内没有返回`);
+      }
+      throw error;
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
     }
-    return data as T;
   }, [getAuthHeaders, withUserPayload]);
 
   const fetchStructureSources = useCallback(async () => {
@@ -2000,12 +2033,13 @@ const AgentWorkspace: React.FC = () => {
       summary: '把推荐或自定义模型转换成结构化建模意图',
       details: [prompt],
     });
+    let currentToolId = parseToolId;
 
     try {
       const parsePayload = await postJson<{ success: boolean; intent: Record<string, any> }>('/modeling/parse-intent', {
         prompt,
         providerPreferences: ['mp', 'ase', 'builtin'],
-      });
+      }, { timeoutMs: 20000 });
       if (!parsePayload?.success) throw new Error('Modeling intent parse failed');
       const parsedIntent = parsePayload.intent || {};
       const intent: Record<string, any> = {
@@ -2048,12 +2082,16 @@ const AgentWorkspace: React.FC = () => {
         summary: '调用确定性结构构建器生成可计算结构',
         details: [],
       });
+      currentToolId = buildToolId;
+      const buildController = new AbortController();
+      const buildTimeoutId = window.setTimeout(() => buildController.abort(), 45000);
       const buildResponse = await fetch(`${API_BASE_URL}/modeling/build`, {
         method: 'POST',
         headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        signal: buildController.signal,
         body: JSON.stringify(intent),
-      });
-      const buildPayload = await buildResponse.json();
+      }).finally(() => window.clearTimeout(buildTimeoutId));
+      const buildPayload = await buildResponse.json().catch(() => ({}));
       if (!buildResponse.ok || !(buildPayload?.success || buildPayload?.ok) || !buildPayload?.data) {
         throw new Error(buildPayload?.error || 'Modeling build failed');
       }
@@ -2107,10 +2145,17 @@ const AgentWorkspace: React.FC = () => {
       });
       setPhase('await_software');
     } catch (error) {
+      const message = error instanceof DOMException && error.name === 'AbortError'
+        ? '建模请求超时：后端在限定时间内没有返回'
+        : error instanceof Error ? error.message : String(error);
+      updateTool(currentToolId, {
+        status: 'error',
+        details: [message],
+      });
       addMessage({
         role: 'assistant',
         title: '建模失败',
-        content: error instanceof Error ? error.message : String(error),
+        content: message,
         status: 'error',
       });
       setPhase('error');
