@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CheckCircle2 } from 'lucide-react';
 import { ModelingIntent } from '../../types/modeling';
 import { Scene3D } from '../../../../components/Scene3D';
 import { useStore } from '../../../../store/useStore';
@@ -8,7 +9,17 @@ import { exportToPOSCAR } from '../../../../utils/poscarExporter';
 
 type ToolMode = 'select' | 'move' | 'rotate' | 'scale' | 'measure' | 'angle';
 
-const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) => {
+interface CanvasPanelProps {
+  intent: ModelingIntent | null;
+  workflowReturnActive?: boolean;
+  onConfirmWorkflow?: () => void;
+}
+
+const CanvasPanel: React.FC<CanvasPanelProps> = ({
+  intent,
+  workflowReturnActive = false,
+  onConfirmWorkflow,
+}) => {
   const navigate = useNavigate();
   const molecularData = useStore(state => state.molecularData);
   const isEditMode = useStore(state => state.isEditMode);
@@ -89,17 +100,29 @@ const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) =>
         </div>
 
         <div className="flex gap-2 pointer-events-auto">
-          <button
-            className="px-4 py-3 bg-green-600 text-white rounded-[32px] hover:bg-green-700 transition-colors shadow-sm font-medium text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
-            onClick={() => navigate('/agent/compute')}
-            disabled={!molecularData}
-            title="Send structure to Compute Agent"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-            Send to Compute
-          </button>
+          {workflowReturnActive ? (
+            <button
+              className="px-4 py-3 bg-green-600 text-white rounded-[32px] hover:bg-green-700 transition-colors shadow-sm font-medium text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
+              onClick={onConfirmWorkflow}
+              disabled={!molecularData}
+              title="确认当前结构并返回 Agent 工作流"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              确认模型并回到 Agent
+            </button>
+          ) : (
+            <button
+              className="px-4 py-3 bg-green-600 text-white rounded-[32px] hover:bg-green-700 transition-colors shadow-sm font-medium text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
+              onClick={() => navigate('/agent/compute')}
+              disabled={!molecularData}
+              title="Send structure to Compute Agent"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+              Send to Compute
+            </button>
+          )}
           <button
             className="px-4 py-3 bg-[#2E4A8E] text-white rounded-[32px] hover:bg-[#3D5BA6] transition-colors shadow-sm font-medium text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
             onClick={handleExportPOSCAR}
@@ -118,6 +141,12 @@ const CanvasPanel: React.FC<{ intent: ModelingIntent | null }> = ({ intent }) =>
           <div>ATOMS: {atomCount ?? '--'}</div>
           <div>LATTICE: {intent.substrate?.supercell?.join('x') || '1x1x1'}</div>
           <div>VACUUM: {intent.substrate?.vacuum || '0'} Å</div>
+        </div>
+      )}
+
+      {workflowReturnActive && (
+        <div className="absolute bottom-4 left-4 max-w-sm rounded-[16px] border border-white/10 bg-white/95 p-3 text-xs leading-5 text-[#0A1128] shadow-[0_4px_20px_rgba(0,0,0,0.08)]">
+          当前处于 Agent 工作流修改模式。完成结构调整后点击“确认模型并回到 Agent”，后续输入文件会基于这版结构重新生成。
         </div>
       )}
     </div>

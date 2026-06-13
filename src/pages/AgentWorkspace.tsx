@@ -258,6 +258,43 @@ interface CompleteData {
   } | null;
 }
 
+interface AgentWorkflowSnapshot {
+  version: 1;
+  savedAt: number;
+  phase: WorkflowPhase;
+  messages: ChatMessage[];
+  toolEvents: ToolEvent[];
+  research: CompleteData | null;
+  selectedIdeaId: string | null;
+  modelIntent: Record<string, any> | null;
+  modelStructure: MolecularStructure | null;
+  computeIntent: ComputeIntent;
+  profiles: ServerComputeProfile[];
+  selectedProfileId: string;
+  compiledInputs: CompiledInputs | null;
+  selectedInputFileName: string | null;
+  jobStatus: JobStatus | null;
+  computeResult: ComputeResult | null;
+  pptUrl: string | null;
+  pptQa: string | null;
+  harnessSession: HarnessSessionState | null;
+  chatSessionId: string | null;
+}
+
+interface ModelingReturnPayload {
+  savedAt: number;
+  structure: MolecularStructure;
+}
+
+interface AgentTaskRecord {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  archived: boolean;
+  snapshot: AgentWorkflowSnapshot;
+}
+
 type AgentEvent = StageEvent | { type: 'error'; content: string } | { type: 'complete'; data: CompleteData };
 
 const navItems = [
@@ -437,6 +474,11 @@ const defaultComputeIntent: ComputeIntent = {
   restart_policy: 'custodian',
 };
 
+const WORKFLOW_STORAGE_KEY = 'sci-agent-workflow-v1';
+const MODELING_RETURN_KEY = 'sci-agent-modeling-return-v1';
+const TASK_STORAGE_KEY = 'sci-agent-tasks-v1';
+const ACTIVE_TASK_STORAGE_KEY = 'sci-agent-active-task-v1';
+
 const recentTasks = [
   '检索 CO2 加氢催化剂文章',
   '构建 Cu(111)+CO2+H2 吸附模型',
@@ -476,6 +518,82 @@ const isWorkflowPrompt = (content: string, hasFiles = false) => {
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+const createWelcomeMessages = (content = '可以像普通助手一样直接聊天；当你明确要求检索、建模、计算、提交作业或生成 PPT 时，我会切换到连续科研流程。'): ChatMessage[] => [
+  {
+    id: 'welcome',
+    role: 'assistant',
+    title: '流程已就绪',
+    content,
+    createdAt: Date.now(),
+  },
+];
+
+const createEmptyWorkflowSnapshot = (): AgentWorkflowSnapshot => ({
+  version: 1,
+  savedAt: Date.now(),
+  phase: 'idle',
+  messages: createWelcomeMessages(),
+  toolEvents: [],
+  research: null,
+  selectedIdeaId: null,
+  modelIntent: null,
+  modelStructure: null,
+  computeIntent: defaultComputeIntent,
+  profiles: [],
+  selectedProfileId: 'local_demo',
+  compiledInputs: null,
+  selectedInputFileName: null,
+  jobStatus: null,
+  computeResult: null,
+  pptUrl: null,
+  pptQa: null,
+  harnessSession: null,
+  chatSessionId: null,
+});
+
+const truncateTaskTitle = (value: string, max = 34) => {
+  const text = value.replace(/\s+/g, ' ').trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+};
+
+const deriveTaskTitle = (snapshot: AgentWorkflowSnapshot) => {
+  const firstUserMessage = snapshot.messages.find((message) => message.role === 'user' && message.content.trim());
+  const title = firstUserMessage?.content
+    || snapshot.research?.user_goal?.interpreted_goal
+    || snapshot.research?.summary
+    || snapshot.modelStructure?.filename
+    || '新科研任务';
+  return truncateTaskTitle(title);
+};
+
+const createTaskRecord = (snapshot: AgentWorkflowSnapshot = createEmptyWorkflowSnapshot()): AgentTaskRecord => {
+  const now = Date.now();
+  return {
+    id: newId('task'),
+    title: deriveTaskTitle(snapshot),
+    createdAt: now,
+    updatedAt: now,
+    archived: false,
+    snapshot: { ...snapshot, savedAt: now },
+  };
+};
+
+const taskSearchText = (task: AgentTaskRecord) => [
+  task.title,
+  task.snapshot.phase,
+  task.snapshot.research?.summary,
+  task.snapshot.research?.user_goal?.interpreted_goal,
+  task.snapshot.modelStructure?.filename,
+  task.snapshot.messages.map((message) => `${message.title || ''} ${message.content}`).join(' '),
+  task.snapshot.toolEvents.map((event) => `${event.name} ${event.summary} ${event.details.join(' ')}`).join(' '),
+].filter(Boolean).join(' ').toLowerCase();
+
+const formatTaskTime = (value: number) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+};
 
 const StatusPill: React.FC<{ status: AgentStatus }> = ({ status }) => {
   const meta = statusMeta[status];
@@ -551,6 +669,22 @@ const normalizeBonds = (raw: any[], atoms: Atom[]): Bond[] => {
       };
     })
     .filter((bond): bond is Bond => Boolean(bond));
+};
+
+const cloneWorkflowStructure = (structure: MolecularStructure | null): MolecularStructure | null => {
+  if (!structure) return null;
+  const atoms = normalizeAtoms(structure.atoms || []);
+  const bonds = normalizeBonds(structure.bonds || [], atoms);
+  return {
+    id: String(structure.id || `workflow-structure-${Date.now()}`),
+    filename: String(structure.filename || 'workflow-structure.vasp'),
+    atoms,
+    bonds,
+    boundingBox: computeBoundingBox(atoms),
+    latticeVectors: Array.isArray(structure.latticeVectors)
+      ? structure.latticeVectors.map((row) => row.map((value) => Number(value)))
+      : undefined,
+  };
 };
 
 const buildMolecularStructure = (result: any, taskType: string): MolecularStructure => {
@@ -839,18 +973,13 @@ const AgentWorkspace: React.FC = () => {
   const accountLabel = user?.email || 'Research user';
   const [workspacePrompt, setWorkspacePrompt] = useState('');
   const [taskSearch, setTaskSearch] = useState('');
+  const [tasks, setTasks] = useState<AgentTaskRecord[]>([]);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [showArchivedTasks, setShowArchivedTasks] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [phase, setPhase] = useState<WorkflowPhase>('idle');
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      title: '流程已就绪',
-      content: '可以像普通助手一样直接聊天；当你明确要求检索、建模、计算、提交作业或生成 PPT 时，我会切换到连续科研流程。',
-      createdAt: Date.now(),
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => createWelcomeMessages());
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([]);
   const [research, setResearch] = useState<CompleteData | null>(null);
   const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
@@ -872,8 +1001,13 @@ const AgentWorkspace: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeTaskIdRef = useRef<string | null>(null);
   const harnessSessionIdRef = useRef<string | null>(null);
   const chatSessionIdRef = useRef<string | null>(null);
+  const workflowRestoreRef = useRef(false);
+  const taskHydratedRef = useRef(false);
+  const taskInitialSaveSkippedRef = useRef(false);
+  const taskPersistPausedRef = useRef(false);
 
   const selectedIdea = useMemo(() => {
     if (!research?.idea_cards?.length) return null;
@@ -882,7 +1016,16 @@ const AgentWorkspace: React.FC = () => {
       || research.idea_cards[0];
   }, [research, selectedIdeaId]);
 
-  const filteredRecentTasks = recentTasks.filter((task) => task.toLowerCase().includes(taskSearch.trim().toLowerCase()));
+  const taskSearchQuery = taskSearch.trim().toLowerCase();
+  const activeTask = useMemo(() => tasks.find((task) => task.id === activeTaskId) || null, [activeTaskId, tasks]);
+  const activeTasks = useMemo(() => tasks.filter((task) => !task.archived), [tasks]);
+  const archivedTasks = useMemo(() => tasks.filter((task) => task.archived), [tasks]);
+  const filteredTasks = useMemo(() => {
+    const source = showArchivedTasks ? archivedTasks : activeTasks;
+    return source
+      .filter((task) => !taskSearchQuery || taskSearchText(task).includes(taskSearchQuery))
+      .sort((left, right) => right.updatedAt - left.updatedAt);
+  }, [activeTasks, archivedTasks, showArchivedTasks, taskSearchQuery]);
   const configuredProfiles = profiles.filter((profile) => profile.configured);
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) || configuredProfiles[0] || profiles[0] || null;
   const compiledFileNames = useMemo(() => Object.keys(compiledInputs?.files || {}), [compiledInputs]);
@@ -951,6 +1094,357 @@ const AgentWorkspace: React.FC = () => {
       };
     });
   }, []);
+
+  const applyWorkflowSnapshot = useCallback((snapshot: AgentWorkflowSnapshot) => {
+    taskPersistPausedRef.current = true;
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    setPhase(snapshot.phase || 'idle');
+    setMessages(snapshot.messages?.length ? snapshot.messages : createWelcomeMessages());
+    setToolEvents(snapshot.toolEvents || []);
+    setResearch(snapshot.research || null);
+    setSelectedIdeaId(snapshot.selectedIdeaId || null);
+    setModelIntent(snapshot.modelIntent || null);
+    const structure = cloneWorkflowStructure(snapshot.modelStructure);
+    setModelStructure(structure);
+    setMolecularData(structure);
+    setShowBonds(Boolean(structure?.bonds?.length));
+    setComputeIntent(snapshot.computeIntent || defaultComputeIntent);
+    setProfiles(snapshot.profiles || []);
+    setSelectedProfileId(snapshot.selectedProfileId || 'local_demo');
+    setCompiledInputs(snapshot.compiledInputs || null);
+    setSelectedInputFileName(snapshot.selectedInputFileName || null);
+    setJobStatus(snapshot.jobStatus || null);
+    setComputeResult(snapshot.computeResult || null);
+    setPptUrl(snapshot.pptUrl || null);
+    setPptQa(snapshot.pptQa || null);
+    setHarnessSession(snapshot.harnessSession || null);
+    setSourceProbe(null);
+    harnessSessionIdRef.current = snapshot.harnessSession?.sessionId || null;
+    chatSessionIdRef.current = snapshot.chatSessionId || null;
+    window.setTimeout(() => {
+      taskPersistPausedRef.current = false;
+    }, 0);
+  }, [setMolecularData, setShowBonds]);
+
+  const buildCurrentSnapshot = useCallback((patch: Partial<AgentWorkflowSnapshot> = {}): AgentWorkflowSnapshot => {
+    const nextStructure = Object.prototype.hasOwnProperty.call(patch, 'modelStructure')
+      ? patch.modelStructure || null
+      : modelStructure;
+    const baseSnapshot: AgentWorkflowSnapshot = {
+      version: 1,
+      savedAt: Date.now(),
+      phase,
+      messages,
+      toolEvents,
+      research,
+      selectedIdeaId,
+      modelIntent,
+      modelStructure: cloneWorkflowStructure(nextStructure),
+      computeIntent,
+      profiles,
+      selectedProfileId,
+      compiledInputs,
+      selectedInputFileName,
+      jobStatus,
+      computeResult,
+      pptUrl,
+      pptQa,
+      harnessSession,
+      chatSessionId: chatSessionIdRef.current,
+    };
+    const snapshot: AgentWorkflowSnapshot = {
+      ...baseSnapshot,
+      ...patch,
+      version: 1,
+      savedAt: Date.now(),
+      modelStructure: cloneWorkflowStructure(nextStructure),
+    };
+    return snapshot;
+  }, [
+    compiledInputs,
+    computeIntent,
+    computeResult,
+    harnessSession,
+    jobStatus,
+    messages,
+    modelIntent,
+    modelStructure,
+    phase,
+    pptQa,
+    pptUrl,
+    profiles,
+    research,
+    selectedIdeaId,
+    selectedInputFileName,
+    selectedProfileId,
+    toolEvents,
+  ]);
+
+  const saveWorkflowSnapshot = useCallback((patch: Partial<AgentWorkflowSnapshot> = {}) => {
+    if (typeof window === 'undefined') return;
+    const snapshot = buildCurrentSnapshot(patch);
+    try {
+      window.sessionStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(snapshot));
+    } catch {
+      // Session storage is an enhancement; the active global structure still carries the model to the editor.
+    }
+  }, [buildCurrentSnapshot]);
+
+  useEffect(() => {
+    if (taskHydratedRef.current || typeof window === 'undefined') return;
+    taskHydratedRef.current = true;
+
+    let records: AgentTaskRecord[] = [];
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(TASK_STORAGE_KEY) || '[]');
+      if (Array.isArray(parsed)) {
+        records = parsed
+          .filter((item) => item?.id && item?.snapshot?.version === 1)
+          .map((item) => ({
+            id: String(item.id),
+            title: String(item.title || deriveTaskTitle(item.snapshot)),
+            createdAt: Number(item.createdAt || item.snapshot.savedAt || Date.now()),
+            updatedAt: Number(item.updatedAt || item.snapshot.savedAt || Date.now()),
+            archived: Boolean(item.archived),
+            snapshot: {
+              ...createEmptyWorkflowSnapshot(),
+              ...item.snapshot,
+              version: 1,
+              modelStructure: cloneWorkflowStructure(item.snapshot.modelStructure || null),
+              chatSessionId: item.snapshot.chatSessionId || null,
+            },
+          }));
+      }
+    } catch {
+      records = [];
+    }
+
+    if (!records.length) {
+      records = [createTaskRecord()];
+    }
+
+    const storedActiveId = window.localStorage.getItem(ACTIVE_TASK_STORAGE_KEY);
+    const initialTask = records.find((task) => task.id === storedActiveId && !task.archived)
+      || records.find((task) => !task.archived)
+      || records[0];
+
+    setTasks(records);
+    setActiveTaskId(initialTask.id);
+    activeTaskIdRef.current = initialTask.id;
+    applyWorkflowSnapshot(initialTask.snapshot);
+  }, [applyWorkflowSnapshot]);
+
+  useEffect(() => {
+    if (!taskHydratedRef.current || typeof window === 'undefined') return;
+    if (!taskInitialSaveSkippedRef.current) {
+      taskInitialSaveSkippedRef.current = true;
+      return;
+    }
+    try {
+      window.localStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(tasks));
+      if (activeTaskId) {
+        window.localStorage.setItem(ACTIVE_TASK_STORAGE_KEY, activeTaskId);
+      }
+    } catch {
+      // Local history is best-effort; failed writes should not interrupt the research workflow.
+    }
+  }, [activeTaskId, tasks]);
+
+  useEffect(() => {
+    if (!taskHydratedRef.current || taskPersistPausedRef.current || !activeTaskId) return;
+    const timer = window.setTimeout(() => {
+      const snapshot = buildCurrentSnapshot();
+      setTasks((prev) => prev.map((task) => (
+        task.id === activeTaskId
+          ? {
+              ...task,
+              title: deriveTaskTitle(snapshot),
+              updatedAt: Date.now(),
+              snapshot,
+            }
+          : task
+      )));
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [activeTaskId, buildCurrentSnapshot]);
+
+  useEffect(() => {
+    if (workflowRestoreRef.current || typeof window === 'undefined') return;
+    workflowRestoreRef.current = true;
+
+    let snapshot: AgentWorkflowSnapshot | null = null;
+    let returnedStructure: MolecularStructure | null = null;
+    try {
+      const rawSnapshot = window.sessionStorage.getItem(WORKFLOW_STORAGE_KEY);
+      if (rawSnapshot) {
+        const parsed = JSON.parse(rawSnapshot) as AgentWorkflowSnapshot;
+        if (parsed?.version === 1) snapshot = parsed;
+      }
+      const rawReturn = window.sessionStorage.getItem(MODELING_RETURN_KEY);
+      if (rawReturn) {
+        const parsedReturn = JSON.parse(rawReturn) as ModelingReturnPayload;
+        returnedStructure = cloneWorkflowStructure(parsedReturn?.structure || null);
+        window.sessionStorage.removeItem(MODELING_RETURN_KEY);
+      }
+    } catch {
+      snapshot = null;
+      returnedStructure = null;
+    }
+
+    if (!snapshot && !returnedStructure) return;
+
+    if (!returnedStructure) {
+      if (snapshot) applyWorkflowSnapshot(snapshot);
+      return;
+    }
+
+    const structure = returnedStructure;
+    const baseSnapshot: AgentWorkflowSnapshot = {
+      ...createEmptyWorkflowSnapshot(),
+      ...(snapshot || {}),
+      version: 1,
+    };
+    const nextSnapshot: AgentWorkflowSnapshot = {
+      ...baseSnapshot,
+      version: 1,
+      savedAt: Date.now(),
+      phase: 'await_software',
+      modelStructure: structure,
+      compiledInputs: null,
+      selectedInputFileName: null,
+      jobStatus: null,
+      computeResult: null,
+      pptUrl: null,
+      pptQa: null,
+      messages: [
+        ...(baseSnapshot.messages?.length ? baseSnapshot.messages : createWelcomeMessages()),
+        {
+          id: newId('msg'),
+          role: 'assistant',
+          title: '模型修改已确认',
+          content: [
+            `已从 Modeling Agent 接收修改后的结构：${structure.filename}。`,
+            `当前结构包含 ${structure.atoms.length} 个原子、${structure.bonds.length} 条键。`,
+            '下一步继续选择计算软件；我会基于这版结构重新生成输入文件。',
+          ].join('\n'),
+          createdAt: Date.now(),
+          status: 'success',
+        },
+      ],
+      toolEvents: [
+        ...(baseSnapshot.toolEvents || []),
+        {
+          id: newId('tool'),
+          name: 'modeling.confirm-return',
+          agent: 'Modeling',
+          status: 'success',
+          summary: '从 Modeling Agent 确认返回连续科研流程',
+          details: [`${structure.atoms.length} atoms`, `${structure.bonds.length} bonds`, structure.filename],
+        },
+      ],
+      chatSessionId: baseSnapshot.chatSessionId || chatSessionIdRef.current,
+    };
+    applyWorkflowSnapshot(nextSnapshot);
+
+    const taskId = activeTaskIdRef.current;
+    if (taskId) {
+      setTasks((prev) => prev.map((task) => (
+        task.id === taskId
+          ? {
+              ...task,
+              title: deriveTaskTitle(nextSnapshot),
+              updatedAt: Date.now(),
+              snapshot: nextSnapshot,
+            }
+          : task
+      )));
+    }
+
+    try {
+      window.sessionStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(nextSnapshot));
+    } catch {
+      // Best-effort resume cache.
+    }
+  }, [
+    applyWorkflowSnapshot,
+  ]);
+
+  const persistActiveTaskNow = useCallback((snapshotOverride?: AgentWorkflowSnapshot) => {
+    if (!activeTaskId) return;
+    const snapshot = snapshotOverride || buildCurrentSnapshot();
+    setTasks((prev) => prev.map((task) => (
+      task.id === activeTaskId
+        ? {
+            ...task,
+            title: deriveTaskTitle(snapshot),
+            updatedAt: Date.now(),
+            snapshot,
+          }
+        : task
+    )));
+  }, [activeTaskId, buildCurrentSnapshot]);
+
+  const openTask = useCallback((taskId: string) => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    persistActiveTaskNow();
+    setActiveTaskId(task.id);
+    activeTaskIdRef.current = task.id;
+    applyWorkflowSnapshot(task.snapshot);
+  }, [applyWorkflowSnapshot, persistActiveTaskNow, tasks]);
+
+  const createNewTask = useCallback(() => {
+    persistActiveTaskNow();
+    const record = createTaskRecord();
+    setTasks((prev) => [record, ...prev]);
+    setActiveTaskId(record.id);
+    activeTaskIdRef.current = record.id;
+    setShowArchivedTasks(false);
+    applyWorkflowSnapshot(record.snapshot);
+  }, [applyWorkflowSnapshot, persistActiveTaskNow]);
+
+  const archiveTask = useCallback((taskId: string) => {
+    persistActiveTaskNow();
+    const archivedAt = Date.now();
+    const nextRecords = tasks.map((task) => (
+      task.id === taskId ? { ...task, archived: true, updatedAt: archivedAt } : task
+    ));
+    if (taskId !== activeTaskId) {
+      setTasks(nextRecords);
+      return;
+    }
+
+    const nextOpenTask = nextRecords.find((task) => !task.archived && task.id !== taskId);
+    if (nextOpenTask) {
+      setTasks(nextRecords);
+      setActiveTaskId(nextOpenTask.id);
+      activeTaskIdRef.current = nextOpenTask.id;
+      applyWorkflowSnapshot(nextOpenTask.snapshot);
+      return;
+    }
+
+    const replacement = createTaskRecord();
+    setTasks([replacement, ...nextRecords]);
+    setActiveTaskId(replacement.id);
+    activeTaskIdRef.current = replacement.id;
+    setShowArchivedTasks(false);
+    applyWorkflowSnapshot(replacement.snapshot);
+  }, [activeTaskId, applyWorkflowSnapshot, persistActiveTaskNow, tasks]);
+
+  const restoreTask = useCallback((taskId: string) => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    persistActiveTaskNow();
+    const restored = { ...task, archived: false, updatedAt: Date.now() };
+    setTasks((prev) => prev.map((item) => (item.id === taskId ? restored : item)));
+    setShowArchivedTasks(false);
+    setActiveTaskId(taskId);
+    activeTaskIdRef.current = taskId;
+    applyWorkflowSnapshot(restored.snapshot);
+  }, [applyWorkflowSnapshot, persistActiveTaskNow, tasks]);
 
   const getAuthHeaders = useCallback((extra?: Record<string, string>) => {
     const token = localStorage.getItem('vasp_token') || '';
@@ -1146,7 +1640,11 @@ const AgentWorkspace: React.FC = () => {
       const nextProfiles: ServerComputeProfile[] = Array.isArray(payload.profiles) ? payload.profiles : [];
       setProfiles(nextProfiles);
       const firstConfigured = nextProfiles.find((profile) => profile.configured);
-      if (firstConfigured) setSelectedProfileId(firstConfigured.id);
+      if (firstConfigured) {
+        setSelectedProfileId((prev) => (
+          prev && nextProfiles.some((profile) => profile.id === prev) ? prev : firstConfigured.id
+        ));
+      }
       if (toolId) updateTool(toolId, {
         status: 'success',
         details: nextProfiles.map((profile) => `${profile.label}: ${profile.configured ? 'configured' : 'not configured'}`),
@@ -1577,6 +2075,7 @@ const AgentWorkspace: React.FC = () => {
         content: [
           `已生成 ${structure.filename}。`,
           `原子数：${structure.atoms.length}；键数：${structure.bonds.length}。`,
+          '你可以先打开完整建模页调整结构，确认后会回到这里继续下一步。',
           '下一步请选择计算软件。我建议周期性催化/表面吸附体系先用 VASP relaxation，之后可追加 static/DOS。'
         ].join('\n'),
       });
@@ -1617,6 +2116,22 @@ const AgentWorkspace: React.FC = () => {
       setPhase('error');
     }
   }, [addMessage, addTool, getAuthHeaders, postJson, recordHarnessCheckpoint, research, selectedIdea, setMolecularData, setShowBonds, updateTool]);
+
+  const openModelingForWorkflow = useCallback(() => {
+    if (!modelStructure) {
+      addMessage({
+        role: 'assistant',
+        title: '没有可编辑结构',
+        content: '请先让 Agent 生成或上传一个模型结构，再进入 Modeling Agent 修改。',
+        status: 'error',
+      });
+      return;
+    }
+    saveWorkflowSnapshot({ phase: 'await_software', modelStructure });
+    setMolecularData(modelStructure);
+    setShowBonds(Boolean(modelStructure.bonds?.length));
+    navigate('/agent/modeling?return=agent-workflow');
+  }, [addMessage, modelStructure, navigate, saveWorkflowSnapshot, setMolecularData, setShowBonds]);
 
   const compileInputs = useCallback(async (nextIntent: ComputeIntent) => {
     if (!modelStructure) {
@@ -1982,31 +2497,7 @@ const AgentWorkspace: React.FC = () => {
     }
   }, [addMessage, addTool, compiledInputs, computeIntent, computeResult, jobStatus, messages, modelIntent, modelStructure, postJson, recordHarnessCheckpoint, research, selectedIdea, updateTool]);
 
-  const resetTask = () => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = null;
-    setMessages([{
-      id: 'welcome',
-      role: 'assistant',
-      title: '新任务',
-      content: '新的连续科研流程已准备好。',
-      createdAt: Date.now(),
-    }]);
-    setToolEvents([]);
-    setResearch(null);
-    setSelectedIdeaId(null);
-    setModelIntent(null);
-    setModelStructure(null);
-    setCompiledInputs(null);
-    setJobStatus(null);
-    setComputeResult(null);
-    setPptUrl(null);
-    setPptQa(null);
-    setHarnessSession(null);
-    harnessSessionIdRef.current = null;
-    chatSessionIdRef.current = null;
-    setPhase('idle');
-  };
+  const resetTask = createNewTask;
 
   const runChat = useCallback(async (content: string) => {
     const toolId = addTool({
@@ -2355,42 +2846,109 @@ const AgentWorkspace: React.FC = () => {
               <MessageSquarePlus size={16} />
               新任务
             </button>
-            <nav className="space-y-1">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleNavItem(item.id)}
-                    className="flex w-full items-center gap-3 rounded-[16px] px-3 py-2.5 text-left text-sm text-gray-600 transition hover:bg-[#F5F5F0] hover:text-[#0A1128]"
-                  >
-                    <Icon size={17} />
-                    <span className="min-w-0 truncate">{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
+
+            <div>
+              <div className="flex items-center justify-between gap-2 px-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+                  {showArchivedTasks ? '已归档' : '任务记录'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowArchivedTasks((value) => !value)}
+                  className="rounded-[32px] border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-500 transition hover:bg-[#F5F5F0] hover:text-[#0A1128]"
+                >
+                  {showArchivedTasks ? `返回 ${activeTasks.length}` : `归档 ${archivedTasks.length}`}
+                </button>
+              </div>
+              <div className="mt-2 space-y-1">
+                {filteredTasks.map((task) => {
+                  const isActive = activeTaskId === task.id;
+                  const messageCount = task.snapshot.messages.filter((message) => message.role !== 'system').length;
+                  return (
+                    <div
+                      key={task.id}
+                      className={cx(
+                        'group flex items-stretch gap-1 rounded-[16px] transition',
+                        isActive && !showArchivedTasks ? 'bg-[#F5F5F0]' : 'hover:bg-[#F5F5F0]'
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => openTask(task.id)}
+                        className="min-w-0 flex-1 px-3 py-2 text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={cx('h-2 w-2 shrink-0 rounded-full', isActive ? 'bg-[#0A1128]' : task.archived ? 'bg-gray-300' : 'bg-emerald-500')} />
+                          <span className={cx('min-w-0 flex-1 truncate text-xs font-semibold', isActive ? 'text-[#0A1128]' : 'text-gray-700')}>
+                            {task.title}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-2 pl-4 text-[10px] text-gray-400">
+                          <span>{phaseLabel[task.snapshot.phase] || '任务'}</span>
+                          <span>{messageCount} 条对话</span>
+                          <span>{formatTaskTime(task.updatedAt)}</span>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => task.archived ? restoreTask(task.id) : archiveTask(task.id)}
+                        className="my-1 mr-1 flex w-8 shrink-0 items-center justify-center rounded-[12px] text-gray-400 opacity-70 transition hover:bg-white hover:text-[#0A1128] group-hover:opacity-100"
+                        title={task.archived ? '恢复任务' : '归档任务'}
+                      >
+                        <Archive size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {!filteredTasks.length && (
+                  <div className="rounded-[16px] border border-gray-100 bg-[#F8F8F4] px-3 py-3 text-xs leading-5 text-gray-500">
+                    {taskSearchQuery ? '没有匹配的任务。' : showArchivedTasks ? '暂无归档任务。' : '暂无历史任务，创建新任务后会自动保存在这里。'}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {!showArchivedTasks && !taskSearchQuery && (
+              <div className="mt-6">
+                <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">快速开始</p>
+                <div className="mt-2 space-y-1">
+                  {recentTasks.map((task, index) => (
+                    <button
+                      key={task}
+                      type="button"
+                      onClick={() => {
+                        createNewTask();
+                        setWorkspacePrompt(task);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-[16px] px-3 py-2 text-left text-xs text-gray-500 transition hover:bg-[#F5F5F0] hover:text-[#0A1128]"
+                    >
+                      {index === 0 ? <Zap size={14} className="text-emerald-600" /> : <Check size={14} className="text-gray-400" />}
+                      <span className="min-w-0 flex-1 truncate">{task}</span>
+                      <span className="text-[10px] text-gray-400">模板</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="mt-6">
-              <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">近期任务</p>
-              <div className="mt-2 space-y-1">
-                {filteredRecentTasks.map((task, index) => (
-                  <button
-                    key={task}
-                    type="button"
-                    onClick={() => setWorkspacePrompt(task)}
-                    className={cx(
-                      'flex w-full items-center gap-2 rounded-[16px] px-3 py-2 text-left text-xs transition',
-                      index === 0 ? 'bg-[#F5F5F0] text-[#0A1128]' : 'text-gray-500 hover:bg-[#F5F5F0]'
-                    )}
-                  >
-                    {index === 0 ? <Zap size={14} className="text-emerald-600" /> : <Check size={14} className="text-gray-400" />}
-                    <span className="min-w-0 flex-1 truncate">{task}</span>
-                    {index === 0 && <span className="text-[10px] text-gray-400">模板</span>}
-                  </button>
-                ))}
-              </div>
+              <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">工具入口</p>
+              <nav className="mt-2 space-y-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleNavItem(item.id)}
+                      className="flex w-full items-center gap-3 rounded-[16px] px-3 py-2.5 text-left text-sm text-gray-600 transition hover:bg-[#F5F5F0] hover:text-[#0A1128]"
+                    >
+                      <Icon size={17} />
+                      <span className="min-w-0 truncate">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
             </div>
           </div>
 
@@ -2418,7 +2976,7 @@ const AgentWorkspace: React.FC = () => {
               首页
             </button>
             <div className="hidden min-w-0 flex-1 md:block">
-              <p className="truncate text-sm font-semibold">连续科研流程</p>
+              <p className="truncate text-sm font-semibold">{activeTask?.title || '连续科研流程'}</p>
               <p className="truncate text-[11px] text-gray-400">检索 &gt; 模型确认 &gt; 输入文件检查 &gt; 提交计算 &gt; 结果汇报</p>
             </div>
             <div className="ml-auto flex items-center gap-2">
@@ -2555,7 +3113,7 @@ const AgentWorkspace: React.FC = () => {
                   )}
 
                   {modelStructure && (
-                    <StructurePreview structure={modelStructure} onOpenModeling={() => navigate('/agent/modeling')} />
+                    <StructurePreview structure={modelStructure} onOpenModeling={openModelingForWorkflow} />
                   )}
 
                   {compiledInputs && (

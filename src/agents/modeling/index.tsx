@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import ChatPanel from './components/ChatPanel';
 import CanvasPanel from './components/CanvasPanel';
 import { ModelingIntent } from './types/modeling';
+import { useStore } from '../../store/useStore';
+import type { MolecularStructure } from '../../types';
+
+const MODELING_RETURN_KEY = 'sci-agent-modeling-return-v1';
 
 const extractSupercell = (value: string | null) => {
   const match = String(value || '').match(/(\d+)\s*[x×X]\s*(\d+)(?:\s*[x×X]\s*(\d+))?/);
@@ -36,9 +40,43 @@ const buildStructuredHandoffPrompt = ({
   return `Build a bulk ${material} crystal${mpid ? ` using Materials Project entry ${mpid}` : ''} with a ${sc} supercell`;
 };
 
+const cloneReturnStructure = (structure: MolecularStructure | null): MolecularStructure | null => {
+  if (!structure) return null;
+  return {
+    id: String(structure.id || `modeling-return-${Date.now()}`),
+    filename: String(structure.filename || 'modeling-edited-structure.vasp'),
+    atoms: (structure.atoms || []).map((atom, index) => ({
+      id: String(atom.id || `atom-${index}`),
+      element: String(atom.element || 'C'),
+      position: {
+        x: Number(atom.position?.x || 0),
+        y: Number(atom.position?.y || 0),
+        z: Number(atom.position?.z || 0),
+      },
+      radius: Number(atom.radius || 1),
+      color: String(atom.color || '#9CA3AF'),
+      renderStyle: atom.renderStyle,
+    })),
+    bonds: (structure.bonds || []).map((bond, index) => ({
+      id: String(bond.id || `bond-${index}`),
+      atom1Id: String(bond.atom1Id),
+      atom2Id: String(bond.atom2Id),
+      length: Number(bond.length || 0),
+      type: bond.type || 'single',
+      order: Number(bond.order || 1),
+    })),
+    boundingBox: structure.boundingBox,
+    latticeVectors: Array.isArray(structure.latticeVectors)
+      ? structure.latticeVectors.map((row) => row.map((value) => Number(value)))
+      : undefined,
+  };
+};
+
 const ModelingAgent: React.FC = () => {
+  const navigate = useNavigate();
   const [intent, setIntent] = useState<ModelingIntent | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const molecularData = useStore(state => state.molecularData);
 
   // Handle handoff from Idea Agent
   // Supports: ?prompt=... (full handoff_prompt) OR legacy ?material=...&source=...
@@ -57,10 +95,21 @@ const ModelingAgent: React.FC = () => {
     }) || handoffPrompt || null,
     autoSubmit: searchParams.get('auto') === '1' || searchParams.get('run') === '1',
   }));
+  const [workflowReturnActive] = useState(() => searchParams.get('return') === 'agent-workflow');
+
+  const handleConfirmWorkflowModel = () => {
+    const structure = cloneReturnStructure(molecularData);
+    if (!structure) return;
+    window.sessionStorage.setItem(MODELING_RETURN_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      structure,
+    }));
+    navigate('/workspace?resume=modeling');
+  };
 
   // Clear handoff params from URL after reading them once
   useEffect(() => {
-    if (handoffPrompt || handoffMaterial) {
+    if (handoffPrompt || handoffMaterial || workflowReturnActive) {
       setSearchParams({}, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -87,7 +136,11 @@ const ModelingAgent: React.FC = () => {
       </div>
 
       <div className="flex-1 h-full relative rounded-[24px] bg-white shadow-[0_4px_30px_rgba(0,0,0,0.05)] ring-1 ring-black/5 overflow-hidden">
-        <CanvasPanel intent={intent} />
+        <CanvasPanel
+          intent={intent}
+          workflowReturnActive={workflowReturnActive}
+          onConfirmWorkflow={handleConfirmWorkflowModel}
+        />
       </div>
     </div>
   );
