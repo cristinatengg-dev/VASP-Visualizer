@@ -3047,7 +3047,7 @@ const AgentWorkspace: React.FC = () => {
             </div>
           </header>
 
-          <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="grid min-h-0 flex-1 grid-cols-1">
             <section className="flex min-h-0 flex-col overflow-hidden">
               <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-3 md:px-6">
                 <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
@@ -3336,7 +3336,7 @@ const AgentWorkspace: React.FC = () => {
               </div>
             </section>
 
-            <aside className="hidden min-h-0 border-l border-gray-200 bg-white xl:flex xl:flex-col">
+            <aside className="hidden">
               <div className="border-b border-gray-200 p-5">
                 <div className="flex items-start gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-[#0A1128] text-white">

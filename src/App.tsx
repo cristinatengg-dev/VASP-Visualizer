@@ -30,6 +30,7 @@ import { Loader2 } from 'lucide-react';
 import { API_BASE_URL } from './config';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AgentGate } from './components/AgentGate';
+import { createLocalTrustedUser, getLocalTrustedEmail } from './utils/localTrustedDevice';
 
 // Protected route: redirect to /login if not authenticated
 const AppRoute: React.FC = () => {
@@ -75,12 +76,25 @@ function App() {
   const { user, setUser } = useStore();
   
   const [isAuthChecking, setIsAuthChecking] = useState(() => {
+      const hasLocalTrustedDevice = !!getLocalTrustedEmail();
       const hasToken = !!(localStorage.getItem('vasp_user_id') && localStorage.getItem('vasp_token'));
-      return hasToken && !user;
+      return (hasLocalTrustedDevice || hasToken) && !user;
   });
 
   useEffect(() => {
     const checkAuth = async () => {
+        const localTrustedEmail = getLocalTrustedEmail();
+        if (localTrustedEmail) {
+            if (!user) {
+                localStorage.setItem('vasp_user_id', localTrustedEmail);
+                localStorage.setItem('vasp_local_trusted_device', '1');
+                localStorage.removeItem('vasp_token');
+                setUser(createLocalTrustedUser(localTrustedEmail));
+            }
+            setIsAuthChecking(false);
+            return;
+        }
+
         const userId = localStorage.getItem('vasp_user_id');
         const token = localStorage.getItem('vasp_token');
         
@@ -113,6 +127,12 @@ function App() {
         checkAuth();
     }
   }, [isAuthChecking, setUser, user]);
+
+  useEffect(() => {
+    if (!user && !isAuthChecking && getLocalTrustedEmail()) {
+      setIsAuthChecking(true);
+    }
+  }, [isAuthChecking, user]);
 
   if (isAuthChecking) {
       return (
