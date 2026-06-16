@@ -27,3 +27,235 @@
   background: transparent;
   margin: 10px 0; /* Space for rounded corners */
 }
+
+@layer utilities {
+  /*
+    Legacy UI token bridge.
+    Older agent surfaces still contain task-specific Tailwind colors. Keep their
+    rendered chrome inside UI_STYLE.md without rewriting every historical panel.
+    Scientific/3D atom colors are data colors and are intentionally not touched.
+  */
+  .rounded-md,
+  .rounded-lg,
+  .rounded-xl,
+  .rounded-\[12px\] {
+    border-radius: 16px !important;
+  }
+
+  .bg-emerald-50,
+  .bg-emerald-50\/70,
+  .bg-green-50,
+  .bg-indigo-50,
+  .bg-indigo-50\/30,
+  .bg-indigo-50\/40,
+  .bg-indigo-50\/50,
+  .bg-sky-50,
+  .bg-violet-50,
+  .bg-cyan-50,
+  .bg-cyan-50\/60,
+  .bg-teal-50,
+  .bg-blue-50,
+  .bg-purple-50,
+  .bg-yellow-100,
+  .bg-amber-50,
+  .bg-amber-50\/60,
+  .bg-amber-50\/70,
+  .bg-amber-50\/80,
+  .bg-orange-50,
+  .bg-pink-50,
+  .bg-lime-50 {
+    background-color: #f9fafb !important;
+  }
+
+  .bg-emerald-100,
+  .bg-green-100,
+  .bg-indigo-100,
+  .bg-sky-100,
+  .bg-violet-100,
+  .bg-cyan-100,
+  .bg-teal-100,
+  .bg-blue-100,
+  .bg-purple-100,
+  .bg-amber-100,
+  .bg-orange-100,
+  .bg-pink-100,
+  .bg-lime-100 {
+    background-color: #f3f4f6 !important;
+  }
+
+  .bg-emerald-400,
+  .bg-emerald-500,
+  .bg-emerald-600,
+  .bg-emerald-700,
+  .bg-green-500,
+  .bg-green-600,
+  .bg-green-700,
+  .bg-indigo-400,
+  .bg-indigo-500,
+  .bg-indigo-600,
+  .bg-indigo-700,
+  .bg-sky-500,
+  .bg-sky-600,
+  .bg-violet-500,
+  .bg-violet-600,
+  .bg-cyan-500,
+  .bg-cyan-600,
+  .bg-blue-500,
+  .bg-blue-600,
+  .bg-blue-700,
+  .bg-purple-500,
+  .bg-purple-600,
+  .bg-amber-500,
+  .bg-amber-600,
+  .bg-orange-500,
+  .bg-orange-600,
+  .bg-pink-500,
+  .bg-lime-500 {
+    background-color: #0A1128 !important;
+  }
+
+  .hover\:bg-emerald-100:hover,
+  .hover\:bg-green-100:hover,
+  .hover\:bg-indigo-100:hover,
+  .hover\:bg-sky-100:hover,
+  .hover\:bg-violet-100:hover,
+  .hover\:bg-cyan-100:hover,
+  .hover\:bg-blue-100:hover,
+  .hover\:bg-purple-100:hover,
+  .hover\:bg-amber-100:hover,
+  .hover\:bg-orange-100:hover {
+    background-color: #f3f4f6 !important;
+  }
+
+  .hover\:bg-emerald-700:hover,
+  .hover\:bg-green-700:hover,
+  .hover\:bg-indigo-700:hover,
+  .hover\:bg-sky-700:hover,
+  .hover\:bg-violet-700:hover,
+  .hover\:bg-cyan-700:hover,
+  .hover\:bg-blue-700:hover,
+  .hover\:bg-purple-700:hover,
+  .hover\:bg-amber-700:hover,
+  .hover\:bg-orange-700:hover {
+    background-color: #162044 !important;
+  }
+
+  .disabled\:bg-green-50:disabled,
+  .disabled\:bg-indigo-50:disabled,
+  .disabled\:bg-blue-50:disabled,
+  .disabled\:bg-amber-50:disabled {
+    background-color: #f9fafb !important;
+  }
+
+  .disabled\:bg-green-600:disabled,
+  .disabled\:bg-indigo-600:disabled,
+  .disabled\:bg-blue-600:disabled {
+    background-color: #d1d5db !important;
+  }
+
+  .text-emerald-400,
+  .text-emerald-500,
+  .text-emerald-600,
+  .text-emerald-700,
+  .text-emerald-800,
+  .text-green-500,
+  .text-green-600,
+  .text-green-700,
+  .text-indigo-400,
+  .text-indigo-500,
+  .text-indigo-600,
+  .text-indigo-700,
+  .text-indigo-800,
+  .text-sky-500,
+  .text-sky-600,
+  .text-sky-700,
+  .text-violet-500,
+  .text-violet-600,
+  .text-violet-700,
+  .text-cyan-500,
+  .text-cyan-600,
+  .text-cyan-700,
+  .text-cyan-800,
+  .text-blue-400,
+  .text-blue-500,
+  .text-blue-600,
+  .text-blue-700,
+  .text-purple-400,
+  .text-purple-500,
+  .text-purple-600,
+  .text-amber-400,
+  .text-amber-500,
+  .text-amber-600,
+  .text-amber-700,
+  .text-amber-800,
+  .text-orange-500,
+  .text-orange-600,
+  .text-orange-700,
+  .text-yellow-500,
+  .text-yellow-700,
+  .text-pink-500,
+  .text-lime-600 {
+    color: #0A1128 !important;
+  }
+
+  .border-emerald-100,
+  .border-emerald-200,
+  .border-green-100,
+  .border-green-200,
+  .border-indigo-100,
+  .border-indigo-200,
+  .border-sky-100,
+  .border-sky-200,
+  .border-violet-100,
+  .border-violet-200,
+  .border-cyan-100,
+  .border-cyan-200,
+  .border-blue-100,
+  .border-blue-200,
+  .border-purple-100,
+  .border-amber-100,
+  .border-amber-200,
+  .border-orange-100,
+  .border-orange-200,
+  .border-yellow-100,
+  .border-pink-100,
+  .border-lime-100 {
+    border-color: #e5e7eb !important;
+  }
+
+  .focus\:border-indigo-300:focus,
+  .focus\:border-cyan-300:focus,
+  .focus\:border-amber-300:focus,
+  .focus\:border-blue-300:focus,
+  .focus\:border-emerald-300:focus {
+    border-color: #d1d5db !important;
+  }
+
+  .focus\:ring-indigo-400:focus,
+  .focus\:ring-blue-400:focus,
+  .focus\:ring-emerald-400:focus {
+    --tw-ring-color: rgba(10, 17, 40, 0.18) !important;
+  }
+
+  .from-emerald-600,
+  .from-indigo-600,
+  .from-sky-600,
+  .from-cyan-600,
+  .from-amber-600,
+  .from-violet-600,
+  .from-slate-700 {
+    --tw-gradient-from: #0A1128 var(--tw-gradient-from-position) !important;
+    --tw-gradient-to: rgba(10, 17, 40, 0) var(--tw-gradient-to-position) !important;
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+  }
+
+  .to-teal-600,
+  .to-violet-600,
+  .to-cyan-600,
+  .to-emerald-600,
+  .to-orange-600,
+  .to-fuchsia-600,
+  .to-cyan-700 {
+    --tw-gradient-to: #162044 var(--tw-gradient-to-position) !important;
+  }
+}

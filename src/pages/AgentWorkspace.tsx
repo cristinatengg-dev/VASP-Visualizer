@@ -324,7 +324,7 @@ const agents: WorkspaceAgent[] = [
     name: '文献证据',
     subtitle: '真实来源',
     status: 'ready',
-    accent: 'bg-emerald-600 text-white',
+    accent: 'bg-gray-200 text-gray-400',
     icon: FileText,
     tools: ['CrossRef', 'OpenAlex', 'arXiv', 'PubMed'],
     output: '从论文和数据库证据生成可建模候选。',
@@ -334,7 +334,7 @@ const agents: WorkspaceAgent[] = [
     name: '结构数据库',
     subtitle: '八个结构源',
     status: 'active',
-    accent: 'bg-indigo-600 text-white',
+    accent: 'bg-[#0A1128] text-white',
     icon: Database,
     tools: ['MP', 'OQMD', 'AFLOW', 'JARVIS', 'Alexandria', 'NOMAD', 'MC3D', 'OMDB'],
     output: '统一呈现实时结构源和大规模训练/评测数据集。',
@@ -344,7 +344,7 @@ const agents: WorkspaceAgent[] = [
     name: '确定性建模',
     subtitle: '结构可视化',
     status: 'ready',
-    accent: 'bg-sky-600 text-white',
+    accent: 'bg-gray-200 text-gray-400',
     icon: AtomIcon,
     tools: ['bulk', 'slab', 'molecule', 'adsorbate'],
     output: '把候选体系落成可计算原子结构。',
@@ -354,7 +354,7 @@ const agents: WorkspaceAgent[] = [
     name: '计算输入',
     subtitle: '文件可编辑',
     status: 'handoff',
-    accent: 'bg-amber-600 text-white',
+    accent: 'bg-gray-200 text-gray-500',
     icon: Cpu,
     tools: ['VASP', 'CP2K', 'QE', 'Slurm/PBS'],
     output: '生成输入文件并提交到选定计算位置。',
@@ -364,7 +364,7 @@ const agents: WorkspaceAgent[] = [
     name: '结果汇报',
     subtitle: '可下载 PPTX',
     status: 'ready',
-    accent: 'bg-rose-600 text-white',
+    accent: 'bg-gray-200 text-gray-400',
     icon: Archive,
     tools: ['pptx', 'QA', 'download'],
     output: '生成可下载中文汇报 PPT。',
@@ -486,10 +486,10 @@ const recentTasks = [
 ];
 
 const statusMeta: Record<AgentStatus, { label: string; className: string }> = {
-  active: { label: '运行中', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  ready: { label: '就绪', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  handoff: { label: '待确认', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  gated: { label: '需授权', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+  active: { label: '运行中', className: 'bg-white text-[#0A1128] border-gray-200 shadow-sm ring-1 ring-black/5' },
+  ready: { label: '就绪', className: 'bg-gray-50 text-gray-500 border-gray-200' },
+  handoff: { label: '待确认', className: 'bg-[#F5F5F0] text-gray-700 border-gray-200' },
+  gated: { label: '需授权', className: 'bg-red-50 text-red-600 border-red-200' },
 };
 
 const phaseLabel: Record<WorkflowPhase, string> = {
@@ -513,7 +513,17 @@ const isWorkflowPrompt = (content: string, hasFiles = false) => {
   if (hasFiles) return true;
   const text = content.trim();
   if (!text) return false;
-  return /(检索|搜索|查找|文献|论文|数据库|材料库|建模|模型|结构|晶体|晶面|吸附|计算|VASP|DFT|CP2K|QE|LAMMPS|提交|作业|PPT|汇报|生成|构建|优化|弛豫|能带|态密度|扩散|NEB|催化|电池|储氢|热储能|液流|航天材料|supercapacitor|battery|hydrogen|aerospace|modeling|compute|presentation)/i.test(text);
+  const explicitWorkflow = /(检索|搜索|查找|文献|论文|文章|资料|数据库|材料库|建模|模型|结构|晶体|晶面|吸附|计算|VASP|DFT|CP2K|QE|LAMMPS|提交|作业|PPT|汇报|生成|构建|优化|弛豫|能带|态密度|扩散|NEB|催化|电池|储氢|热储能|液流|航天材料|supercapacitor|battery|hydrogen|aerospace|literature|paper|review|modeling|compute|presentation)/i.test(text);
+  if (explicitWorkflow) return true;
+
+  const researchTopic = /(材料|体系|催化|催化剂|合金|晶体|分子|结构|电池|核能|反应堆|熔盐|腐蚀|辐照|燃料|堆芯|吸附|扩散|molten\s*salt|reactor|nuclear|corrosion|irradiation|catalyst|alloy|materials?)/i.test(text);
+  const researchIntent = /(方向|课题|选题|主题|近期|最近|前沿|进展|综述|调研|找一找|看一下|帮我看|推荐|paper|literature|review|survey|state\s+of\s+the\s+art)/i.test(text);
+  return researchTopic && researchIntent;
+};
+
+const shouldAutoPromoteChatToRetrieval = (prompt: string, reply: string) => {
+  const promisedRetrieval = /(启动|开始|马上|立即|将|会|为你|帮你|接下来|稍候)[\s\S]{0,36}(检索|搜索|查找|文献|论文|文章|资料|数据库|工作流|workflow)/i.test(reply);
+  return Boolean(prompt.trim()) && promisedRetrieval;
 };
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
@@ -611,7 +621,7 @@ const normalizeSnapshotToolEvents = (events: ToolEvent[] = [], phase: WorkflowPh
 const StatusPill: React.FC<{ status: AgentStatus }> = ({ status }) => {
   const meta = statusMeta[status];
   return (
-    <span className={cx('inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold', meta.className)}>
+    <span className={cx('inline-flex items-center gap-1 rounded-[32px] border px-2 py-0.5 text-[10px] font-semibold', meta.className)}>
       <CircleDot size={9} />
       {meta.label}
     </span>
@@ -2580,6 +2590,14 @@ const AgentWorkspace: React.FC = () => {
         title: payload.memories?.length ? `对话 · 已载入 ${payload.memories.length} 条记忆` : '对话',
         content: payload.reply || '我在，但这次没有生成有效回复。',
       });
+      if (payload.reply && shouldAutoPromoteChatToRetrieval(content, payload.reply)) {
+        addMessage({
+          role: 'assistant',
+          title: '已接入检索流程',
+          content: '我现在开始执行真实文献和数据库检索，不只停留在对话回复。',
+        });
+        void runRetrieval(content);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       updateTool(toolId, { status: 'error', details: [message] });
@@ -2590,7 +2608,7 @@ const AgentWorkspace: React.FC = () => {
         status: 'error',
       });
     }
-  }, [addMessage, addTool, postJson, updateTool]);
+  }, [addMessage, addTool, postJson, runRetrieval, updateTool]);
 
   const handleComposerSubmit = async () => {
     const prompt = workspacePrompt.trim();
@@ -2857,7 +2875,7 @@ const AgentWorkspace: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#F5F5F0] text-[#101828]">
+    <div className="h-screen w-screen overflow-hidden bg-[#F5F5F0] text-gray-800">
       <div className="flex h-full min-w-0">
         <aside className="hidden h-full w-[280px] shrink-0 border-r border-gray-200 bg-white lg:flex lg:flex-col">
           <div className="border-b border-gray-200 px-5 py-5">
@@ -2923,7 +2941,7 @@ const AgentWorkspace: React.FC = () => {
                         className="min-w-0 flex-1 px-3 py-2 text-left"
                       >
                         <div className="flex items-center gap-2">
-                          <span className={cx('h-2 w-2 shrink-0 rounded-full', isActive ? 'bg-[#0A1128]' : task.archived ? 'bg-gray-300' : 'bg-emerald-500')} />
+                          <span className={cx('h-2 w-2 shrink-0 rounded-full', isActive ? 'bg-[#0A1128]' : 'bg-gray-300')} />
                           <span className={cx('min-w-0 flex-1 truncate text-xs font-semibold', isActive ? 'text-[#0A1128]' : 'text-gray-700')}>
                             {task.title}
                           </span>
@@ -2937,7 +2955,7 @@ const AgentWorkspace: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => task.archived ? restoreTask(task.id) : archiveTask(task.id)}
-                        className="my-1 mr-1 flex w-8 shrink-0 items-center justify-center rounded-[12px] text-gray-400 opacity-70 transition hover:bg-white hover:text-[#0A1128] group-hover:opacity-100"
+                        className="my-1 mr-1 flex w-8 shrink-0 items-center justify-center rounded-[16px] text-gray-400 opacity-70 transition hover:bg-white hover:text-[#0A1128] group-hover:opacity-100"
                         title={task.archived ? '恢复任务' : '归档任务'}
                       >
                         <Archive size={14} />
@@ -2946,7 +2964,7 @@ const AgentWorkspace: React.FC = () => {
                   );
                 })}
                 {!filteredTasks.length && (
-                  <div className="rounded-[16px] border border-gray-100 bg-[#F8F8F4] px-3 py-3 text-xs leading-5 text-gray-500">
+                  <div className="rounded-[16px] border border-gray-100 bg-gray-50 px-3 py-3 text-xs leading-5 text-gray-500">
                     {taskSearchQuery ? '没有匹配的任务。' : showArchivedTasks ? '暂无归档任务。' : '暂无历史任务，创建新任务后会自动保存在这里。'}
                   </div>
                 )}
@@ -2967,7 +2985,7 @@ const AgentWorkspace: React.FC = () => {
                       }}
                       className="flex w-full items-center gap-2 rounded-[16px] px-3 py-2 text-left text-xs text-gray-500 transition hover:bg-[#F5F5F0] hover:text-[#0A1128]"
                     >
-                      {index === 0 ? <Zap size={14} className="text-emerald-600" /> : <Check size={14} className="text-gray-400" />}
+                      {index === 0 ? <Zap size={14} className="text-[#0A1128]" /> : <Check size={14} className="text-gray-400" />}
                       <span className="min-w-0 flex-1 truncate">{task}</span>
                       <span className="text-[10px] text-gray-400">模板</span>
                     </button>
@@ -3025,8 +3043,8 @@ const AgentWorkspace: React.FC = () => {
               <p className="truncate text-[11px] text-gray-400">检索 &gt; 模型确认 &gt; 输入文件检查 &gt; 提交计算 &gt; 结果汇报</p>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <span className="hidden h-9 items-center gap-2 rounded-[32px] border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 sm:flex">
-                <ShieldCheck size={14} />
+              <span className="hidden h-9 items-center gap-2 rounded-[32px] border border-gray-200 bg-gray-50 px-3 text-xs font-semibold text-gray-700 sm:flex">
+                <ShieldCheck size={14} className="text-gray-500" />
                 来源校验
               </span>
               <div className="relative">
@@ -3056,7 +3074,7 @@ const AgentWorkspace: React.FC = () => {
                     return (
                       <div key={agent.id} className="min-h-[78px] w-[168px] shrink-0 rounded-[16px] border border-gray-200 bg-white p-3 text-left">
                         <div className="flex items-center gap-2">
-                          <span className={cx('flex h-8 w-8 items-center justify-center rounded-[12px]', agent.accent)}>
+                          <span className={cx('flex h-8 w-8 items-center justify-center rounded-[16px]', agent.accent)}>
                             <Icon size={16} />
                           </span>
                           <StatusPill status={agent.status} />
@@ -3090,7 +3108,7 @@ const AgentWorkspace: React.FC = () => {
                       {pptUrl && (
                         <a
                           href={pptUrl}
-                          className="flex h-9 items-center gap-2 rounded-[32px] bg-emerald-600 px-4 text-xs font-semibold text-white hover:bg-emerald-700"
+                          className="flex h-9 items-center gap-2 rounded-[32px] bg-[#0A1128] px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-[#162044]"
                         >
                           <Download size={14} />
                           下载 PPT
@@ -3104,12 +3122,12 @@ const AgentWorkspace: React.FC = () => {
                       key={message.id}
                       className={cx(
                         'rounded-[24px] border p-4 shadow-[0_4px_30px_rgba(0,0,0,0.04)]',
-                        message.role === 'user' ? 'ml-auto max-w-3xl border-[#0A1128] bg-[#0A1128] text-white' : 'max-w-4xl border-gray-100 bg-white text-gray-800',
-                        message.status === 'error' && 'border-rose-200 bg-rose-50 text-rose-800'
+                        message.role === 'user' ? 'ml-auto max-w-3xl border-gray-200 bg-white text-[#0A1128]' : 'max-w-4xl border-gray-100 bg-white text-gray-800',
+                        message.status === 'error' && 'border-red-200 bg-red-50 text-red-600'
                       )}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={cx('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px]', message.role === 'user' ? 'bg-white/10 text-white' : 'bg-[#F5F5F0] text-gray-600')}>
+                        <div className={cx('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[16px]', message.role === 'user' ? 'bg-[#0A1128] text-white' : 'bg-[#F5F5F0] text-gray-600')}>
                           {message.role === 'user' ? <MessageSquarePlus size={15} /> : <Bot size={15} />}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -3136,10 +3154,10 @@ const AgentWorkspace: React.FC = () => {
                                 href={evidenceUrl || paper.ablesci_url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="rounded-[16px] border border-gray-200 bg-[#F8F8F4] p-3 text-left transition hover:border-gray-300 hover:bg-white"
+                                className="rounded-[16px] border border-gray-200 bg-gray-50 p-3 text-left transition hover:border-gray-300 hover:bg-white"
                               >
                                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                                  <span className="rounded-[32px] border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                  <span className="rounded-[32px] border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600">
                                     {paper.source_label || paper.source}
                                   </span>
                                   <span className="text-[10px] text-gray-400">{paper.year || 'n.d.'}</span>
@@ -3194,7 +3212,7 @@ const AgentWorkspace: React.FC = () => {
                         ))}
                       </div>
                       {selectedInputFileName && (
-                        <div className="mt-3 overflow-hidden rounded-[16px] border border-gray-200 bg-[#F8F8F4]">
+                        <div className="mt-3 overflow-hidden rounded-[16px] border border-gray-200 bg-gray-50">
                           <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
                             <span className="font-mono text-xs font-semibold text-gray-700">{selectedInputFileName}</span>
                             <span className="text-[11px] text-gray-400">{selectedInputContent.length.toLocaleString()} chars</span>
@@ -3228,11 +3246,11 @@ const AgentWorkspace: React.FC = () => {
                       </div>
                       <div className="space-y-3">
                         {toolEvents.map((event) => (
-                          <div key={event.id} className="rounded-[16px] border border-gray-100 bg-[#F8F8F4] p-3">
+                          <div key={event.id} className="rounded-[16px] border border-gray-100 bg-gray-50 p-3">
                             <div className="flex items-center gap-2">
-                              {event.status === 'running' ? <Loader2 size={14} className="animate-spin text-sky-600" /> : event.status === 'success' ? <Check size={14} className="text-emerald-600" /> : <CircleDot size={14} className="text-rose-600" />}
+                              {event.status === 'running' ? <Loader2 size={14} className="animate-spin text-[#0A1128]" /> : event.status === 'success' ? <Check size={14} className="text-[#0A1128]" /> : <CircleDot size={14} className="text-red-600" />}
                               <p className="text-xs font-bold text-gray-800">{event.name}</p>
-                              <span className="rounded-[12px] border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500">{event.agent}</span>
+                              <span className="rounded-[16px] border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500">{event.agent}</span>
                             </div>
                             <p className="mt-2 text-xs text-gray-600">{event.summary}</p>
                             {event.details.length > 0 && (
@@ -3269,7 +3287,7 @@ const AgentWorkspace: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex h-8 w-8 items-center justify-center rounded-[12px] text-gray-500 hover:bg-[#F5F5F0]"
+                      className="flex h-8 w-8 items-center justify-center rounded-[16px] text-gray-500 hover:bg-[#F5F5F0]"
                       title="添加文件"
                     >
                       <Paperclip size={16} />
@@ -3277,7 +3295,7 @@ const AgentWorkspace: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => navigate('/materials')}
-                      className="flex h-8 w-8 items-center justify-center rounded-[12px] text-gray-500 hover:bg-[#F5F5F0]"
+                      className="flex h-8 w-8 items-center justify-center rounded-[16px] text-gray-500 hover:bg-[#F5F5F0]"
                       title="打开材料库"
                     >
                       <FolderOpen size={16} />
@@ -3293,7 +3311,7 @@ const AgentWorkspace: React.FC = () => {
                           key={`${file.name}-${file.size}`}
                           type="button"
                           onClick={() => setAttachedFiles((prev) => prev.filter((item) => item !== file))}
-                          className="rounded-[32px] border border-gray-200 bg-[#F5F5F0] px-2 py-1 text-[10px] font-semibold text-gray-600 hover:border-rose-200 hover:text-rose-600"
+                          className="rounded-[32px] border border-gray-200 bg-[#F5F5F0] px-2 py-1 text-[10px] font-semibold text-gray-600 hover:border-red-200 hover:text-red-600"
                         >
                           {file.name}
                         </button>
@@ -3317,7 +3335,7 @@ const AgentWorkspace: React.FC = () => {
                     <button
                       type="button"
                       onClick={startVoiceInput}
-                      className={cx('flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border text-gray-500 hover:bg-[#F5F5F0]', isListening ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-gray-200')}
+                      className={cx('flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border text-gray-500 hover:bg-[#F5F5F0]', isListening ? 'border-[#0A1128] bg-white text-[#0A1128] shadow-sm ring-1 ring-black/5' : 'border-gray-200')}
                       title="语音输入"
                     >
                       <Mic size={16} />
@@ -3368,7 +3386,7 @@ const AgentWorkspace: React.FC = () => {
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-5 custom-scrollbar">
-                <div className="mb-5 rounded-[24px] border border-gray-100 bg-[#F8F8F4] p-4">
+                <div className="mb-5 rounded-[24px] border border-gray-100 bg-gray-50 p-4">
                   <div className="flex items-center gap-2">
                     <ShieldCheck size={16} className="text-gray-600" />
                     <p className="text-sm font-bold">过程记录</p>
@@ -3396,7 +3414,7 @@ const AgentWorkspace: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <span className={cx(
                                 'h-2 w-2 rounded-full',
-                                checkpoint.status === 'success' ? 'bg-emerald-500' : checkpoint.status === 'running' ? 'bg-sky-500' : checkpoint.status === 'error' ? 'bg-rose-500' : 'bg-slate-300'
+                                checkpoint.status === 'success' ? 'bg-[#0A1128]' : checkpoint.status === 'running' ? 'bg-gray-500' : checkpoint.status === 'error' ? 'bg-red-500' : 'bg-gray-300'
                               )} />
                               <p className="min-w-0 flex-1 truncate text-[11px] font-semibold text-gray-700">{checkpoint.summary}</p>
                             </div>
@@ -3428,7 +3446,7 @@ const AgentWorkspace: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => void fetchStructureSources()}
-                      className="flex h-8 w-8 items-center justify-center rounded-[12px] border border-gray-200 text-gray-500 transition hover:bg-[#F5F5F0]"
+                      className="flex h-8 w-8 items-center justify-center rounded-[16px] border border-gray-200 text-gray-500 transition hover:bg-[#F5F5F0]"
                       title="刷新后台数据源登记"
                     >
                       <RefreshCw size={14} />
@@ -3441,7 +3459,7 @@ const AgentWorkspace: React.FC = () => {
                       return (
                       <div key={db.id} className="rounded-[16px] border border-gray-200 bg-white p-3">
                         <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-[12px] bg-[#0A1128] text-[9px] font-bold text-white">{db.shortName.slice(0, 3)}</span>
+                          <span className="flex h-7 w-7 items-center justify-center rounded-[16px] bg-[#0A1128] text-[9px] font-bold text-white">{db.shortName.slice(0, 3)}</span>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-xs font-bold">{db.name}</p>
                             <p className="truncate text-[11px] text-gray-400">{registryEntry?.kind || db.agentRole}</p>
@@ -3462,7 +3480,7 @@ const AgentWorkspace: React.FC = () => {
                               href={registryEntry.homepage}
                               target="_blank"
                               rel="noreferrer"
-                              className="flex h-7 w-7 items-center justify-center rounded-[12px] text-gray-400 hover:bg-[#F5F5F0] hover:text-[#0A1128]"
+                              className="flex h-7 w-7 items-center justify-center rounded-[16px] text-gray-400 hover:bg-[#F5F5F0] hover:text-[#0A1128]"
                               title="打开来源主页"
                             >
                               <ExternalLink size={13} />
@@ -3474,17 +3492,17 @@ const AgentWorkspace: React.FC = () => {
                     })}
                   </div>
                   {sourceProbe && (
-                    <div className="mt-3 rounded-[16px] border border-gray-200 bg-[#F8F8F4] p-3">
+                    <div className="mt-3 rounded-[16px] border border-gray-200 bg-gray-50 p-3">
                       <div className="flex items-center gap-2">
-                        {sourceProbe.status === 'running' ? <Loader2 size={14} className="animate-spin text-sky-600" /> : sourceProbe.status === 'error' ? <CircleDot size={14} className="text-rose-600" /> : <Check size={14} className="text-emerald-600" />}
+                        {sourceProbe.status === 'running' ? <Loader2 size={14} className="animate-spin text-[#0A1128]" /> : sourceProbe.status === 'error' ? <CircleDot size={14} className="text-red-600" /> : <Check size={14} className="text-[#0A1128]" />}
                         <p className="min-w-0 flex-1 truncate text-xs font-bold text-[#0A1128]">{sourceProbe.label}</p>
-                        <span className="rounded-[12px] border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-[9px] text-gray-500">{sourceProbe.formula}</span>
+                        <span className="rounded-[16px] border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-[9px] text-gray-500">{sourceProbe.formula}</span>
                       </div>
                       <p className="mt-2 text-[11px] leading-5 text-gray-600">{sourceProbe.summary}</p>
                       {sourceProbe.results.length > 0 && (
                         <div className="mt-2 space-y-1">
                           {sourceProbe.results.slice(0, 4).map((item) => (
-                            <div key={`${sourceProbe.sourceId}-${item.material_id}`} className="rounded-[12px] border border-gray-200 bg-white px-2 py-1.5">
+                            <div key={`${sourceProbe.sourceId}-${item.material_id}`} className="rounded-[16px] border border-gray-200 bg-white px-2 py-1.5">
                               <p className="truncate font-mono text-[10px] font-semibold text-gray-700">{item.material_id}</p>
                               <p className="mt-0.5 truncate text-[10px] text-gray-400">{item.formula} · {item.crystal_system || 'unknown'} · hull {item.energy_above_hull || 'N/A'}</p>
                             </div>
@@ -3496,7 +3514,7 @@ const AgentWorkspace: React.FC = () => {
                 </div>
 
                 {selectedIdea && (
-                  <div className="mb-5 rounded-[24px] border border-gray-100 bg-[#F8F8F4] p-4">
+                  <div className="mb-5 rounded-[24px] border border-gray-100 bg-gray-50 p-4">
                     <div className="flex items-center gap-2">
                       <FlaskConical size={16} className="text-gray-600" />
                       <p className="text-xs font-bold">当前模型建议</p>
@@ -3515,7 +3533,7 @@ const AgentWorkspace: React.FC = () => {
                 )}
 
                 {compiledInputs && (
-                  <div className="mb-5 rounded-[24px] border border-gray-100 bg-[#F8F8F4] p-4">
+                  <div className="mb-5 rounded-[24px] border border-gray-100 bg-gray-50 p-4">
                     <div className="flex items-center gap-2">
                       <FileText size={16} className="text-gray-600" />
                       <p className="text-xs font-bold">输入文件</p>
@@ -3527,7 +3545,7 @@ const AgentWorkspace: React.FC = () => {
                   </div>
                 )}
 
-                <div className="rounded-[24px] border border-gray-100 bg-[#F8F8F4] p-4">
+                <div className="rounded-[24px] border border-gray-100 bg-gray-50 p-4">
                   <div className="flex items-center gap-2">
                     <Server size={16} className="text-gray-600" />
                     <p className="text-xs font-bold">提交位置</p>
@@ -3545,7 +3563,7 @@ const AgentWorkspace: React.FC = () => {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-bold">{profile.label}</span>
-                          <span className={cx('rounded-[12px] px-1.5 py-0.5 text-[9px] font-bold', profile.configured ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400')}>
+                          <span className={cx('rounded-[16px] border px-1.5 py-0.5 text-[9px] font-bold', profile.configured ? 'border-gray-200 bg-white text-[#0A1128]' : 'border-gray-200 bg-gray-100 text-gray-400')}>
                             {profile.configured ? '已配置' : '未配置'}
                           </span>
                         </div>
@@ -3556,9 +3574,9 @@ const AgentWorkspace: React.FC = () => {
                 </div>
 
                 {pptQa && (
-                  <div className="mt-5 rounded-[24px] border border-emerald-200 bg-emerald-50 p-4">
-                    <p className="text-xs font-bold text-emerald-800">PPT QA</p>
-                    <p className="mt-2 text-xs leading-5 text-emerald-700">{pptQa}</p>
+                  <div className="mt-5 rounded-[24px] border border-gray-200 bg-white p-4">
+                    <p className="text-xs font-bold text-[#0A1128]">PPT QA</p>
+                    <p className="mt-2 text-xs leading-5 text-gray-600">{pptQa}</p>
                   </div>
                 )}
               </div>

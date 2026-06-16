@@ -38,7 +38,7 @@ const MaterialsLibrary: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-[#F5F5F0] px-4 py-8 text-[#101828]">
+    <div className="min-h-screen bg-[#F5F5F0] px-4 py-8 text-gray-800">
       <div className="mx-auto max-w-6xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -73,7 +73,7 @@ const MaterialsLibrary: React.FC = () => {
                 每个资料库进入后都使用同一套后台结构检索源，并保留各自领域的常用公式、建模提示和结果转 Modeling Agent 的路径。
               </p>
             </div>
-            <div className="rounded-[16px] border border-gray-200 bg-[#F8F8F4] px-3 py-2">
+            <div className="rounded-[16px] border border-gray-200 bg-gray-50 px-3 py-2">
               <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Libraries</p>
               <p className="mt-1 font-mono text-base font-bold text-[#0A1128]">{MATERIAL_EXPLORER_CARDS.length}</p>
             </div>
@@ -102,7 +102,7 @@ const MaterialsLibrary: React.FC = () => {
                 </div>
                 <p className="text-base font-bold text-[#0A1128]">{label.title}</p>
                 <p className="mt-2 min-h-[44px] text-sm leading-6 text-gray-600">{label.note}</p>
-                <div className="mt-4 flex items-center gap-2 rounded-[16px] border border-gray-100 bg-[#F8F8F4] px-3 py-2">
+                <div className="mt-4 flex items-center gap-2 rounded-[16px] border border-gray-100 bg-gray-50 px-3 py-2">
                   <Database size={14} className="text-gray-400" />
                   <p className="line-clamp-1 text-xs text-gray-500">{card.description}</p>
                 </div>
