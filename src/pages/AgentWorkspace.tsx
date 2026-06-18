@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Activity,
   Archive,
+  ArchiveRestore,
   ArrowRight,
   Atom as AtomIcon,
   Bot,
@@ -33,6 +34,7 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  Trash2,
   WandSparkles,
   Zap,
 } from 'lucide-react';
@@ -245,16 +247,23 @@ interface CompleteData {
   summary: string;
   user_goal: { interpreted_goal: string; user_profile: string; depth: string };
   idea_cards: IdeaCard[];
-  recommended_idea_id: string;
+  recommended_idea_id: string | null;
   papers: Paper[];
   structures: StructureCandidate[];
   handoff: {
+    idea_id?: string;
+    idea_title?: string;
     formula: string;
     material_id: string | null;
+    source?: string;
     model_type: string;
     supercell: string | null;
     handoff_prompt: string | null;
     rationale: string | null;
+  } | null;
+  no_model_recommendation?: {
+    reason: string;
+    action: string;
   } | null;
 }
 
@@ -920,73 +929,88 @@ const StructurePreview: React.FC<{ structure: MolecularStructure; onOpenModeling
   );
 };
 
-const shouldReplaceIrrelevantCatalystFallback = (prompt: string, data: CompleteData) => {
-  const text = `${prompt} ${data.user_goal?.interpreted_goal || ''}`.toLowerCase();
-  if (!/(co2|二氧化碳).*(hydrogenation|加氢|methanol|甲醇)/i.test(text)) return false;
-  const idea = data.idea_cards?.find((item) => item.id === data.recommended_idea_id) || data.idea_cards?.[0];
-  const formula = `${idea?.blueprint?.structure_source?.formula || ''} ${idea?.title || ''} ${idea?.material_family || ''}`;
-  return !idea || /LiCoO2|NaCoO2|battery|电池|cathode|^H2$|^CO2$|literature-backed starter model/i.test(formula.trim());
+const normalizeFormulaToken = (value: string | null | undefined) => String(value || '').replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+
+const recommendationEvidenceText = (prompt: string, data: CompleteData) => [
+  prompt,
+  data.user_goal?.interpreted_goal,
+  data.user_goal?.depth,
+  ...(data.papers || []).flatMap((paper) => [paper.title, paper.abstract]),
+].filter(Boolean).join(' ');
+
+const evidenceMentionsFormula = (text: string, formula: string | null | undefined) => {
+  const formulaToken = normalizeFormulaToken(formula);
+  if (!formulaToken || formulaToken.length < 2) return false;
+  return normalizeFormulaToken(text).includes(formulaToken);
 };
 
-const applyChemistryAwareRecommendation = (prompt: string, data: CompleteData): CompleteData => {
-  if (!shouldReplaceIrrelevantCatalystFallback(prompt, data)) return data;
-  const evidencePaper = (data.papers || []).find((paper) => /CuZn|ZrO2|methanol|hydrogenation|加氢|甲醇/i.test(`${paper.title} ${paper.abstract}`));
-  const catalystIdea: IdeaCard = {
-    id: 'co2-hydrogenation-cuzn-zro2-starter',
-    title: evidencePaper ? 'Cu(111)+CO2/H2 可核验文献起始模型' : 'Cu(111)+CO2/H2 启发式起始模型',
-    material_family: 'Cu / CuZn-ZrO2 CO2 hydrogenation catalyst',
-    fit_reason: evidencePaper
-      ? `检索到与 CO2 加氢相关的铜基/氧化物界面文献，因此推荐先用 Cu(111)+CO2/H2 作为可计算 starter model，而不是使用无关的电池材料 fallback。`
-      : '目标是 CO2 加氢催化，优先使用铜基表面和 CO2/H2 吸附物作为 starter model，避免把无关电池材料传入建模。',
-    literature_basis: evidencePaper
-      ? `${evidencePaper.title} (${evidencePaper.year || 'n.d.'})`
-      : '本轮没有返回带 DOI 或可打开来源链接的 CO2 加氢文献。',
-    recommended_model_type: 'slab + adsorbates',
-    target_properties: ['adsorption energy', 'surface relaxation', 'CO2 activation'],
-    starter_friendly: true,
-    difficulty: 'starter',
-    confidence: evidencePaper ? 'medium' : 'low',
-    directly_supported: Boolean(evidencePaper),
-    blueprint: {
-      why_this_idea: 'CO2 加氢通常需要表面位点和 CO2/H2 吸附构型；先用铜基表面 starter model 能保证建模和计算链路化学相关。',
-      what_can_be_calculated: 'CO2/H2 adsorption energy, relaxed geometry, charge transfer, initial activation descriptors.',
-      structure_source: {
-        formula: 'Cu',
-        phase_or_polymorph: 'fcc copper surface',
-        material_id: null,
-        source_reason: 'No robust database catalyst interface was returned, so Orchestrator selected a deterministic Cu(111) surface starter model.',
-      },
-      modeling_recipe: {
-        starting_point: 'slab',
-        cell_choice: 'Cu(111) slab',
-        supercell: '3x3x4',
-        slab: '(111), 4 layers, 15 A vacuum',
-        defect_or_doping: null,
-        migration: null,
-      },
-      literature_rationale: evidencePaper
-        ? `Evidence anchor: ${evidencePaper.title}.`
-        : 'This is a chemistry heuristic rather than a literature claim: copper-based surfaces are a safer starter path for CO2 hydrogenation than battery oxides.',
-      caution_notes: ['This is a starter model. Validate exact catalyst phase/interface against target papers before publication-grade conclusions.'],
-      first_step: 'Build and relax Cu(111)+CO2/H2 adsorbate structure.',
-      second_step: 'Compare CO2, H2, COOH/formate intermediates on the same surface model.',
-      handoff_prompt: 'Build a Cu(111) slab with 4 layers, 3x3 supercell, 15 A vacuum, then place CO2 and H2 adsorbates on top sites for CO2 hydrogenation catalyst screening.',
-    },
-  };
+const findEvidenceBackedStructure = (prompt: string, data: CompleteData, idea: IdeaCard | null) => {
+  if (!idea || !Array.isArray(data.structures) || !data.structures.length) return null;
+  const evidenceText = recommendationEvidenceText(prompt, data);
+  const formula = idea.blueprint?.structure_source?.formula || idea.material_family || '';
+  const materialId = idea.blueprint?.structure_source?.material_id || '';
+  return data.structures.find((structure) => {
+    const sameFormula = formula && normalizeFormulaToken(structure.formula) === normalizeFormulaToken(formula);
+    const sameMaterialId = materialId && String(structure.material_id || '').toLowerCase() === String(materialId).toLowerCase();
+    const mentioned = evidenceMentionsFormula(evidenceText, structure.formula) || evidenceMentionsFormula(evidenceText, structure.material_id);
+    return (sameFormula || sameMaterialId) && mentioned;
+  }) || null;
+};
 
+const isBatteryFallbackForOtherTopic = (prompt: string, data: CompleteData, idea: IdeaCard) => {
+  const ideaText = `${idea.blueprint?.structure_source?.formula || ''} ${idea.title || ''} ${idea.material_family || ''}`;
+  if (!/LiCoO2|NaCoO2|LiFePO4|NaMnO2|LiMn2O4|battery|cathode|电池|正极/i.test(ideaText)) return false;
+  return !/(LiCoO2|NaCoO2|LiFePO4|NaMnO2|LiMn2O4|battery|cathode|电池|正极)/i.test(recommendationEvidenceText(prompt, data));
+};
+
+const getRecommendedIdea = (data: CompleteData | null) => {
+  if (!data?.idea_cards?.length) return null;
+  return data.idea_cards.find((item) => item.id === data.recommended_idea_id) || data.idea_cards[0] || null;
+};
+
+const applyEvidenceBackedRecommendation = (prompt: string, data: CompleteData): CompleteData => {
+  if (data.no_model_recommendation) {
+    return {
+      ...data,
+      idea_cards: [],
+      recommended_idea_id: null,
+      handoff: null,
+    };
+  }
+
+  const safeIdeas = (data.idea_cards || []).filter((idea) => (
+    !isBatteryFallbackForOtherTopic(prompt, data, idea) && Boolean(findEvidenceBackedStructure(prompt, data, idea))
+  ));
+
+  if (!safeIdeas.length) {
+    const reason = '本轮没有找到能和检索文献对应的结构数据库条目；不会使用 LiCoO2 或其他无关材料作为推荐模型。';
+    return {
+      ...data,
+      summary: `${data.summary || ''}\n${reason}`.trim(),
+      idea_cards: [],
+      recommended_idea_id: null,
+      handoff: null,
+      no_model_recommendation: {
+        reason,
+        action: 'manual_modeling_required',
+      },
+    };
+  }
+
+  const recommended = safeIdeas.find((idea) => idea.id === data.recommended_idea_id) || safeIdeas[0];
   return {
     ...data,
-    summary: `${data.summary || ''}\nOrchestrator replaced an irrelevant fallback with a chemistry-aware CO2 hydrogenation starter model.`.trim(),
-    recommended_idea_id: catalystIdea.id,
-    idea_cards: [catalystIdea, ...(data.idea_cards || [])],
-    handoff: {
-      formula: 'Cu',
-      material_id: null,
-      model_type: 'slab + adsorbates',
-      supercell: '3x3x4',
-      handoff_prompt: catalystIdea.blueprint.handoff_prompt,
-      rationale: catalystIdea.fit_reason,
+    idea_cards: safeIdeas,
+    recommended_idea_id: recommended.id,
+    handoff: data.handoff && data.handoff.idea_id === recommended.id ? data.handoff : {
+      formula: recommended.blueprint?.structure_source?.formula || recommended.material_family,
+      material_id: recommended.blueprint?.structure_source?.material_id || null,
+      model_type: recommended.blueprint?.modeling_recipe?.starting_point || recommended.recommended_model_type || 'bulk',
+      supercell: recommended.blueprint?.modeling_recipe?.supercell || null,
+      handoff_prompt: recommended.blueprint?.handoff_prompt || null,
+      rationale: recommended.fit_reason,
     },
+    no_model_recommendation: null,
   };
 };
 
@@ -1035,8 +1059,7 @@ const AgentWorkspace: React.FC = () => {
   const selectedIdea = useMemo(() => {
     if (!research?.idea_cards?.length) return null;
     return research.idea_cards.find((idea) => idea.id === selectedIdeaId)
-      || research.idea_cards.find((idea) => idea.id === research.recommended_idea_id)
-      || research.idea_cards[0];
+      || getRecommendedIdea(research);
   }, [research, selectedIdeaId]);
 
   const taskSearchQuery = taskSearch.trim().toLowerCase();
@@ -1431,11 +1454,24 @@ const AgentWorkspace: React.FC = () => {
   }, [applyWorkflowSnapshot, persistActiveTaskNow]);
 
   const archiveTask = useCallback((taskId: string) => {
-    persistActiveTaskNow();
+    const currentSnapshot = buildCurrentSnapshot();
+    const currentSavedAt = Date.now();
     const archivedAt = Date.now();
-    const nextRecords = tasks.map((task) => (
-      task.id === taskId ? { ...task, archived: true, updatedAt: archivedAt } : task
-    ));
+    const nextRecords = tasks.map((task) => {
+      let nextTask = task;
+      if (task.id === activeTaskId) {
+        nextTask = {
+          ...nextTask,
+          title: deriveTaskTitle(currentSnapshot),
+          updatedAt: currentSavedAt,
+          snapshot: currentSnapshot,
+        };
+      }
+      if (task.id === taskId) {
+        nextTask = { ...nextTask, archived: true, updatedAt: archivedAt };
+      }
+      return nextTask;
+    });
     if (taskId !== activeTaskId) {
       setTasks(nextRecords);
       return;
@@ -1456,7 +1492,54 @@ const AgentWorkspace: React.FC = () => {
     activeTaskIdRef.current = replacement.id;
     setShowArchivedTasks(false);
     applyWorkflowSnapshot(replacement.snapshot);
-  }, [activeTaskId, applyWorkflowSnapshot, persistActiveTaskNow, tasks]);
+  }, [activeTaskId, applyWorkflowSnapshot, buildCurrentSnapshot, tasks]);
+
+  const deleteTask = useCallback((taskId: string) => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) return;
+
+    const confirmed = typeof window === 'undefined'
+      ? true
+      : window.confirm(`确定删除“${task.title}”？此操作不可恢复。`);
+    if (!confirmed) return;
+
+    const currentSnapshot = buildCurrentSnapshot();
+    const currentSavedAt = Date.now();
+    const nextRecords = tasks
+      .filter((item) => item.id !== taskId)
+      .map((item) => (
+        item.id === activeTaskId
+          ? {
+              ...item,
+              title: deriveTaskTitle(currentSnapshot),
+              updatedAt: currentSavedAt,
+              snapshot: currentSnapshot,
+            }
+          : item
+      ));
+
+    if (taskId !== activeTaskId) {
+      setTasks(nextRecords);
+      return;
+    }
+
+    const nextOpenTask = nextRecords.find((item) => !item.archived);
+    if (nextOpenTask) {
+      setTasks(nextRecords);
+      setActiveTaskId(nextOpenTask.id);
+      activeTaskIdRef.current = nextOpenTask.id;
+      setShowArchivedTasks(false);
+      applyWorkflowSnapshot(nextOpenTask.snapshot);
+      return;
+    }
+
+    const replacement = createTaskRecord();
+    setTasks([replacement, ...nextRecords]);
+    setActiveTaskId(replacement.id);
+    activeTaskIdRef.current = replacement.id;
+    setShowArchivedTasks(false);
+    applyWorkflowSnapshot(replacement.snapshot);
+  }, [activeTaskId, applyWorkflowSnapshot, buildCurrentSnapshot, tasks]);
 
   const restoreTask = useCallback((taskId: string) => {
     const task = tasks.find((item) => item.id === taskId);
@@ -1962,16 +2045,18 @@ const AgentWorkspace: React.FC = () => {
             throw new Error(event.content);
           }
           if (event.type === 'complete') {
-            const data = applyChemistryAwareRecommendation(prompt, event.data);
+            const data = applyEvidenceBackedRecommendation(prompt, event.data);
             const verifiedPapers = getVerifiedPapers(data.papers || []);
+            const recommendedIdea = getRecommendedIdea(data);
+            const noRecommendationReason = data.no_model_recommendation?.reason || '本轮没有找到能和检索文献对应的结构数据库条目。';
             setResearch(data);
-            setSelectedIdeaId(data.recommended_idea_id || data.idea_cards?.[0]?.id || null);
+            setSelectedIdeaId(recommendedIdea?.id || null);
             updateTool(toolId, {
               status: 'success',
               details: [
                 `${verifiedPapers.length} 篇可核验文献`,
                 `${data.structures?.length || 0} structures collected`,
-                `recommended: ${data.idea_cards?.find((idea) => idea.id === data.recommended_idea_id)?.title || data.idea_cards?.[0]?.title || 'none'}`,
+                recommendedIdea ? `recommended: ${recommendedIdea.title}` : 'recommended: none; manual modeling required',
               ],
             });
             addMessage({
@@ -1983,10 +2068,12 @@ const AgentWorkspace: React.FC = () => {
                 '可核验文献：',
                 ...(topPaperLines(data.papers || [], 6).length ? topPaperLines(data.papers || [], 6) : ['没有返回带 DOI 或来源链接的文献。本轮不会把不可追溯条目当作证据。']),
                 '',
-                `推荐模型：${data.idea_cards?.find((idea) => idea.id === data.recommended_idea_id)?.title || data.idea_cards?.[0]?.title || '暂无推荐'}`,
-                `推荐原因：${data.idea_cards?.find((idea) => idea.id === data.recommended_idea_id)?.fit_reason || data.summary || '基于当前检索结果生成。'}`,
+                recommendedIdea ? `推荐模型：${recommendedIdea.title}` : '推荐模型：暂无推荐',
+                recommendedIdea ? `推荐原因：${recommendedIdea.fit_reason}` : `原因：${noRecommendationReason}`,
                 '',
-                '是否使用这个推荐模型？也可以直接在输入框写你想改成的模型、晶面、吸附物或材料。'
+                recommendedIdea
+                  ? '是否使用这个推荐模型？也可以直接在输入框写你想改成的模型、晶面、吸附物或材料。'
+                  : '下一步需要你自己建模：可以点击“去 Modeling Agent 自建模型”，然后按目标论文确定材料、晶面、熔盐组分、吸附物或缺陷。'
               ].join('\n'),
             });
             void recordHarnessCheckpoint({
@@ -2187,6 +2274,24 @@ const AgentWorkspace: React.FC = () => {
     setShowBonds(Boolean(modelStructure.bonds?.length));
     navigate('/agent/modeling?return=agent-workflow');
   }, [addMessage, modelStructure, navigate, saveWorkflowSnapshot, setMolecularData, setShowBonds]);
+
+  const openManualModelingForWorkflow = useCallback(() => {
+    const prompt = research?.user_goal?.interpreted_goal || messages.find((message) => message.role === 'user')?.content || workspacePrompt || '请根据目标文献手动建立模型';
+    saveWorkflowSnapshot({
+      phase: 'await_model',
+      selectedIdeaId: null,
+      modelStructure: null,
+      compiledInputs: null,
+      selectedInputFileName: null,
+    });
+    setMolecularData(null);
+    setShowBonds(false);
+    const params = new URLSearchParams({
+      return: 'agent-workflow',
+      prompt,
+    });
+    navigate(`/agent/modeling?${params.toString()}`);
+  }, [messages, navigate, research?.user_goal?.interpreted_goal, saveWorkflowSnapshot, setMolecularData, setShowBonds, workspacePrompt]);
 
   const compileInputs = useCallback(async (nextIntent: ComputeIntent) => {
     if (!modelStructure) {
@@ -2734,6 +2839,26 @@ const AgentWorkspace: React.FC = () => {
 
   const renderDecisionPanel = () => {
     if (phase === 'await_model' && research) {
+      const recommendedIdea = getRecommendedIdea(research);
+      if (!recommendedIdea) {
+        return (
+          <div className="border-t border-gray-200 bg-white px-4 py-3">
+            <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={openManualModelingForWorkflow}
+                className="h-9 rounded-[32px] bg-[#0A1128] px-4 text-xs font-semibold text-white hover:bg-[#162044]"
+              >
+                去 Modeling Agent 自建模型
+              </button>
+              <span className="text-xs text-gray-400">
+                无可用推荐：{research.no_model_recommendation?.reason || '没有和检索文献匹配的结构。'}
+              </span>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="border-t border-gray-200 bg-white px-4 py-3">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
@@ -2952,14 +3077,24 @@ const AgentWorkspace: React.FC = () => {
                           <span>{formatTaskTime(task.updatedAt)}</span>
                         </div>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => task.archived ? restoreTask(task.id) : archiveTask(task.id)}
-                        className="my-1 mr-1 flex w-8 shrink-0 items-center justify-center rounded-[16px] text-gray-400 opacity-70 transition hover:bg-white hover:text-[#0A1128] group-hover:opacity-100"
-                        title={task.archived ? '恢复任务' : '归档任务'}
-                      >
-                        <Archive size={14} />
-                      </button>
+                      <div className="my-1 mr-1 flex shrink-0 items-center gap-1 opacity-80 transition group-hover:opacity-100">
+                        <button
+                          type="button"
+                          onClick={() => task.archived ? restoreTask(task.id) : archiveTask(task.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-[16px] text-gray-400 transition hover:bg-white hover:text-[#0A1128]"
+                          title={task.archived ? '恢复任务' : '归档任务'}
+                        >
+                          {task.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteTask(task.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-[16px] border border-transparent text-gray-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                          title="删除任务"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

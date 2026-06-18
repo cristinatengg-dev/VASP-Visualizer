@@ -1059,6 +1059,124 @@ function inferFallbackFormula(prompt) {
   return null;
 }
 
+function normalizeFormulaToken(value) {
+  return String(value || '').replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+}
+
+function buildEvidenceText({ userPrompt, intent, papers }) {
+  return [
+    userPrompt,
+    intent?.interpreted_goal,
+    intent?.literature_query,
+    ...(Array.isArray(papers) ? papers.flatMap((paper) => [paper?.title, paper?.abstract]) : []),
+  ].filter(Boolean).join(' ');
+}
+
+function textMentionsFormula(text, formula) {
+  const normalizedFormula = normalizeFormulaToken(formula);
+  if (!normalizedFormula || normalizedFormula.length < 2) return false;
+  const normalizedText = normalizeFormulaToken(text);
+  return normalizedText.includes(normalizedFormula);
+}
+
+function isStructureEvidenceRelated(structure, context) {
+  if (!structure) return false;
+  const evidenceText = buildEvidenceText(context);
+  const formula = structure.formula || structure.formula_pretty || '';
+  const materialId = structure.material_id || '';
+  return textMentionsFormula(evidenceText, formula) || (materialId && textMentionsFormula(evidenceText, materialId));
+}
+
+function findEvidenceBackedStructureForIdea(idea, structures, context) {
+  if (!idea || !Array.isArray(structures) || structures.length === 0) return null;
+  const source = idea.blueprint?.structure_source || {};
+  const formula = source.formula || idea.material_family || '';
+  const materialId = source.material_id || '';
+
+  const matched = structures.find((structure) => {
+    const sameMaterialId = materialId && String(structure.material_id || '').toLowerCase() === String(materialId).toLowerCase();
+    const sameFormula = formula && normalizeFormulaToken(structure.formula) === normalizeFormulaToken(formula);
+    return (sameMaterialId || sameFormula) && isStructureEvidenceRelated(structure, context);
+  });
+
+  return matched || null;
+}
+
+function buildNoModelRecommendationPayload({ userPrompt, intent, papers, structures, reason }) {
+  const message = reason || '本轮没有找到能和检索文献对应的结构数据库条目，因此不推荐 starter model。';
+  return {
+    summary: `${message} 请进入 Modeling Agent 根据目标文献手动建立模型，确认材料、晶面、吸附物或熔盐组分后再继续计算。`,
+    user_goal: {
+      interpreted_goal: intent?.interpreted_goal || userPrompt,
+      user_profile: intent?.user_profile || 'general',
+      depth: intent?.depth || 'starter',
+    },
+    idea_cards: [],
+    recommended_idea_id: null,
+    papers,
+    structures,
+    handoff: null,
+    no_model_recommendation: {
+      reason: message,
+      action: 'manual_modeling_required',
+    },
+  };
+}
+
+function sanitizeIdeaRecommendations({ userPrompt, intent, papers, structures, ideaCards, recommendedIdeaId, overallSummary }) {
+  const context = { userPrompt, intent, papers };
+  const safeCards = (Array.isArray(ideaCards) ? ideaCards : []).filter((idea) => {
+    const formulaText = `${idea?.blueprint?.structure_source?.formula || ''} ${idea?.title || ''} ${idea?.material_family || ''}`;
+    if (/LiCoO2|NaCoO2|LiFePO4|NaMnO2|LiMn2O4|battery|cathode|电池|正极/i.test(formulaText)) {
+      const evidenceText = buildEvidenceText(context);
+      if (!/(LiCoO2|NaCoO2|LiFePO4|NaMnO2|LiMn2O4|battery|cathode|电池|正极)/i.test(evidenceText)) return false;
+    }
+    return Boolean(findEvidenceBackedStructureForIdea(idea, structures, context));
+  });
+
+  if (!safeCards.length) {
+    return buildNoModelRecommendationPayload({
+      userPrompt,
+      intent,
+      papers,
+      structures,
+      reason: '已检索到文献，但没有找到与这些文献主题相匹配的结构数据库条目；不会用无关材料充当推荐模型。',
+    });
+  }
+
+  const safeRecommendedId = safeCards.some((idea) => idea.id === recommendedIdeaId)
+    ? recommendedIdeaId
+    : safeCards[0].id;
+  const recommendedCard = safeCards.find((idea) => idea.id === safeRecommendedId) || safeCards[0];
+  const matchedStructure = findEvidenceBackedStructureForIdea(recommendedCard, structures, { userPrompt, intent, papers });
+
+  return {
+    summary: overallSummary || 'Ideas generated based on literature and database evidence.',
+    user_goal: {
+      interpreted_goal: intent.interpreted_goal,
+      user_profile: intent.user_profile,
+      depth: intent.depth,
+    },
+    idea_cards: safeCards,
+    recommended_idea_id: safeRecommendedId,
+    papers,
+    structures,
+    handoff: {
+      idea_id: recommendedCard.id,
+      idea_title: recommendedCard.title,
+      formula: recommendedCard.blueprint?.structure_source?.formula || matchedStructure?.formula || '',
+      phase: recommendedCard.blueprint?.structure_source?.phase_or_polymorph || matchedStructure?.space_group || null,
+      material_id: recommendedCard.blueprint?.structure_source?.material_id || matchedStructure?.material_id || null,
+      source: matchedStructure?.source || 'Structure database',
+      model_type: recommendedCard.blueprint?.modeling_recipe?.starting_point || 'bulk',
+      supercell: recommendedCard.blueprint?.modeling_recipe?.supercell || null,
+      target_property: (recommendedCard.target_properties || [])[0] || null,
+      handoff_prompt: recommendedCard.blueprint?.handoff_prompt || null,
+      rationale: recommendedCard.blueprint?.literature_rationale || recommendedCard.fit_reason || null,
+    },
+  };
+}
+
 function buildHeuristicLiteratureQuery(prompt) {
   const text = String(prompt || '').trim();
   if (!text) return '';
@@ -1069,6 +1187,12 @@ function buildHeuristicLiteratureQuery(prompt) {
   const lower = text.toLowerCase();
   if (/(co2|二氧化碳).*(加氢|hydrogenation|催化|catalyst)|加氢.*(co2|二氧化碳)/i.test(text)) {
     return `${formulas.join(' ')} CO2 hydrogenation catalyst DFT surface adsorption methanol`.trim();
+  }
+  if (/(熔盐堆|熔盐反应堆|molten\s*salt\s*reactor|msr|氟盐|氯盐|FLiBe|FLiNaK)/i.test(text)) {
+    return `${formulas.join(' ')} molten salt reactor materials corrosion fuel salt fluoride chloride`.trim();
+  }
+  if (/(核材料|反应堆|辐照|包壳|燃料)/.test(text)) {
+    return `${formulas.join(' ')} nuclear reactor materials irradiation corrosion DFT`.trim();
   }
   if (/(吸附|表面|晶面|催化)/.test(text)) {
     return `${formulas.join(' ')} catalyst surface adsorption DFT`.trim();
@@ -1149,7 +1273,8 @@ function extractSupercellSpec(value) {
 }
 
 function buildSafeHandoffPrompt({ formula, modelType, recipe, bestStructure }) {
-  const safeFormula = formula && formula !== 'candidate battery material' ? formula : 'LiCoO2';
+  const safeFormula = formula && formula !== 'candidate battery material' ? formula : null;
+  if (!safeFormula) return null;
   const supercell = extractSupercellSpec(recipe?.supercell);
   if (modelType === 'slab') {
     return `Build a ${safeFormula}(001) slab with a ${supercell} supercell and 15 A vacuum`;
@@ -1159,7 +1284,17 @@ function buildSafeHandoffPrompt({ formula, modelType, recipe, bestStructure }) {
 
 function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
   const bestStructure = chooseBestStructure(structures);
-  const formula = bestStructure?.formula || intent.candidate_formulas?.[0] || inferFallbackFormula(userPrompt) || 'LiCoO2';
+  if (!bestStructure || !isStructureEvidenceRelated(bestStructure, { userPrompt, intent, papers })) {
+    return buildNoModelRecommendationPayload({
+      userPrompt,
+      intent,
+      papers,
+      structures,
+      reason: '文本模型不可用，且本轮没有找到与检索文献相匹配的结构条目；不会用 LiCoO2 或其他无关材料作为兜底模型。',
+    });
+  }
+
+  const formula = bestStructure.formula || intent.candidate_formulas?.[0] || inferFallbackFormula(userPrompt);
   const researchType = intent.research_type || inferResearchType(userPrompt);
   const recipe = fallbackRecipeForType(researchType, formula, bestStructure);
   const modelType = recipe.starting_point === 'diffusion' ? 'diffusion' : recipe.starting_point;
@@ -1306,9 +1441,14 @@ async function runRetrievalAgentStream(userPrompt, onChunk) {
 
     const llmIntentPromise = llm([{
       role: 'user',
-      content: `You are a battery / computational materials science expert advisor.
+      content: `You are a computational materials science advisor covering catalysis, batteries, nuclear materials, molten salts, ceramics, alloys, and surfaces.
 A student typed the following research question (may be in Chinese or English).
 Analyse their intent and return ONLY a JSON object — no prose, no markdown fences.
+
+Rules:
+- candidate_formulas MUST be empty unless the user explicitly names a concrete chemical formula, composition, alloy, crystal, or material.
+- Do not infer LiCoO2, NaCoO2, LFP, NMC, or any battery material from a non-battery topic.
+- For literature_query, translate Chinese domain terms precisely, e.g. 熔盐堆 -> molten salt reactor.
 
 JSON schema:
 {
@@ -1629,9 +1769,18 @@ Return ONLY a JSON object — no markdown, no prose:
       ], { timeoutMs: 15000, maxRetries: 1 });
 
       const ideaData = cleanJson(ideaRaw);
-      ideaCards = ideaData?.idea_cards || [];
-      recommendedIdeaId = ideaData?.recommended_idea_id || ideaCards[0]?.id || null;
-      overallSummary = ideaData?.overall_summary || 'Ideas generated based on literature and database evidence.';
+      const sanitized = sanitizeIdeaRecommendations({
+        userPrompt,
+        intent,
+        papers,
+        structures: allStructures,
+        ideaCards: ideaData?.idea_cards || [],
+        recommendedIdeaId: ideaData?.recommended_idea_id || null,
+        overallSummary: ideaData?.overall_summary || 'Ideas generated based on literature and database evidence.',
+      });
+      ideaCards = sanitized.idea_cards;
+      recommendedIdeaId = sanitized.recommended_idea_id;
+      overallSummary = sanitized.summary;
     } catch (_error) {
       usedFallback = true;
       const fallback = buildFallbackIdeaPayload({ userPrompt, intent, papers, structures: allStructures });
@@ -1650,31 +1799,29 @@ Return ONLY a JSON object — no markdown, no prose:
         : `${ideaCards.length} ideas generated.`,
     });
 
+    const sanitizedPayload = sanitizeIdeaRecommendations({
+      userPrompt,
+      intent,
+      papers,
+      structures: allStructures,
+      ideaCards,
+      recommendedIdeaId,
+      overallSummary,
+    });
+    ideaCards = sanitizedPayload.idea_cards;
+    recommendedIdeaId = sanitizedPayload.recommended_idea_id;
+    overallSummary = sanitizedPayload.summary;
+
     // Stage 5: handoff
     emit({ type: 'stage', stage: 'handoff_ready', title: 'Preparing modeling handoff', status: 'active' });
-    const recommendedCard = ideaCards.find((card) => card.id === recommendedIdeaId) || ideaCards[0] || null;
-    const handoff = recommendedCard
-      ? {
-          idea_id: recommendedCard.id,
-          idea_title: recommendedCard.title,
-          formula: recommendedCard.blueprint?.structure_source?.formula || '',
-          phase: recommendedCard.blueprint?.structure_source?.phase_or_polymorph || null,
-          material_id: recommendedCard.blueprint?.structure_source?.material_id || null,
-          source: recommendedCard.blueprint?.structure_source?.material_id ? 'Materials Project' : 'Heuristic fallback',
-          model_type: recommendedCard.blueprint?.modeling_recipe?.starting_point || 'bulk',
-          supercell: recommendedCard.blueprint?.modeling_recipe?.supercell || null,
-          target_property: (recommendedCard.target_properties || [])[0] || null,
-          handoff_prompt: recommendedCard.blueprint?.handoff_prompt || null,
-          rationale: recommendedCard.blueprint?.literature_rationale || null,
-        }
-      : null;
+    const handoff = sanitizedPayload.handoff || null;
 
     emit({
       type: 'stage',
       stage: 'handoff_ready',
       title: 'Handoff ready',
       status: 'done',
-      content: handoff ? `Recommended: ${handoff.idea_title}` : 'No handoff generated.',
+      content: handoff ? `Recommended: ${handoff.idea_title}` : 'No evidence-backed structure recommendation.',
     });
 
     emit({
@@ -1691,6 +1838,7 @@ Return ONLY a JSON object — no markdown, no prose:
         papers,
         structures: allStructures,
         handoff,
+        no_model_recommendation: sanitizedPayload.no_model_recommendation || null,
       },
     });
   } catch (error) {
@@ -1730,4 +1878,7 @@ module.exports = {
   searchPubMed,
   searchAllLiterature,
   formulaToOptimadeReduced,
+  buildHeuristicLiteratureQuery,
+  buildFallbackIdeaPayload,
+  sanitizeIdeaRecommendations,
 };

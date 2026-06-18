@@ -82,10 +82,14 @@ interface CompleteData {
   summary: string;
   user_goal: { interpreted_goal: string; user_profile: string; depth: string };
   idea_cards: IdeaCard[];
-  recommended_idea_id: string;
+  recommended_idea_id: string | null;
   papers: Paper[];
   structures: Structure[];
   handoff: Handoff | null;
+  no_model_recommendation?: {
+    reason: string;
+    action: string;
+  } | null;
 }
 
 type AgentEvent = StageEvent | ErrorEvent | { type: 'complete'; data: CompleteData };
@@ -526,6 +530,13 @@ const IdeaAgent: React.FC = () => {
     navigate(`/agent/modeling?${params.toString()}`);
   };
 
+  const handleManualModeling = () => {
+    const params = new URLSearchParams();
+    const prompt = result?.user_goal?.interpreted_goal || query || '请根据目标文献手动建立模型';
+    params.set('prompt', prompt);
+    navigate(`/agent/modeling?${params.toString()}`);
+  };
+
   const hasResult = result !== null;
   const doneStages = stages.filter((s) => s.status === 'done').length;
   const totalStages = 13; // goal, 7x literature, structure(MP), oqmd, aflow, ideas
@@ -836,6 +847,23 @@ const IdeaAgent: React.FC = () => {
             </motion.div>
           ))}
 
+          {hasResult && result.idea_cards.length === 0 && (
+            <div className="rounded-[24px] border border-gray-100 bg-gray-50 p-5">
+              <p className="text-sm font-bold text-[#0A1128]">暂无可推荐模型</p>
+              <p className="mt-2 text-xs leading-5 text-gray-600">
+                {result.no_model_recommendation?.reason || '没有找到能和检索文献对应的结构数据库条目。'}
+              </p>
+              <button
+                type="button"
+                onClick={handleManualModeling}
+                className="mt-4 inline-flex items-center gap-2 rounded-[32px] bg-[#0A1128] px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#162044]"
+              >
+                <ArrowRight size={13} />
+                去 Modeling Agent 自建模型
+              </button>
+            </div>
+          )}
+
           {hasResult && result.papers.length > 0 && (
             <div className="pt-2">
               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1.5">
@@ -877,9 +905,16 @@ const IdeaAgent: React.FC = () => {
         <div className="flex-1 overflow-hidden">
           {!selectedCard && (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center opacity-30">
-                <ChevronRight size={40} className="text-gray-400 mx-auto mb-2" />
-                <p className="text-xs font-bold text-gray-400">Select an idea to view blueprint</p>
+              <div className="max-w-sm text-center">
+                <ChevronRight size={40} className="text-gray-300 mx-auto mb-2" />
+                <p className="text-xs font-bold text-gray-400">
+                  {result?.idea_cards.length === 0 ? 'No evidence-backed model recommendation' : 'Select an idea to view blueprint'}
+                </p>
+                {result?.idea_cards.length === 0 && (
+                  <p className="mt-2 text-[11px] leading-5 text-gray-400">
+                    需要先在 Modeling Agent 中按目标论文手动确定结构。
+                  </p>
+                )}
               </div>
             </div>
           )}
