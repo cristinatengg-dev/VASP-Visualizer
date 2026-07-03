@@ -281,6 +281,18 @@ interface SynthesisRoute {
   evidence: string;
   risk: string;
   alternatives: string[];
+  dataset_hit?: boolean;
+  source?: string;
+  source_project?: string;
+  source_url?: string;
+  source_citation?: string;
+  source_dataset_doi?: string;
+  doi?: string;
+  doi_url?: string;
+  recipe_id?: string;
+  match_score?: number;
+  matched_terms?: string[];
+  reaction_string?: string;
 }
 
 interface FeasibilityDimension {
@@ -294,6 +306,30 @@ interface ExperimentVariable {
   name: string;
   type: string;
   range: Array<string | number> | [number, number];
+}
+
+interface RecipeIndexMatch {
+  id: string;
+  source: string;
+  source_project: string;
+  source_url: string;
+  source_citation: string;
+  source_dataset_doi: string;
+  doi: string;
+  doi_url: string;
+  synthesis_type: string;
+  target_formula: string;
+  target_name: string;
+  precursors: string[];
+  conditions: {
+    temperature?: string;
+    time?: string;
+    atmosphere?: string;
+  };
+  reaction_string: string;
+  paragraph: string;
+  score: number;
+  matched_terms: string[];
 }
 
 interface ResearchStackReport {
@@ -311,6 +347,20 @@ interface ResearchStackReport {
   synthesis: {
     summary: string;
     routes: SynthesisRoute[];
+  };
+  recipe_index?: {
+    index: {
+      status: string;
+      path: string | null;
+      total: number;
+      source_counts: Record<string, number>;
+      loaded_at: string | null;
+      error: string | null;
+    };
+    query: string;
+    formulas: string[];
+    domain: string;
+    matches: RecipeIndexMatch[];
   };
   feasibility: {
     score: number;
@@ -343,7 +393,12 @@ interface ResearchStackReport {
     role: string;
     integration: string;
     status: string;
+    available?: boolean;
+    backing?: string;
+    kind?: string;
+    probe?: Record<string, any>;
   }>;
+  adapter_summary?: Record<string, number>;
 }
 
 interface AgentWorkflowSnapshot {
@@ -1059,9 +1114,24 @@ const levelLabel: Record<ResearchStackReport['feasibility']['level'], string> = 
   low: '低',
 };
 
+const adapterStatusLabel: Record<string, string> = {
+  active: '已接入',
+  fallback: '降级',
+  missing: '缺失',
+};
+
+const adapterStatusTone = (status: string) => {
+  if (status === 'active') return 'border-[#0A1128] bg-[#0A1128] text-white';
+  if (status === 'fallback') return 'border-gray-200 bg-gray-50 text-gray-600';
+  return 'border-red-200 bg-red-50 text-red-600';
+};
+
 const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report }) => {
   const firstRoute = report.synthesis.routes[0];
   const experimentColumns = Object.keys(report.experiment.first_batch[0] || {}).slice(0, 7);
+  const recipeMatches = report.recipe_index?.matches || [];
+  const recipeIndexTotal = report.recipe_index?.index?.total || 0;
+  const hasRecipeHit = recipeMatches.length > 0;
 
   return (
     <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
@@ -1072,9 +1142,15 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
             文献证据、合成路线、可行性评分和实验矩阵已经串入同一个工作流。
           </p>
         </div>
-        <div className="rounded-[16px] border border-gray-200 bg-[#F5F5F0] px-3 py-2 text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">Feasibility</p>
-          <p className="text-sm font-bold text-[#0A1128]">{report.feasibility.score}/100 · {levelLabel[report.feasibility.level]}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="rounded-[16px] border border-gray-200 bg-[#F5F5F0] px-3 py-2 text-right">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">Ceder Index</p>
+            <p className="text-sm font-bold text-[#0A1128]">{hasRecipeHit ? `命中 ${recipeMatches.length}` : '无命中'} · {recipeIndexTotal || '-'}</p>
+          </div>
+          <div className="rounded-[16px] border border-gray-200 bg-[#F5F5F0] px-3 py-2 text-right">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">Feasibility</p>
+            <p className="text-sm font-bold text-[#0A1128]">{report.feasibility.score}/100 · {levelLabel[report.feasibility.level]}</p>
+          </div>
         </div>
       </div>
 
@@ -1087,8 +1163,46 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
           <p className="text-xs leading-5 text-gray-600">{report.synthesis.summary}</p>
           {firstRoute && (
             <div className="mt-3 rounded-[14px] border border-gray-200 bg-white p-3">
-              <p className="text-xs font-bold text-[#0A1128]">{firstRoute.title}</p>
-              <p className="mt-1 text-[11px] text-gray-500">{firstRoute.method}</p>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs font-bold text-[#0A1128]">{firstRoute.title}</p>
+                  <p className="mt-1 text-[11px] text-gray-500">{firstRoute.method}</p>
+                </div>
+                <span className={cx(
+                  'rounded-full border px-2 py-1 text-[10px] font-bold',
+                  firstRoute.dataset_hit
+                    ? 'border-[#0A1128] bg-[#0A1128] text-white'
+                    : 'border-gray-200 bg-[#F5F5F0] text-gray-500',
+                )}>
+                  {firstRoute.dataset_hit ? 'Ceder 命中' : '规则草案'}
+                </span>
+              </div>
+              {firstRoute.source && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                  <span>{firstRoute.source}</span>
+                  {typeof firstRoute.match_score === 'number' && <span>score {firstRoute.match_score}</span>}
+                  {firstRoute.doi_url && (
+                    <a
+                      className="inline-flex items-center gap-1 font-semibold text-[#0A1128] hover:text-[#162044]"
+                      href={firstRoute.doi_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      DOI <ExternalLink size={12} />
+                    </a>
+                  )}
+                  {firstRoute.source_url && (
+                    <a
+                      className="inline-flex items-center gap-1 font-semibold text-[#0A1128] hover:text-[#162044]"
+                      href={firstRoute.source_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      数据集 <ExternalLink size={12} />
+                    </a>
+                  )}
+                </div>
+              )}
               <div className="mt-2 grid gap-2 text-[11px] text-gray-600 md:grid-cols-3">
                 <div>
                   <span className="font-semibold text-gray-800">前驱体</span>
@@ -1106,6 +1220,29 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
               {firstRoute.alternatives.length > 0 && (
                 <p className="mt-2 text-[11px] leading-5 text-gray-500">替代路线：{firstRoute.alternatives.join('、')}</p>
               )}
+              {firstRoute.reaction_string && (
+                <p className="mt-2 rounded-[10px] bg-[#F5F5F0] px-2 py-1.5 font-mono text-[10px] leading-4 text-gray-600">
+                  {firstRoute.reaction_string}
+                </p>
+              )}
+            </div>
+          )}
+          {recipeMatches.length > 1 && (
+            <div className="mt-3 space-y-2">
+              {recipeMatches.slice(1, 4).map((match) => (
+                <div key={match.id} className="rounded-[12px] border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-bold text-[#0A1128]">{match.target_formula || match.target_name}</span>
+                    <span className="font-mono text-gray-400">score {match.score}</span>
+                  </div>
+                  <p className="mt-1 leading-5">{match.synthesis_type} · {match.precursors.slice(0, 4).join('、') || 'precursors not extracted'}</p>
+                  {match.doi_url && (
+                    <a className="mt-1 inline-flex items-center gap-1 font-semibold text-[#0A1128] hover:text-[#162044]" href={match.doi_url} target="_blank" rel="noreferrer">
+                      {match.doi} <ExternalLink size={12} />
+                    </a>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -1173,19 +1310,29 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
         </div>
         <div className="rounded-[16px] border border-gray-200 bg-gray-50 p-3">
           <p className="text-xs font-bold text-[#0A1128]">开源能力接入</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-2 grid gap-2">
             {report.adapters.slice(0, 8).map((adapter) => (
-              <a
+              <div
                 key={adapter.id}
-                href={adapter.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded-[32px] border border-gray-200 bg-white px-2 py-1 text-[10px] font-semibold text-gray-600 transition hover:border-gray-300 hover:text-[#0A1128]"
+                className="rounded-[16px] border border-gray-200 bg-white px-3 py-2 text-[11px]"
                 title={adapter.role}
               >
-                {adapter.name}
-                <ExternalLink size={10} />
-              </a>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <a
+                    href={adapter.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-bold text-[#0A1128] transition hover:text-[#162044]"
+                  >
+                    {adapter.name}
+                    <ExternalLink size={10} />
+                  </a>
+                  <span className={cx('rounded-[32px] border px-2 py-0.5 text-[10px] font-semibold', adapterStatusTone(adapter.status))}>
+                    {adapterStatusLabel[adapter.status] || adapter.status}
+                  </span>
+                </div>
+                <p className="mt-1 leading-5 text-gray-500">{adapter.backing || adapter.role}</p>
+              </div>
             ))}
           </div>
           <p className="mt-2 text-[11px] leading-5 text-gray-500">{report.evidence.guardrail}</p>
@@ -2262,11 +2409,18 @@ const AgentWorkspace: React.FC = () => {
       if (!payload?.success || !payload.report) throw new Error('Research stack analysis failed');
       const report = payload.report;
       setResearchStack(report);
+      const recipeHitCount = report.recipe_index?.matches?.length || 0;
+      const recipeIndexTotal = report.recipe_index?.index?.total || 0;
+      const adapterSummaryText = report.adapter_summary
+        ? `adapters active=${report.adapter_summary.active || 0}, fallback=${report.adapter_summary.fallback || 0}, missing=${report.adapter_summary.missing || 0}`
+        : 'adapters=not reported';
       updateTool(toolId, {
         status: 'success',
         details: [
           `domain=${report.domain}`,
           `feasibility=${report.feasibility.score}/100 (${report.feasibility.level})`,
+          `ceder_recipe_hits=${recipeHitCount}/${recipeIndexTotal || 0}`,
+          adapterSummaryText,
           `${report.synthesis.routes.length} synthesis route(s)`,
           `${report.experiment.first_batch.length} first-batch experiment(s)`,
         ],
@@ -2278,9 +2432,12 @@ const AgentWorkspace: React.FC = () => {
           `合成判断：${report.synthesis.summary}`,
           `可行性评分：${report.feasibility.score}/100（${report.feasibility.level}）`,
           `决策：${report.feasibility.decision}`,
+          report.recipe_index
+            ? `Ceder recipe index：${recipeHitCount ? `命中 ${recipeHitCount} 条` : '无命中'}（本地 ${recipeIndexTotal || 0} 条）`
+            : 'Ceder recipe index：未启用',
           '',
           '首选路线：',
-          ...(report.synthesis.routes.slice(0, 2).map((route, index) => `${index + 1}. ${route.title} · ${route.method} · ${route.conditions.temperature}, ${route.conditions.atmosphere}`)),
+          ...(report.synthesis.routes.slice(0, 2).map((route, index) => `${index + 1}. ${route.title} · ${route.method} · ${route.conditions.temperature}, ${route.conditions.atmosphere}${route.doi ? ` · DOI ${route.doi}` : ''}`)),
           '',
           `实验设计：${report.experiment.engine}`,
           `第一批实验：${report.experiment.first_batch.length} 组；优化目标：${report.experiment.objective}`,
@@ -2296,6 +2453,7 @@ const AgentWorkspace: React.FC = () => {
         details: [
           `domain=${report.domain}`,
           `score=${report.feasibility.score}`,
+          `ceder_recipe_hits=${recipeHitCount}`,
           `${report.synthesis.routes.length} synthesis routes`,
           `${report.experiment.first_batch.length} first-batch experiments`,
         ],

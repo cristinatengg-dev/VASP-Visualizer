@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "check": "tsc -b --noEmit"
+    "check": "tsc -b --noEmit",
+    "recipes:build-ceder-index": "node server/scripts/build-ceder-recipe-index.cjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",

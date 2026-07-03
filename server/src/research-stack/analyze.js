@@ -1,79 +1,17 @@
 'use strict';
 
-const OPEN_SOURCE_ADAPTERS = [
-  {
-    id: 'paperqa2',
-    name: 'PaperQA2',
-    project: 'Future-House/paper-qa',
-    url: 'https://github.com/Future-House/paper-qa',
-    role: '文献问答、证据链和 citation-grounded synthesis',
-    integration: 'citation_rag_adapter',
-    status: 'adapter-ready',
-  },
-  {
-    id: 'chemdataextractor2',
-    name: 'ChemDataExtractor2',
-    project: 'CambridgeMolecularEngineering/chemdataextractor2',
-    url: 'https://github.com/CambridgeMolecularEngineering/chemdataextractor2',
-    role: '从论文抽取前驱体、温度、时间、气氛、表格和谱图信息',
-    integration: 'literature_extraction_adapter',
-    status: 'adapter-ready',
-  },
-  {
-    id: 'ceder_synthesis',
-    name: 'Ceder text-mined synthesis datasets',
-    project: 'CederGroupHub/text-mined-synthesis_public',
-    url: 'https://github.com/CederGroupHub/text-mined-synthesis_public',
-    role: '无机固相合成路线和条件先验',
-    integration: 'synthesis_recipe_registry',
-    status: 'data-registry-ready',
-  },
-  {
-    id: 'ceder_solution_synthesis',
-    name: 'Ceder solution synthesis dataset',
-    project: 'CederGroupHub/text-mined-solution-synthesis_public',
-    url: 'https://github.com/CederGroupHub/text-mined-solution-synthesis_public',
-    role: '溶液法合成配方、前驱体和动作序列先验',
-    integration: 'solution_recipe_registry',
-    status: 'data-registry-ready',
-  },
-  {
-    id: 'rxn_network',
-    name: 'rxn_network',
-    project: 'materialsproject/reaction-network',
-    url: 'https://github.com/materialsproject/reaction-network',
-    role: '无机反应网络和合成路径规划',
-    integration: 'reaction_pathway_adapter',
-    status: 'adapter-ready',
-  },
-  {
-    id: 'baybe',
-    name: 'BayBE',
-    project: 'emdgroup/baybe',
-    url: 'https://github.com/emdgroup/baybe',
-    role: '实验变量空间、约束和 Bayesian optimization 下一轮推荐',
-    integration: 'doe_optimizer_adapter',
-    status: 'adapter-ready',
-  },
-  {
-    id: 'bofire',
-    name: 'BoFire',
-    project: 'experimental-design/bofire',
-    url: 'https://github.com/experimental-design/bofire',
-    role: '实验设计、多目标优化和 REST 友好的 DoE 接口',
-    integration: 'doe_optimizer_adapter',
-    status: 'adapter-ready',
-  },
-  {
-    id: 'atomate2',
-    name: 'atomate2 + pymatgen',
-    project: 'materialsproject/atomate2',
-    url: 'https://github.com/materialsproject/atomate2',
-    role: 'VASP/材料计算 workflow、结构处理和计算 provenance',
-    integration: 'compute_workflow_adapter',
-    status: 'pymatgen-active',
-  },
-];
+const { recipeIndexStatus, searchRecipes } = require('./recipe-index');
+const { ADAPTER_DEFINITIONS, adapterSummary, buildAdapterRegistry } = require('./adapter-registry');
+
+const OPEN_SOURCE_ADAPTERS = ADAPTER_DEFINITIONS.map((adapter) => ({
+  id: adapter.id,
+  name: adapter.name,
+  project: adapter.project,
+  url: adapter.url,
+  role: adapter.role,
+  integration: adapter.integration,
+  status: 'probe-required',
+}));
 
 function asText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -120,13 +58,38 @@ function detectDomain(text) {
   return 'general_materials';
 }
 
-function extractFormulaCandidates({ research, selectedIdea }) {
+const SMALL_MOLECULES = new Set([
+  'co2', 'h2', 'o2', 'n2', 'h2o', 'co', 'no', 'no2', 'nh3', 'ch4', 'ar', 'he', 'ne',
+]);
+
+const ELEMENT_SYMBOLS = new Set([
+  'H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar',
+  'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr',
+  'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn', 'Sb', 'Te', 'I', 'Xe',
+  'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb', 'Lu',
+  'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg', 'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn',
+  'Fr', 'Ra', 'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu',
+]);
+
+function extractTextFormulas(text) {
+  const matches = asText(text).match(/\b(?:[A-Z][a-z]?[0-9a-z().+-]*){2,}\b/g) || [];
+  return matches.filter((formula) => {
+    const normalized = formula.replace(/\s+/g, '').toLowerCase();
+    if (SMALL_MOLECULES.has(normalized)) return false;
+    const elements = formula.match(/[A-Z][a-z]?/g) || [];
+    if (elements.length < 2) return false;
+    return elements.every((symbol) => ELEMENT_SYMBOLS.has(symbol));
+  });
+}
+
+function extractFormulaCandidates({ research, selectedIdea, text }) {
   const structures = Array.isArray(research?.structures) ? research.structures : [];
   const candidates = [
     selectedIdea?.blueprint?.structure_source?.formula,
     selectedIdea?.material_family,
     research?.handoff?.formula,
     ...(structures.map((item) => item?.formula)),
+    ...extractTextFormulas(text),
   ];
   return unique(candidates).slice(0, 6);
 }
@@ -151,7 +114,54 @@ function bestStructureScore(structures) {
   return 38;
 }
 
-function routeForDomain(domain, formulas) {
+function routeFromRecipeMatch(match) {
+  const operationVerbs = unique((match.operations || []).map((operation) => operation.verb || operation.type)).slice(0, 5);
+  const sourceLabel = match.source || 'Ceder recipe index';
+  return {
+    id: `ceder-${match.id}`,
+    title: `${match.target_formula || match.target_name || 'Target'} · ${match.synthesis_type || 'synthesis'} recipe`,
+    method: match.synthesis_type || 'text-mined synthesis recipe',
+    target: match.target_formula || match.target_name || 'target material',
+    precursors: Array.isArray(match.precursors) && match.precursors.length ? match.precursors : ['precursors not extracted'],
+    conditions: {
+      temperature: match.conditions?.temperature || 'not extracted',
+      time: match.conditions?.time || 'not extracted',
+      atmosphere: match.conditions?.atmosphere || 'not extracted',
+    },
+    evidence: [
+      `命中 ${sourceLabel}，匹配分数 ${match.score}/100。`,
+      match.doi ? `原始论文 DOI: ${match.doi}。` : '原始论文 DOI 未抽取。',
+      match.reaction_string ? `反应式：${match.reaction_string}` : '',
+    ].filter(Boolean).join(' '),
+    risk: '该路线来自文本挖掘 recipe，能作为可追溯起点；正式实验前仍需打开原论文核对计量、设备、安全条件和段落上下文。',
+    alternatives: operationVerbs.length ? operationVerbs : ['人工核对原论文', '用 rxn_network 做反应能排序', '按实验条件做 DoE 微调'],
+    dataset_hit: true,
+    source: sourceLabel,
+    source_project: match.source_project,
+    source_url: match.source_url,
+    source_citation: match.source_citation,
+    source_dataset_doi: match.source_dataset_doi,
+    doi: match.doi,
+    doi_url: match.doi_url,
+    recipe_id: match.id,
+    match_score: match.score,
+    matched_terms: match.matched_terms || [],
+    reaction_string: match.reaction_string,
+  };
+}
+
+function routeForDomain(domain, formulas, recipeMatches = []) {
+  const datasetRoutes = (Array.isArray(recipeMatches) ? recipeMatches : [])
+    .slice(0, 3)
+    .map(routeFromRecipeMatch);
+  if (datasetRoutes.length) {
+    return {
+      summary: `Ceder 本地 recipe index 命中 ${datasetRoutes.length} 条可追溯合成记录；优先采用数据集路线，再由人工核对原始论文条件。`,
+      routes: datasetRoutes,
+      dataset_hit_count: datasetRoutes.length,
+      route_source: 'ceder_recipe_index',
+    };
+  }
   const material = formulas[0] || 'target material';
   if (domain === 'molten_salt_reactor') {
     return {
@@ -167,6 +177,8 @@ function routeForDomain(domain, formulas) {
           evidence: '适合熔盐堆结构材料、腐蚀和辐照前筛选；需要把目标从“合成单一材料”拆成材料制备 + 熔盐暴露评价。',
           risk: '高温熔盐吸湿和腐蚀性强，杂质氧/水会主导结果；安全和手套箱条件是主要瓶颈。',
           alternatives: ['先做 DFT/热力学筛选 Cr/Ni/Fe/F/Cl 反应倾向', '小规模静态坩埚实验', '后续再做流动回路或辐照耦合实验'],
+          dataset_hit: false,
+          source: 'domain heuristic',
         },
         {
           id: 'msr-thermo-screening',
@@ -178,6 +190,8 @@ function routeForDomain(domain, formulas) {
           evidence: '适合接 rxn_network/pymatgen 相图和反应能筛选，避免盲目进入高风险熔盐实验。',
           risk: '结构数据库和热力学数据缺口会导致不确定性；需要人工确认盐组分和目标腐蚀产物。',
           alternatives: ['CALPHAD/FactSage 补充', '手动给定 corrosion products', '用实验文献做校准'],
+          dataset_hit: false,
+          source: 'domain heuristic',
         },
       ],
     };
@@ -196,6 +210,8 @@ function routeForDomain(domain, formulas) {
           evidence: '符合 CO2 加氢到甲醇常见实验路线，可和 Cu/ZnO 表面吸附模型对应。',
           risk: '铜粒径、界面比例和还原程度强烈影响活性；需要 XRD/XPS/TEM/TPR 校验。',
           alternatives: ['impregnation route', 'Cu-Zn-Zr oxide', 'In2O3/ZrO2 if methanol selectivity is the target'],
+          dataset_hit: false,
+          source: 'domain heuristic',
         },
       ],
     };
@@ -214,6 +230,8 @@ function routeForDomain(domain, formulas) {
           evidence: '与 Ceder 固相合成数据集和 reaction-network 路线规划兼容。',
           risk: '挥发性碱金属和多相杂质常见；需要过量 Li/Na 源和多步煅烧优化。',
           alternatives: ['sol-gel/citrate route', 'molten-salt assisted route', 'hydrothermal precursor + calcination'],
+          dataset_hit: false,
+          source: 'domain heuristic',
         },
       ],
     };
@@ -232,6 +250,8 @@ function routeForDomain(domain, formulas) {
           evidence: '适合合金/耐蚀材料体系，能和 DFT 表面偏析、氧化/腐蚀产物计算对应。',
           risk: '成分偏析、氧含量和样品表面状态会影响可重复性。',
           alternatives: ['powder metallurgy', 'thin-film combinatorial library', 'CALPHAD pre-screening'],
+          dataset_hit: false,
+          source: 'domain heuristic',
         },
       ],
     };
@@ -249,15 +269,20 @@ function routeForDomain(domain, formulas) {
         evidence: '可作为 Ceder synthesis dataset 和 rxn_network 的默认接入形态。',
         risk: '材料类别、氧化态和挥发元素未明确，路线只能作为第一版实验草案。',
         alternatives: ['sol-gel', 'hydrothermal', 'combustion synthesis'],
+        dataset_hit: false,
+        source: 'domain heuristic',
       },
     ],
+    dataset_hit_count: 0,
+    route_source: 'domain_heuristic',
   };
 }
 
-function buildFeasibility({ research, selectedIdea, domain, synthesisPlan }) {
+function buildFeasibility({ research, selectedIdea, domain, synthesisPlan, recipeSearch }) {
   const papers = Array.isArray(research?.papers) ? research.papers : [];
   const structures = Array.isArray(research?.structures) ? research.structures : [];
   const verifiedPaperCount = countVerifiedPapers(papers);
+  const recipeHits = Array.isArray(recipeSearch?.matches) ? recipeSearch.matches.length : 0;
   const dimensions = [
     {
       id: 'literature_evidence',
@@ -286,16 +311,20 @@ function buildFeasibility({ research, selectedIdea, domain, synthesisPlan }) {
     {
       id: 'reaction_accessibility',
       label: '反应路径可达性',
-      score: clamp(domain === 'molten_salt_reactor' ? 56 : domain === 'general_materials' ? 58 : 74),
-      rationale: domain === 'molten_salt_reactor'
+      score: clamp(recipeHits ? 82 : domain === 'molten_salt_reactor' ? 56 : domain === 'general_materials' ? 58 : 74),
+      rationale: recipeHits
+        ? `本地 Ceder recipe index 命中 ${recipeHits} 条可追溯路线，可从真实 DOI 记录进入实验条件核对。`
+        : domain === 'molten_salt_reactor'
         ? '熔盐体系更像环境暴露/腐蚀评价，反应路径需要盐组分和腐蚀产物约束。'
         : `已生成 ${synthesisPlan.routes.length} 条可执行路线，可后续接 rxn_network 做反应能排序。`,
     },
     {
       id: 'precursor_availability',
       label: '前驱体可得性',
-      score: clamp(domain === 'molten_salt_reactor' ? 62 : 78),
-      rationale: domain === 'molten_salt_reactor'
+      score: clamp(recipeHits ? 80 : domain === 'molten_salt_reactor' ? 62 : 78),
+      rationale: recipeHits
+        ? '前驱体来自文本挖掘 recipe 记录；采购和纯度仍需按原论文核对。'
+        : domain === 'molten_salt_reactor'
         ? '盐和高纯结构材料可得，但水氧控制和安全条件要求高。'
         : '默认前驱体多为常见 nitrate/oxide/carbonate；采购前需按目标配方核对纯度。',
     },
@@ -422,11 +451,18 @@ function buildComputeBridge({ selectedIdea, modelStructure, domain }) {
 }
 
 function analyzeResearchStack({ prompt, research, selectedIdea, modelStructure }) {
+  const adapters = buildAdapterRegistry();
   const text = evidenceText({ prompt, research, selectedIdea });
   const domain = detectDomain(text);
-  const formulas = extractFormulaCandidates({ research, selectedIdea });
-  const synthesis = routeForDomain(domain, formulas);
-  const feasibility = buildFeasibility({ research, selectedIdea, domain, synthesisPlan: synthesis });
+  const formulas = extractFormulaCandidates({ research, selectedIdea, text });
+  const recipeSearch = searchRecipes({
+    query: text || prompt,
+    formulas,
+    domain,
+    limit: 8,
+  });
+  const synthesis = routeForDomain(domain, formulas, recipeSearch.matches);
+  const feasibility = buildFeasibility({ research, selectedIdea, domain, synthesisPlan: synthesis, recipeSearch });
   const experiment = buildExperimentPlan(domain, synthesis, formulas);
   const compute = buildComputeBridge({ selectedIdea, modelStructure, domain });
   const papers = Array.isArray(research?.papers) ? research.papers : [];
@@ -444,15 +480,27 @@ function analyzeResearchStack({ prompt, research, selectedIdea, modelStructure }
       formulas,
       guardrail: '模型、合成路线和实验矩阵必须来自文献/结构/领域规则证据；无结构证据时不自动推荐模型。',
     },
+    recipe_index: {
+      ...recipeSearch,
+      index: {
+        ...recipeSearch.index,
+        path: recipeSearch.index?.path ? 'server/data/recipe-index/ceder-recipes.jsonl.gz' : null,
+      },
+    },
     synthesis,
     feasibility,
     experiment,
     compute,
-    adapters: OPEN_SOURCE_ADAPTERS,
+    adapters,
+    adapter_summary: adapterSummary(adapters),
   };
 }
 
 module.exports = {
   OPEN_SOURCE_ADAPTERS,
+  adapterSummary,
   analyzeResearchStack,
+  buildAdapterRegistry,
+  recipeIndexStatus,
+  searchRecipes,
 };

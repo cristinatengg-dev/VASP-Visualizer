@@ -158,6 +158,7 @@ def generate(payload, out_path):
         add_bullets(slide, 0.8, 3.16, 5.65, 2.95, [
             f"Route: {clean(route.get('title'), 'No route')}",
             f"Method: {clean(route.get('method'), 'n/a')}",
+            f"Source: {clean(route.get('source'), 'heuristic')} {clean(route.get('doi'), '')}".strip(),
             f"Precursors: {clean(', '.join(route.get('precursors') or []), 'n/a')}",
             f"Conditions: {clean((route.get('conditions') or {}).get('temperature'), 'n/a')}; {clean((route.get('conditions') or {}).get('atmosphere'), 'n/a')}",
             f"Risk: {clean(route.get('risk'), 'n/a')}",

@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-07-03T09:41:24.026Z",
+  "output": "server/data/recipe-index/ceder-recipes.jsonl.gz",
+  "counts": {
+    "ceder_solid_state_20200713": 31782,
+    "ceder_sol_gel_20200713": 9518,
+    "ceder_solution_20210805": 35675
+  },
+  "total": 76975,
+  "sources": {
+    "solid": "CederGroupHub/text-mined-synthesis_public:solid-state_dataset_20200713.json.xz",
+    "solgel": "CederGroupHub/text-mined-synthesis_public:sol-gel_dataset_20200713.json.xz",
+    "solution": "CederGroupHub/text-mined-solution-synthesis_public:solution-synthesis_dataset_2021-8-5.json.zip"
+  }
+}

@@ -21,7 +21,7 @@ const { ChatMemory, ChatSession, Order } = require('./models');
 const { createRuntimeDemoRouter } = require('./src/runtime/http/create-runtime-demo-router');
 const { createRuntimeWorkerRunner } = require('./src/runtime/workers/create-runtime-worker-runner');
 const { createResearchOrchestratorHarnessRouter } = require('./src/agent-harness/research-orchestrator-router');
-const { analyzeResearchStack } = require('./src/research-stack/analyze');
+const { analyzeResearchStack, adapterSummary, buildAdapterRegistry, recipeIndexStatus, searchRecipes } = require('./src/research-stack/analyze');
 const { parseModelingIntent } = require('./src/modeling/parse-intent');
 const { buildModelingStructure } = require('./src/modeling/build-structure');
 const { buildModelingProviderAvailability, normalizeModelingProviderPreferences } = require('./src/modeling/provider-registry');
@@ -2213,6 +2213,49 @@ app.post('/api/agent/research-stack/analyze', requireAgentAccess('retrieval'), a
         });
     } catch (err) {
         console.error('[agent/research-stack/analyze]', err.message);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/agent/research-stack/adapters', requireAgentAccess('retrieval'), async (_req, res) => {
+    try {
+        const adapters = buildAdapterRegistry();
+        return res.json({
+            success: true,
+            ok: true,
+            adapters,
+            summary: adapterSummary(adapters),
+            recipe_index: recipeIndexStatus(),
+        });
+    } catch (err) {
+        console.error('[agent/research-stack/adapters]', err.message);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── Route: POST /api/agent/recipes/search ───────────────────────────────────
+// Local Ceder recipe index search. Returns only dataset-backed synthesis records.
+app.post('/api/agent/recipes/search', requireAgentAccess('retrieval'), async (req, res) => {
+    try {
+        await recordAgentUsage(req.body?.userId, 'retrieval');
+        const result = searchRecipes({
+            query: req.body?.query || req.body?.prompt || '',
+            formulas: Array.isArray(req.body?.formulas) ? req.body.formulas : [],
+            domain: req.body?.domain || 'general_materials',
+            limit: req.body?.limit || 8,
+        });
+        return res.json({ success: true, ok: true, ...result });
+    } catch (err) {
+        console.error('[agent/recipes/search]', err.message);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/agent/recipes/status', requireAgentAccess('retrieval'), async (_req, res) => {
+    try {
+        return res.json({ success: true, ok: true, index: recipeIndexStatus() });
+    } catch (err) {
+        console.error('[agent/recipes/status]', err.message);
         return res.status(500).json({ success: false, error: err.message });
     }
 });
