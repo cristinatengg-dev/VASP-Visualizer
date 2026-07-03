@@ -267,6 +267,85 @@ interface CompleteData {
   } | null;
 }
 
+interface SynthesisRoute {
+  id: string;
+  title: string;
+  method: string;
+  target: string;
+  precursors: string[];
+  conditions: {
+    temperature: string;
+    time: string;
+    atmosphere: string;
+  };
+  evidence: string;
+  risk: string;
+  alternatives: string[];
+}
+
+interface FeasibilityDimension {
+  id: string;
+  label: string;
+  score: number;
+  rationale: string;
+}
+
+interface ExperimentVariable {
+  name: string;
+  type: string;
+  range: Array<string | number> | [number, number];
+}
+
+interface ResearchStackReport {
+  version: string;
+  generated_at: string;
+  question: string;
+  domain: string;
+  evidence: {
+    verified_paper_count: number;
+    paper_count: number;
+    structure_count: number;
+    formulas: string[];
+    guardrail: string;
+  };
+  synthesis: {
+    summary: string;
+    routes: SynthesisRoute[];
+  };
+  feasibility: {
+    score: number;
+    level: 'high' | 'medium' | 'low';
+    decision: string;
+    dimensions: FeasibilityDimension[];
+    blockers: string[];
+    next_actions: string[];
+  };
+  experiment: {
+    engine: string;
+    objective: string;
+    variables: ExperimentVariable[];
+    constraints: string[];
+    first_batch: Array<Record<string, string | number>>;
+    next_round_policy: string;
+    stop_conditions: string[];
+  };
+  compute: {
+    engine: string;
+    structure_status: string;
+    recommended_workflows: string[];
+    handoff: string | null;
+  };
+  adapters: Array<{
+    id: string;
+    name: string;
+    project: string;
+    url: string;
+    role: string;
+    integration: string;
+    status: string;
+  }>;
+}
+
 interface AgentWorkflowSnapshot {
   version: 1;
   savedAt: number;
@@ -274,6 +353,7 @@ interface AgentWorkflowSnapshot {
   messages: ChatMessage[];
   toolEvents: ToolEvent[];
   research: CompleteData | null;
+  researchStack: ResearchStackReport | null;
   selectedIdeaId: string | null;
   modelIntent: Record<string, any> | null;
   modelStructure: MolecularStructure | null;
@@ -347,6 +427,36 @@ const agents: WorkspaceAgent[] = [
     icon: Database,
     tools: ['MP', 'OQMD', 'AFLOW', 'JARVIS', 'Alexandria', 'NOMAD', 'MC3D', 'OMDB'],
     output: '统一呈现实时结构源和大规模训练/评测数据集。',
+  },
+  {
+    id: 'synthesis',
+    name: '合成路线',
+    subtitle: '路线与前驱体',
+    status: 'ready',
+    accent: 'bg-gray-200 text-gray-400',
+    icon: FlaskConical,
+    tools: ['ChemDataExtractor2', 'Ceder data', 'rxn_network'],
+    output: '从文献和合成数据先验评估路线、条件、风险和替代方案。',
+  },
+  {
+    id: 'feasibility',
+    name: '可行性评分',
+    subtitle: '七项证据评分',
+    status: 'ready',
+    accent: 'bg-gray-200 text-gray-400',
+    icon: Gauge,
+    tools: ['evidence', 'stability', 'precursor', 'risk'],
+    output: '用文献证据、结构命中、相稳定性和实验复杂度给候选材料打分。',
+  },
+  {
+    id: 'experiment',
+    name: '实验方案',
+    subtitle: 'DoE 与下一轮',
+    status: 'ready',
+    accent: 'bg-gray-200 text-gray-400',
+    icon: Activity,
+    tools: ['BayBE', 'BoFire', 'constraints'],
+    output: '生成变量范围、约束、第一批实验矩阵和下一轮优化策略。',
   },
   {
     id: 'modeling',
@@ -555,6 +665,7 @@ const createEmptyWorkflowSnapshot = (): AgentWorkflowSnapshot => ({
   messages: createWelcomeMessages(),
   toolEvents: [],
   research: null,
+  researchStack: null,
   selectedIdeaId: null,
   modelIntent: null,
   modelStructure: null,
@@ -603,6 +714,9 @@ const taskSearchText = (task: AgentTaskRecord) => [
   task.snapshot.phase,
   task.snapshot.research?.summary,
   task.snapshot.research?.user_goal?.interpreted_goal,
+  task.snapshot.researchStack?.synthesis?.summary,
+  task.snapshot.researchStack?.feasibility?.decision,
+  task.snapshot.researchStack?.experiment?.objective,
   task.snapshot.modelStructure?.filename,
   task.snapshot.messages.map((message) => `${message.title || ''} ${message.content}`).join(' '),
   task.snapshot.toolEvents.map((event) => `${event.name} ${event.summary} ${event.details.join(' ')}`).join(' '),
@@ -929,6 +1043,158 @@ const StructurePreview: React.FC<{ structure: MolecularStructure; onOpenModeling
   );
 };
 
+const formatExperimentValue = (value: string | number) => (
+  typeof value === 'number' ? Number(value.toFixed ? value.toFixed(3) : value).toString() : value
+);
+
+const scoreTone = (score: number) => {
+  if (score >= 75) return 'bg-[#0A1128]';
+  if (score >= 58) return 'bg-gray-500';
+  return 'bg-gray-300';
+};
+
+const levelLabel: Record<ResearchStackReport['feasibility']['level'], string> = {
+  high: '高',
+  medium: '中',
+  low: '低',
+};
+
+const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report }) => {
+  const firstRoute = report.synthesis.routes[0];
+  const experimentColumns = Object.keys(report.experiment.first_batch[0] || {}).slice(0, 7);
+
+  return (
+    <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-bold text-[#0A1128]">材料学家分析</p>
+          <p className="mt-1 text-xs leading-5 text-gray-500">
+            文献证据、合成路线、可行性评分和实验矩阵已经串入同一个工作流。
+          </p>
+        </div>
+        <div className="rounded-[16px] border border-gray-200 bg-[#F5F5F0] px-3 py-2 text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">Feasibility</p>
+          <p className="text-sm font-bold text-[#0A1128]">{report.feasibility.score}/100 · {levelLabel[report.feasibility.level]}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-[16px] border border-gray-200 bg-gray-50 p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <FlaskConical size={15} className="text-gray-500" />
+            <p className="text-xs font-bold text-[#0A1128]">合成路线</p>
+          </div>
+          <p className="text-xs leading-5 text-gray-600">{report.synthesis.summary}</p>
+          {firstRoute && (
+            <div className="mt-3 rounded-[14px] border border-gray-200 bg-white p-3">
+              <p className="text-xs font-bold text-[#0A1128]">{firstRoute.title}</p>
+              <p className="mt-1 text-[11px] text-gray-500">{firstRoute.method}</p>
+              <div className="mt-2 grid gap-2 text-[11px] text-gray-600 md:grid-cols-3">
+                <div>
+                  <span className="font-semibold text-gray-800">前驱体</span>
+                  <p className="mt-1 leading-5">{firstRoute.precursors.join('、')}</p>
+                </div>
+                <div>
+                  <span className="font-semibold text-gray-800">条件</span>
+                  <p className="mt-1 leading-5">{firstRoute.conditions.temperature}；{firstRoute.conditions.time}；{firstRoute.conditions.atmosphere}</p>
+                </div>
+                <div>
+                  <span className="font-semibold text-gray-800">风险</span>
+                  <p className="mt-1 leading-5">{firstRoute.risk}</p>
+                </div>
+              </div>
+              {firstRoute.alternatives.length > 0 && (
+                <p className="mt-2 text-[11px] leading-5 text-gray-500">替代路线：{firstRoute.alternatives.join('、')}</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-[16px] border border-gray-200 bg-gray-50 p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <Gauge size={15} className="text-gray-500" />
+            <p className="text-xs font-bold text-[#0A1128]">可行性评分</p>
+          </div>
+          <p className="text-xs leading-5 text-gray-600">{report.feasibility.decision}</p>
+          <div className="mt-3 space-y-2">
+            {report.feasibility.dimensions.map((item) => (
+              <div key={item.id}>
+                <div className="mb-1 flex items-center justify-between gap-2 text-[11px]">
+                  <span className="font-semibold text-gray-700">{item.label}</span>
+                  <span className="font-mono text-gray-400">{item.score}</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-gray-200">
+                  <div className={cx('h-full rounded-full', scoreTone(item.score))} style={{ width: `${Math.max(8, Math.min(100, item.score))}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-[16px] border border-gray-200 bg-gray-50 p-3">
+        <div className="mb-2 flex items-center gap-2">
+          <Activity size={15} className="text-gray-500" />
+          <p className="text-xs font-bold text-[#0A1128]">第一轮实验矩阵</p>
+          <span className="rounded-[32px] border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500">{report.experiment.engine}</span>
+        </div>
+        <p className="mb-3 text-xs leading-5 text-gray-600">{report.experiment.objective}</p>
+        <div className="overflow-x-auto rounded-[14px] border border-gray-200 bg-white custom-scrollbar">
+          <table className="min-w-full text-left text-[11px]">
+            <thead className="bg-[#F5F5F0] text-gray-500">
+              <tr>
+                {experimentColumns.map((key) => (
+                  <th key={key} className="whitespace-nowrap px-3 py-2 font-semibold">{key}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {report.experiment.first_batch.map((row, index) => (
+                <tr key={`exp-${index}`} className="border-t border-gray-100">
+                  {experimentColumns.map((key) => (
+                    <td key={key} className="whitespace-nowrap px-3 py-2 text-gray-700">{formatExperimentValue(row[key] ?? '')}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-[11px] leading-5 text-gray-500">下一轮策略：{report.experiment.next_round_policy}</p>
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="rounded-[16px] border border-gray-200 bg-gray-50 p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <Cpu size={15} className="text-gray-500" />
+            <p className="text-xs font-bold text-[#0A1128]">计算桥接</p>
+          </div>
+          <p className="text-xs leading-5 text-gray-600">{report.compute.structure_status}</p>
+          <p className="mt-2 text-[11px] leading-5 text-gray-500">建议 workflow：{report.compute.recommended_workflows.join('、')}</p>
+        </div>
+        <div className="rounded-[16px] border border-gray-200 bg-gray-50 p-3">
+          <p className="text-xs font-bold text-[#0A1128]">开源能力接入</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {report.adapters.slice(0, 8).map((adapter) => (
+              <a
+                key={adapter.id}
+                href={adapter.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 rounded-[32px] border border-gray-200 bg-white px-2 py-1 text-[10px] font-semibold text-gray-600 transition hover:border-gray-300 hover:text-[#0A1128]"
+                title={adapter.role}
+              >
+                {adapter.name}
+                <ExternalLink size={10} />
+              </a>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] leading-5 text-gray-500">{report.evidence.guardrail}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const normalizeFormulaToken = (value: string | null | undefined) => String(value || '').replace(/[^A-Za-z0-9]/g, '').toLowerCase();
 
 const recommendationEvidenceText = (prompt: string, data: CompleteData) => [
@@ -1029,6 +1295,7 @@ const AgentWorkspace: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>(() => createWelcomeMessages());
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([]);
   const [research, setResearch] = useState<CompleteData | null>(null);
+  const [researchStack, setResearchStack] = useState<ResearchStackReport | null>(null);
   const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
   const [modelIntent, setModelIntent] = useState<Record<string, any> | null>(null);
   const [modelStructure, setModelStructure] = useState<MolecularStructure | null>(null);
@@ -1151,6 +1418,7 @@ const AgentWorkspace: React.FC = () => {
     setMessages(snapshot.messages?.length ? snapshot.messages : createWelcomeMessages());
     setToolEvents(normalizeSnapshotToolEvents(snapshot.toolEvents || [], snapshot.phase || 'idle'));
     setResearch(snapshot.research || null);
+    setResearchStack(snapshot.researchStack || null);
     setSelectedIdeaId(snapshot.selectedIdeaId || null);
     setModelIntent(snapshot.modelIntent || null);
     const structure = cloneWorkflowStructure(snapshot.modelStructure);
@@ -1186,6 +1454,7 @@ const AgentWorkspace: React.FC = () => {
       messages,
       toolEvents,
       research,
+      researchStack,
       selectedIdeaId,
       modelIntent,
       modelStructure: cloneWorkflowStructure(nextStructure),
@@ -1223,6 +1492,7 @@ const AgentWorkspace: React.FC = () => {
     pptUrl,
     profiles,
     research,
+    researchStack,
     selectedIdeaId,
     selectedInputFileName,
     selectedProfileId,
@@ -1965,6 +2235,91 @@ const AgentWorkspace: React.FC = () => {
     }
   }, [activeSourceFormula, addMessage, addTool, getAuthHeaders, sourceRegistryById, updateTool]);
 
+  const runResearchStackAnalysis = useCallback(async (
+    prompt: string,
+    data: CompleteData,
+    recommendedIdea: IdeaCard | null,
+  ) => {
+    const toolId = addTool({
+      name: 'research-stack.analyze',
+      agent: 'Synthesis + Feasibility + Experiment',
+      status: 'running',
+      summary: '评估合成路线、材料可行性和第一轮实验矩阵',
+      details: [
+        `${getVerifiedPapers(data.papers || []).length} verified papers`,
+        `${data.structures?.length || 0} structures`,
+        recommendedIdea ? `model=${recommendedIdea.title}` : 'model=manual required',
+      ],
+    });
+
+    try {
+      const payload = await postJson<{ success: boolean; report: ResearchStackReport }>('/agent/research-stack/analyze', {
+        prompt,
+        research: data,
+        selectedIdea: recommendedIdea,
+        modelStructure,
+      }, { timeoutMs: 20000 });
+      if (!payload?.success || !payload.report) throw new Error('Research stack analysis failed');
+      const report = payload.report;
+      setResearchStack(report);
+      updateTool(toolId, {
+        status: 'success',
+        details: [
+          `domain=${report.domain}`,
+          `feasibility=${report.feasibility.score}/100 (${report.feasibility.level})`,
+          `${report.synthesis.routes.length} synthesis route(s)`,
+          `${report.experiment.first_batch.length} first-batch experiment(s)`,
+        ],
+      });
+      addMessage({
+        role: 'assistant',
+        title: '合成可行性与实验方案',
+        content: [
+          `合成判断：${report.synthesis.summary}`,
+          `可行性评分：${report.feasibility.score}/100（${report.feasibility.level}）`,
+          `决策：${report.feasibility.decision}`,
+          '',
+          '首选路线：',
+          ...(report.synthesis.routes.slice(0, 2).map((route, index) => `${index + 1}. ${route.title} · ${route.method} · ${route.conditions.temperature}, ${route.conditions.atmosphere}`)),
+          '',
+          `实验设计：${report.experiment.engine}`,
+          `第一批实验：${report.experiment.first_batch.length} 组；优化目标：${report.experiment.objective}`,
+          report.feasibility.blockers.length ? `需要注意：${report.feasibility.blockers.slice(0, 2).join('；')}` : '当前没有低分阻塞项；仍需人工确认实验安全和材料来源。',
+        ].join('\n'),
+      });
+      void recordHarnessCheckpoint({
+        phase: 'retrieving',
+        status: 'success',
+        agent: 'Synthesis + Feasibility + Experiment',
+        toolName: 'research_stack.analyze',
+        summary: 'Synthesis feasibility and experiment plan generated',
+        details: [
+          `domain=${report.domain}`,
+          `score=${report.feasibility.score}`,
+          `${report.synthesis.routes.length} synthesis routes`,
+          `${report.experiment.first_batch.length} first-batch experiments`,
+        ],
+        artifact: {
+          kind: 'materials_research_stack',
+          summary: `Materials research stack for ${prompt}`,
+          producedBySkill: 'analyze_synthesis_feasibility',
+          payload: report as unknown as Record<string, any>,
+        },
+      });
+      return report;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updateTool(toolId, { status: 'error', details: [message] });
+      addMessage({
+        role: 'assistant',
+        title: '合成可行性分析未完成',
+        content: `文献和建模流程仍可继续；合成/实验设计这一步失败：${message}`,
+        status: 'error',
+      });
+      return null;
+    }
+  }, [addMessage, addTool, modelStructure, postJson, recordHarnessCheckpoint, updateTool]);
+
   const runRetrieval = useCallback(async (prompt: string) => {
     setPhase('retrieving');
     harnessSessionIdRef.current = null;
@@ -1978,6 +2333,7 @@ const AgentWorkspace: React.FC = () => {
     setComputeResult(null);
     setPptUrl(null);
     setPptQa(null);
+    setResearchStack(null);
 
     const sessionId = await startHarnessSession(prompt);
     if (sessionId) {
@@ -2094,6 +2450,7 @@ const AgentWorkspace: React.FC = () => {
                 payload: data as unknown as Record<string, any>,
               },
             });
+            await runResearchStackAnalysis(prompt, data, recommendedIdea);
             setPhase('await_model');
           }
         }
@@ -2108,7 +2465,7 @@ const AgentWorkspace: React.FC = () => {
       });
       setPhase('error');
     }
-  }, [addMessage, addTool, getAuthHeaders, recordHarnessCheckpoint, startHarnessSession, updateTool, withUserPayload]);
+  }, [addMessage, addTool, getAuthHeaders, recordHarnessCheckpoint, runResearchStackAnalysis, startHarnessSession, updateTool, withUserPayload]);
 
   const buildModel = useCallback(async (customPrompt?: string) => {
     const prompt = customPrompt?.trim()
@@ -2601,6 +2958,7 @@ const AgentWorkspace: React.FC = () => {
       const payload = await postJson<any>('/agent/presentation/nature-ppt', {
         prompt: messages.find((message) => message.role === 'user')?.content || '',
         research,
+        researchStack,
         selectedIdea,
         modelIntent,
         modelStructure: modelStructure ? {
@@ -2655,7 +3013,7 @@ const AgentWorkspace: React.FC = () => {
       addMessage({ role: 'assistant', title: 'PPT 生成失败', content: error instanceof Error ? error.message : String(error), status: 'error' });
       setPhase('error');
     }
-  }, [addMessage, addTool, compiledInputs, computeIntent, computeResult, jobStatus, messages, modelIntent, modelStructure, postJson, recordHarnessCheckpoint, research, selectedIdea, updateTool]);
+  }, [addMessage, addTool, compiledInputs, computeIntent, computeResult, jobStatus, messages, modelIntent, modelStructure, postJson, recordHarnessCheckpoint, research, researchStack, selectedIdea, updateTool]);
 
   const resetTask = createNewTask;
 
@@ -3235,6 +3593,7 @@ const AgentWorkspace: React.FC = () => {
                         <p className="text-sm font-bold">流程进度：{phaseLabel[phase]}</p>
                         <p className="mt-1 text-xs text-gray-500">
                           {research ? `${getVerifiedPapers(research.papers || []).length} 篇可核验文献 · ${research.idea_cards?.length || 0} 个模型建议` : '等待新的科研任务'}
+                          {researchStack ? ` · 可行性 ${researchStack.feasibility.score}/100 · ${researchStack.experiment.first_batch.length} 组实验` : ''}
                           {modelStructure ? ` · ${modelStructure.atoms.length} 个原子` : ''}
                           {compiledInputs ? ` · ${compiledFileNames.length} 个输入文件` : ''}
                           {jobStatus ? ` · 作业 ${jobStatus.status}` : ''}
@@ -3308,6 +3667,10 @@ const AgentWorkspace: React.FC = () => {
                         <p className="text-xs leading-5 text-gray-500">本轮没有返回带 DOI 或可打开来源链接的文献，因此不会把检索结果当作论文证据。</p>
                       )}
                     </div>
+                  )}
+
+                  {researchStack && (
+                    <ResearchStackPanel report={researchStack} />
                   )}
 
                   {modelStructure && (

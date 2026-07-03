@@ -11,6 +11,10 @@ const {
 
 const allowedArtifactKinds = new Set([
   'research_bundle',
+  'synthesis_plan',
+  'feasibility_report',
+  'experiment_plan',
+  'materials_research_stack',
   'modeling_intent',
   'orchestration_checkpoint',
   'structure',
@@ -57,6 +61,8 @@ function buildResearchPlanPreview(prompt) {
     harness: 'research-orchestrator.v1',
     steps: [
       { id: 'retrieve', skillId: 'retrieve_literature_and_structures', agentId: 'retrieval' },
+      { id: 'synthesis-feasibility', skillId: 'analyze_synthesis_feasibility', agentId: 'synthesis' },
+      { id: 'experiment-plan', skillId: 'design_experiment_matrix', agentId: 'experiment' },
       { id: 'choose-model', skillId: 'record_agent_checkpoint', agentId: 'orchestrator' },
       { id: 'build-model', skillId: 'modeling_build_structure', agentId: 'modeling' },
       { id: 'choose-software', skillId: 'record_agent_checkpoint', agentId: 'orchestrator' },
@@ -74,6 +80,24 @@ function buildArtifactPreview(kind, payload, explicitPreview = {}) {
     preview.paperCount = Array.isArray(payload?.papers) ? payload.papers.length : 0;
     preview.ideaCount = Array.isArray(payload?.idea_cards) ? payload.idea_cards.length : 0;
     preview.recommendedIdeaId = payload?.recommended_idea_id || null;
+  }
+  if (kind === 'materials_research_stack') {
+    preview.feasibilityScore = payload?.feasibility?.score ?? null;
+    preview.feasibilityLevel = payload?.feasibility?.level ?? null;
+    preview.synthesisRouteCount = Array.isArray(payload?.synthesis?.routes) ? payload.synthesis.routes.length : 0;
+    preview.experimentRunCount = Array.isArray(payload?.experiment?.first_batch) ? payload.experiment.first_batch.length : 0;
+  }
+  if (kind === 'synthesis_plan') {
+    preview.routeCount = Array.isArray(payload?.routes) ? payload.routes.length : 0;
+    preview.summary = payload?.summary || null;
+  }
+  if (kind === 'feasibility_report') {
+    preview.score = payload?.score ?? null;
+    preview.level = payload?.level ?? null;
+  }
+  if (kind === 'experiment_plan') {
+    preview.runCount = Array.isArray(payload?.first_batch) ? payload.first_batch.length : 0;
+    preview.engine = payload?.engine || null;
   }
   if (kind === 'modeling_intent') {
     preview.taskType = payload?.task_type || payload?.intent?.task_type || null;

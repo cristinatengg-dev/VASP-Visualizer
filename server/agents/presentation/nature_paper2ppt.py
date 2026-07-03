@@ -93,6 +93,7 @@ def generate(payload, out_path):
 
     prompt = clean(payload.get("prompt"), "科研计算工作流")
     research = payload.get("research") or {}
+    research_stack = payload.get("researchStack") or {}
     papers = research.get("papers") or []
     idea = payload.get("selectedIdea") or {}
     blueprint = idea.get("blueprint") or {}
@@ -111,6 +112,9 @@ def generate(payload, out_path):
     add_metric(slide, 3.35, 3.0, "Model atoms", str(model.get("atomCount") or 0), BLUE)
     add_metric(slide, 6.0, 3.0, "Input files", str(len(compiled_files)), RGBColor(217, 119, 6))
     add_metric(slide, 8.65, 3.0, "Job", clean(job_status.get("status"), "-"), RGBColor(190, 18, 60))
+    if research_stack.get("feasibility"):
+        add_textbox(slide, 11.25, 3.12, 1.2, 0.18, "Feas.", size=8, bold=True, color=GRAY)
+        add_textbox(slide, 11.25, 3.42, 1.2, 0.3, str(research_stack.get("feasibility", {}).get("score", "-")), size=15, bold=True, color=NAVY)
     add_textbox(slide, 0.7, 6.65, 6.5, 0.3, f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')}", size=9, color=GRAY)
     add_textbox(slide, 8.8, 6.55, 3.9, 0.35, "Evidence-backed PPT workflow", size=9, color=GRAY, align=PP_ALIGN.RIGHT)
 
@@ -136,7 +140,35 @@ def generate(payload, out_path):
     else:
         add_bullets(slide, 0.75, 1.55, 11.8, 5.3, ["No paper evidence was available in the current run."], size=13)
 
-    # 4 Model recommendation
+    # 4 Synthesis feasibility and experiment design
+    if research_stack:
+        synthesis = research_stack.get("synthesis") or {}
+        feasibility = research_stack.get("feasibility") or {}
+        experiment = research_stack.get("experiment") or {}
+        routes = synthesis.get("routes") or []
+        route = routes[0] if routes else {}
+        first_batch = experiment.get("first_batch") or []
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        add_title(slide, "Synthesis Feasibility", "Routes, feasibility score, and first-batch experiment design")
+        add_metric(slide, 0.75, 1.55, "Score", str(feasibility.get("score", "-")), GREEN)
+        add_metric(slide, 3.4, 1.55, "Level", clean(feasibility.get("level"), "-"), BLUE)
+        add_metric(slide, 6.05, 1.55, "Routes", str(len(routes)), RGBColor(217, 119, 6))
+        add_metric(slide, 8.7, 1.55, "Experiments", str(len(first_batch)), RGBColor(190, 18, 60))
+        add_textbox(slide, 0.8, 2.78, 5.55, 0.28, "Synthesis route", size=13, bold=True, color=NAVY)
+        add_bullets(slide, 0.8, 3.16, 5.65, 2.95, [
+            f"Route: {clean(route.get('title'), 'No route')}",
+            f"Method: {clean(route.get('method'), 'n/a')}",
+            f"Precursors: {clean(', '.join(route.get('precursors') or []), 'n/a')}",
+            f"Conditions: {clean((route.get('conditions') or {}).get('temperature'), 'n/a')}; {clean((route.get('conditions') or {}).get('atmosphere'), 'n/a')}",
+            f"Risk: {clean(route.get('risk'), 'n/a')}",
+        ], size=10)
+        add_textbox(slide, 7.05, 2.78, 5.4, 0.28, "Experiment design", size=13, bold=True, color=BLUE)
+        experiment_lines = []
+        for row in first_items(first_batch, 5):
+            experiment_lines.append(", ".join([f"{k}={v}" for k, v in list(row.items())[:5]]))
+        add_bullets(slide, 7.05, 3.16, 5.35, 2.95, experiment_lines or ["No experiment matrix recorded"], size=10)
+
+    # 5 Model recommendation
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     add_title(slide, "Model Recommendation", "Recommended starter structure and why it was selected")
     add_textbox(slide, 0.75, 1.55, 5.3, 0.4, clean(idea.get("title"), "Recommended model"), size=20, bold=True, color=NAVY)

@@ -21,6 +21,7 @@ const { ChatMemory, ChatSession, Order } = require('./models');
 const { createRuntimeDemoRouter } = require('./src/runtime/http/create-runtime-demo-router');
 const { createRuntimeWorkerRunner } = require('./src/runtime/workers/create-runtime-worker-runner');
 const { createResearchOrchestratorHarnessRouter } = require('./src/agent-harness/research-orchestrator-router');
+const { analyzeResearchStack } = require('./src/research-stack/analyze');
 const { parseModelingIntent } = require('./src/modeling/parse-intent');
 const { buildModelingStructure } = require('./src/modeling/build-structure');
 const { buildModelingProviderAvailability, normalizeModelingProviderPreferences } = require('./src/modeling/provider-registry');
@@ -2187,6 +2188,32 @@ app.post('/api/agent/retrieve', requireAgentAccess('retrieval'), async (req, res
         if (!res.writableEnded) {
             res.end();
         }
+    }
+});
+
+// ── Route: POST /api/agent/research-stack/analyze ────────────────────────────
+// Phase 2: Human-like synthesis feasibility, experiment planning, and compute bridge.
+app.post('/api/agent/research-stack/analyze', requireAgentAccess('retrieval'), async (req, res) => {
+    try {
+        const prompt = String(req.body?.prompt || req.body?.research?.user_goal?.interpreted_goal || '').trim();
+        if (!prompt && !req.body?.research) {
+            return res.status(400).json({ success: false, error: 'prompt or research bundle is required' });
+        }
+        await recordAgentUsage(req.body?.userId, 'retrieval');
+        const report = analyzeResearchStack({
+            prompt,
+            research: req.body?.research || null,
+            selectedIdea: req.body?.selectedIdea || null,
+            modelStructure: req.body?.modelStructure || null,
+        });
+        return res.json({
+            success: true,
+            ok: true,
+            report,
+        });
+    } catch (err) {
+        console.error('[agent/research-stack/analyze]', err.message);
+        return res.status(500).json({ success: false, error: err.message });
     }
 });
 
