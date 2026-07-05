@@ -166,8 +166,28 @@ interface StructureCandidate {
   theoretical: boolean | null;
   selection_reason: string;
   source?: string;
+  source_id?: string;
+  source_url?: string;
+  queried_formula?: string;
+  query_reason?: string;
+  query_family?: string | null;
   formation_energy?: string | null;
   band_gap?: string | null;
+  nsites?: number | null;
+}
+
+interface StructureQueryItem {
+  formula: string;
+  reason: string;
+  family_id?: string | null;
+  family_label?: string | null;
+}
+
+interface StructureQueryPlan {
+  formulas: string[];
+  searched_formulas?: string[];
+  sources: StructureQueryItem[];
+  families?: Array<{ id: string; label: string; seed_formulas: string[] }>;
 }
 
 interface StructureSourceEntry {
@@ -250,6 +270,7 @@ interface CompleteData {
   recommended_idea_id: string | null;
   papers: Paper[];
   structures: StructureCandidate[];
+  structure_query_plan?: StructureQueryPlan | null;
   handoff: {
     idea_id?: string;
     idea_title?: string;
@@ -1344,10 +1365,45 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
 
 const normalizeFormulaToken = (value: string | null | undefined) => String(value || '').replace(/[^A-Za-z0-9]/g, '').toLowerCase();
 
+const structureQueryReasonLabel = (reason: string | null | undefined) => ({
+  alias: '别名解析',
+  user_formula: '用户指定',
+  intent_formula: '意图识别',
+  literature_formula: '文献抽取',
+  material_family_seed: '材料族检索',
+  domain_fallback: '领域回退',
+}[String(reason || '')] || '结构检索');
+
+const isFormulaInStructurePlan = (data: CompleteData, formula: string | null | undefined) => {
+  const token = normalizeFormulaToken(formula);
+  if (!token) return false;
+  const formulas = [
+    ...(data.structure_query_plan?.formulas || []),
+    ...(data.structure_query_plan?.searched_formulas || []),
+    ...(data.structure_query_plan?.sources || []).map((item) => item.formula),
+  ];
+  return formulas.some((item) => normalizeFormulaToken(item) === token);
+};
+
+const topStructureLines = (structures: StructureCandidate[] = [], limit = 6) => (
+  structures.slice(0, limit).map((structure, index) => {
+    const source = structure.source || structure.source_id || 'Structure DB';
+    const energy = structure.energy_above_hull && structure.energy_above_hull !== 'N/A'
+      ? `E_hull=${structure.energy_above_hull}`
+      : (structure.formation_energy ? `ΔHf=${structure.formation_energy}` : 'energy=N/A');
+    const query = structure.queried_formula
+      ? `；查询 ${structure.queried_formula}（${structureQueryReasonLabel(structure.query_reason)}）`
+      : '';
+    return `${index + 1}. ${structure.formula} · ${structure.material_id || 'no id'} · ${source} · ${structure.space_group || structure.crystal_system || 'structure'} · ${energy}${query}`;
+  })
+);
+
 const recommendationEvidenceText = (prompt: string, data: CompleteData) => [
   prompt,
   data.user_goal?.interpreted_goal,
   data.user_goal?.depth,
+  ...(data.structure_query_plan?.formulas || []),
+  ...(data.structure_query_plan?.searched_formulas || []),
   ...(data.papers || []).flatMap((paper) => [paper.title, paper.abstract]),
 ].filter(Boolean).join(' ');
 
@@ -1365,8 +1421,9 @@ const findEvidenceBackedStructure = (prompt: string, data: CompleteData, idea: I
   return data.structures.find((structure) => {
     const sameFormula = formula && normalizeFormulaToken(structure.formula) === normalizeFormulaToken(formula);
     const sameMaterialId = materialId && String(structure.material_id || '').toLowerCase() === String(materialId).toLowerCase();
+    const queryBacked = isFormulaInStructurePlan(data, structure.formula) || isFormulaInStructurePlan(data, structure.queried_formula);
     const mentioned = evidenceMentionsFormula(evidenceText, structure.formula) || evidenceMentionsFormula(evidenceText, structure.material_id);
-    return (sameFormula || sameMaterialId) && mentioned;
+    return (sameFormula || sameMaterialId) && (mentioned || queryBacked);
   }) || null;
 };
 
@@ -2582,6 +2639,12 @@ const AgentWorkspace: React.FC = () => {
                 '可核验文献：',
                 ...(topPaperLines(data.papers || [], 6).length ? topPaperLines(data.papers || [], 6) : ['没有返回带 DOI 或来源链接的文献。本轮不会把不可追溯条目当作证据。']),
                 '',
+                '候选结构（真实数据库）：',
+                ...(topStructureLines(data.structures || [], 6).length ? topStructureLines(data.structures || [], 6) : ['没有从已连接结构数据库返回候选结构。本轮不会强行推荐模型。']),
+                data.structure_query_plan?.sources?.length
+                  ? `结构查询：${data.structure_query_plan.sources.slice(0, 6).map((item) => `${item.formula}（${structureQueryReasonLabel(item.reason)}）`).join('、')}`
+                  : '结构查询：暂无可查公式，等待你在 Modeling Agent 中指定材料或晶面。',
+                '',
                 recommendedIdea ? `推荐模型：${recommendedIdea.title}` : '推荐模型：暂无推荐',
                 recommendedIdea ? `推荐原因：${recommendedIdea.fit_reason}` : `原因：${noRecommendationReason}`,
                 '',
@@ -3357,6 +3420,7 @@ const AgentWorkspace: React.FC = () => {
     if (phase === 'await_model' && research) {
       const recommendedIdea = getRecommendedIdea(research);
       if (!recommendedIdea) {
+        const candidateSummary = topStructureLines(research.structures || [], 3).join('；');
         return (
           <div className="border-t border-gray-200 bg-white px-4 py-3">
             <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
@@ -3370,6 +3434,11 @@ const AgentWorkspace: React.FC = () => {
               <span className="text-xs text-gray-400">
                 无可用推荐：{research.no_model_recommendation?.reason || '没有和检索文献匹配的结构。'}
               </span>
+              {candidateSummary && (
+                <span className="max-w-3xl truncate text-xs text-gray-500" title={candidateSummary}>
+                  已查到候选：{candidateSummary}
+                </span>
+              )}
             </div>
           </div>
         );
@@ -3823,6 +3892,55 @@ const AgentWorkspace: React.FC = () => {
                         </div>
                       ) : (
                         <p className="text-xs leading-5 text-gray-500">本轮没有返回带 DOI 或可打开来源链接的文献，因此不会把检索结果当作论文证据。</p>
+                      )}
+                    </div>
+                  )}
+
+                  {research && (
+                    <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
+                      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Database size={16} className="text-gray-500" />
+                          <div>
+                            <p className="text-sm font-bold text-[#0A1128]">候选结构</p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              {research.structure_query_plan?.sources?.length
+                                ? research.structure_query_plan.sources.slice(0, 5).map((item) => `${item.formula}（${structureQueryReasonLabel(item.reason)}）`).join('、')
+                                : '没有可查询公式；需要在 Modeling Agent 中指定材料。'}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="rounded-[32px] border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-semibold text-gray-500">
+                          {(research.structures || []).length} 个数据库候选
+                        </span>
+                      </div>
+                      {(research.structures || []).length ? (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {(research.structures || []).slice(0, 8).map((structure) => (
+                            <div
+                              key={`${structure.source_id || structure.source || 'db'}-${structure.material_id}-${structure.formula}`}
+                              className="rounded-[16px] border border-gray-200 bg-gray-50 p-3"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="truncate font-mono text-xs font-bold text-[#0A1128]">{structure.formula}</p>
+                                  <p className="mt-1 truncate text-[11px] text-gray-500">{structure.material_id || 'no material id'} · {structure.source || structure.source_id || 'Structure DB'}</p>
+                                </div>
+                                <span className="rounded-[32px] border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                                  {structureQueryReasonLabel(structure.query_reason)}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid gap-2 text-[11px] text-gray-500 sm:grid-cols-3">
+                                <span>{structure.space_group || structure.crystal_system || 'space group N/A'}</span>
+                                <span>{structure.energy_above_hull && structure.energy_above_hull !== 'N/A' ? `E_hull ${structure.energy_above_hull}` : 'E_hull N/A'}</span>
+                                <span>{structure.nsites ? `${structure.nsites} sites` : (structure.band_gap ? `gap ${structure.band_gap}` : 'sites N/A')}</span>
+                              </div>
+                              <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-gray-500">{structure.selection_reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs leading-5 text-gray-500">本轮没有从真实结构数据库返回候选结构，因此不会强行给模型推荐。可以进入 Modeling Agent 按目标论文自建模型。</p>
                       )}
                     </div>
                   )}

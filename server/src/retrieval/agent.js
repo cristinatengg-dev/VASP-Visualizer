@@ -496,6 +496,8 @@ async function searchMaterialsProject(formula) {
       space_group: doc.symmetry?.symbol || null,
       energy_above_hull: doc.energy_above_hull !== undefined ? Number(doc.energy_above_hull).toFixed(3) : 'N/A',
       theoretical: doc.theoretical ?? null,
+      source: 'Materials Project',
+      source_id: 'mp',
       selection_reason: doc.energy_above_hull === 0
         ? 'Ground state (hull)'
         : `${Number(doc.energy_above_hull).toFixed(3)} eV/atom above hull`,
@@ -536,6 +538,7 @@ async function searchOQMD(formula, limit = 4) {
       band_gap: doc.band_gap !== undefined ? Number(doc.band_gap).toFixed(2) : null,
       theoretical: null,
       source: 'OQMD',
+      source_id: 'oqmd',
       selection_reason: doc.stability === 0
         ? 'Ground state (OQMD hull)'
         : doc.stability !== undefined
@@ -586,6 +589,7 @@ async function searchAFLOW(formula, limit = 4) {
       energy_above_hull: 'N/A',
       theoretical: null,
       source: 'AFLOW',
+      source_id: 'aflow',
       selection_reason: `AFLOW entry — spacegroup ${entry.spacegroup_relax || '?'}, Pearson ${entry.Pearson_symbol_relax || '?'}`,
     })),
   };
@@ -1007,6 +1011,106 @@ async function searchStructureDatabases(formula, limit = 6, sourceIds = null) {
   };
 }
 
+function annotateStructureCandidate(structure, { sourceId, formula, reason, familyLabel }) {
+  return {
+    ...structure,
+    source_id: structure.source_id || sourceId,
+    queried_formula: formula,
+    query_reason: reason,
+    query_family: familyLabel || null,
+  };
+}
+
+function dedupeStructures(input, limit = 40) {
+  const seen = new Set();
+  const entries = [];
+  for (const structure of Array.isArray(input) ? input : []) {
+    const key = [
+      structure?.source_id || structure?.source || 'source',
+      structure?.material_id || 'id',
+      normalizeFormulaToken(structure?.formula || structure?.queried_formula),
+    ].join(':').toLowerCase();
+    if (!structure?.formula || seen.has(key)) continue;
+    seen.add(key);
+    entries.push(structure);
+  }
+  return entries
+    .sort((a, b) => numericHullEnergy(a) - numericHullEnergy(b))
+    .slice(0, limit);
+}
+
+function summarizeStructureCandidates(structures, limit = 4) {
+  return (structures || []).slice(0, limit).map((structure) => {
+    const hull = structure.energy_above_hull && structure.energy_above_hull !== 'N/A'
+      ? `E_hull=${structure.energy_above_hull}`
+      : (structure.formation_energy ? `ΔHf=${structure.formation_energy}` : 'energy=N/A');
+    const source = structure.source || structure.source_id || 'DB';
+    return `${structure.formula} ${structure.material_id || ''} · ${source} · ${structure.space_group || structure.crystal_system || 'structure'} · ${hull}`;
+  }).join('\n');
+}
+
+function queryReasonLabel(reason) {
+  return {
+    alias: 'alias',
+    user_formula: 'user formula',
+    intent_formula: 'intent formula',
+    literature_formula: 'literature formula',
+    material_family_seed: 'material-family seed',
+    domain_fallback: 'domain fallback',
+  }[reason] || reason || 'query';
+}
+
+async function searchStructureSourceForPlan(sourceId, plan, { formulaLimit = 4, perFormulaLimit = 3 } = {}) {
+  const searcher = STRUCTURE_SEARCHERS[sourceId];
+  if (!searcher) return { sourceId, results: [], error: 'Unknown source' };
+  const items = (plan?.sources || [])
+    .filter((item) => item?.formula)
+    .slice(0, formulaLimit);
+  const results = [];
+  const errors = [];
+
+  for (const item of items) {
+    try {
+      const result = await searcher(item.formula, perFormulaLimit);
+      if (result?.success) {
+        results.push(...(result.results || []).map((structure) => annotateStructureCandidate(structure, {
+          sourceId,
+          formula: item.formula,
+          reason: item.reason,
+          familyLabel: item.family_label,
+        })));
+      } else if (result?.error) {
+        errors.push(`${item.formula}: ${result.error}`);
+      }
+    } catch (error) {
+      errors.push(`${item.formula}: ${error?.message || String(error)}`);
+    }
+  }
+
+  return { sourceId, results: dedupeStructures(results, formulaLimit * perFormulaLimit), error: errors.join('; ') || null };
+}
+
+async function searchStructuresForPlan(plan, sourceIds = STRUCTURE_QUERY_SOURCE_IDS, options = {}) {
+  const settled = await Promise.allSettled(sourceIds.map((sourceId) => searchStructureSourceForPlan(sourceId, plan, options)));
+  const sourceResults = {};
+  const errors = {};
+  const structures = [];
+  for (const item of settled) {
+    if (item.status === 'fulfilled') {
+      sourceResults[item.value.sourceId] = item.value.results || [];
+      if (item.value.error) errors[item.value.sourceId] = item.value.error;
+      structures.push(...(item.value.results || []));
+    } else {
+      errors.unknown = item.reason?.message || String(item.reason);
+    }
+  }
+  return {
+    sourceResults,
+    errors,
+    structures: dedupeStructures(structures),
+  };
+}
+
 // ─── LLM helpers ─────────────────────────────────────────────────────────────
 
 async function llm(messages, opts = {}) {
@@ -1042,6 +1146,247 @@ function inferResearchType(prompt) {
   return 'general';
 }
 
+const VALID_ELEMENT_SYMBOLS = new Set([
+  'H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',
+  'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca',
+  'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
+  'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr',
+  'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn',
+  'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd',
+  'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb',
+  'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg',
+  'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn', 'Fr', 'Ra', 'Ac', 'Th',
+  'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm',
+  'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds',
+  'Rg', 'Cn', 'Nh', 'Fl', 'Mc', 'Lv', 'Ts', 'Og',
+]);
+
+const SMALL_MOLECULE_FORMULAS = new Set([
+  'CO2', 'H2', 'O2', 'N2', 'H2O', 'CO', 'NO', 'NO2', 'NH3',
+  'CH4', 'SO2', 'SO3', 'H2S', 'OH', 'CO2H',
+]);
+
+const NON_FORMULA_TOKENS = new Set([
+  'AI', 'ML', 'DFT', 'VASP', 'PBE', 'GGA', 'UHF', 'RHF', 'NEB', 'AIMD',
+  'XRD', 'XPS', 'SEM', 'TEM', 'STM', 'AFM', 'PDF', 'DOI', 'URL', 'UV',
+  'IR', 'NMR', 'FTIR', 'BET', 'TOF', 'REST', 'JSON', 'POSS', 'MOF', 'COF',
+]);
+
+const STRUCTURE_QUERY_SOURCE_IDS = ['mp', 'oqmd', 'aflow', 'jarvis', 'alexandria', 'nomad'];
+const SUPPLEMENTAL_STRUCTURE_SOURCE_IDS = ['jarvis', 'alexandria', 'nomad', 'oqmd'];
+
+const MATERIAL_FAMILY_RULES = [
+  {
+    id: 'halide_perovskite',
+    label: '卤化物钙钛矿',
+    pattern: /(卤化物钙钛矿|无铅钙钛矿|太阳能|光伏|halide\s+perovskite|lead[-\s]?halide|CsPb|MAPb|FAPb|perovskite\s+solar)/i,
+    seeds: ['CsPbBr3', 'CsPbI3', 'CsSnI3', 'CsPbCl3'],
+  },
+  {
+    id: 'oxide_perovskite',
+    label: '氧化物钙钛矿',
+    pattern: /(氧化物钙钛矿|铁电|oxide\s+perovskite|perovskite\s+oxide|titanate|manganite|ferrite)/i,
+    seeds: ['SrTiO3', 'BaTiO3', 'CaTiO3', 'LaMnO3'],
+  },
+  {
+    id: 'perovskite',
+    label: '钙钛矿材料',
+    pattern: /(钙钛矿|perovskite)/i,
+    seeds: ['SrTiO3', 'BaTiO3', 'CaTiO3', 'CsPbBr3'],
+  },
+  {
+    id: 'spinel',
+    label: '尖晶石材料',
+    pattern: /(尖晶石|spinel)/i,
+    seeds: ['MgAl2O4', 'LiMn2O4', 'NiFe2O4', 'CoFe2O4'],
+  },
+  {
+    id: 'garnet',
+    label: '石榴石结构材料',
+    pattern: /(石榴石|garnet|LLZO|固态电解质)/i,
+    seeds: ['Li7La3Zr2O12', 'Y3Al5O12', 'Li5La3Ta2O12'],
+  },
+  {
+    id: 'olivine',
+    label: '橄榄石结构材料',
+    pattern: /(橄榄石|olivine|LFP|磷酸铁锂)/i,
+    seeds: ['LiFePO4', 'NaFePO4', 'Mg2SiO4'],
+  },
+  {
+    id: 'layered_oxide',
+    label: '层状氧化物',
+    pattern: /(层状氧化物|layered\s+oxide|正极|cathode|脱锂|脱钠|储钠|储锂|battery|电池)/i,
+    seeds: ['LiCoO2', 'NaCoO2', 'LiNiO2', 'NaMnO2'],
+  },
+  {
+    id: 'fluorite',
+    label: '萤石结构氧化物',
+    pattern: /(萤石|fluorite|氧空位|ceria|zirconia|核燃料|fuel\s+oxide)/i,
+    seeds: ['CeO2', 'ZrO2', 'UO2', 'ThO2'],
+  },
+  {
+    id: 'rutile_anatase',
+    label: '二氧化钛/金红石体系',
+    pattern: /(金红石|锐钛矿|rutile|anatase|titania|TiO2|光催化)/i,
+    seeds: ['TiO2', 'SnO2', 'RuO2'],
+  },
+  {
+    id: 'rocksalt',
+    label: '岩盐结构材料',
+    pattern: /(岩盐|rock[-\s]?salt|halite|NaCl|MgO|NiO)/i,
+    seeds: ['NaCl', 'MgO', 'NiO', 'CoO'],
+  },
+  {
+    id: 'molten_salt_reactor',
+    label: '熔盐堆/熔盐体系',
+    pattern: /(熔盐堆|熔盐反应堆|molten\s*salt\s*reactor|MSR\b|氟盐|氯盐|FLiBe|FLiNaK|熔盐腐蚀)/i,
+    seeds: ['LiF', 'BeF2', 'NaF', 'KF', 'ZrF4', 'ThF4', 'UF4', 'SiC'],
+  },
+  {
+    id: 'co2_hydrogenation',
+    label: 'CO2 加氢/催化表面',
+    pattern: /(CO2|二氧化碳).*(加氢|hydrogenation|催化|catalyst|甲醇|methanol)|加氢.*(CO2|二氧化碳)/i,
+    seeds: ['Cu', 'ZnO', 'CeO2', 'In2O3', 'ZrO2', 'TiO2'],
+  },
+  {
+    id: 'alloy_corrosion',
+    label: '合金/腐蚀材料',
+    pattern: /(合金|alloy|腐蚀|corrosion|耐蚀|stainless|镍基|高熵)/i,
+    seeds: ['Fe', 'Ni', 'Cr', 'Ni3Al', 'FeCr2O4'],
+  },
+  {
+    id: 'semiconductor',
+    label: '半导体材料',
+    pattern: /(半导体|semiconductor|光电|optoelectronic|photovoltaic|GaN|SiC|ZnO)/i,
+    seeds: ['Si', 'GaN', 'SiC', 'ZnO', 'CdTe'],
+  },
+];
+
+const MATERIAL_FAMILY_SEEDS = Object.fromEntries(MATERIAL_FAMILY_RULES.map((rule) => [rule.id, rule.seeds]));
+
+function parseFormulaElements(value) {
+  const token = String(value || '').trim();
+  if (!token) return [];
+  const matches = [...token.matchAll(/([A-Z][a-z]?)(\d*)/g)];
+  if (!matches.length || matches.map((match) => match[0]).join('') !== token) return [];
+  if (matches.some((match) => !VALID_ELEMENT_SYMBOLS.has(match[1]))) return [];
+  return matches.map((match) => match[1]);
+}
+
+function isValidStructureFormula(value, { allowSmallMolecules = false, allowSingleElement = false } = {}) {
+  const token = String(value || '').trim();
+  if (NON_FORMULA_TOKENS.has(token.toUpperCase())) return false;
+  const elements = parseFormulaElements(token);
+  if (!elements.length) return false;
+  if (!allowSmallMolecules && SMALL_MOLECULE_FORMULAS.has(token.toUpperCase())) return false;
+  const uniqueElements = new Set(elements);
+  const hasCount = /\d/.test(token);
+  if (uniqueElements.size === 1 && !hasCount && !allowSingleElement) return false;
+  return true;
+}
+
+function detectMaterialFamilies(input) {
+  const text = String(input || '');
+  return MATERIAL_FAMILY_RULES.filter((item) => item.pattern.test(text));
+}
+
+function detectMaterialFamily(prompt) {
+  return detectMaterialFamilies(prompt)[0] || null;
+}
+
+function materialFamilySeedFormulas(familyId) {
+  return MATERIAL_FAMILY_SEEDS[familyId] || [];
+}
+
+function pushUniqueFormula(list, formula, reason, family = null) {
+  if (!isValidStructureFormula(formula, { allowSingleElement: true })) return;
+  const normalized = normalizeFormulaToken(formula);
+  if (!normalized || list.some((item) => normalizeFormulaToken(item.formula) === normalized)) return;
+  list.push({
+    formula,
+    reason,
+    family_id: family?.id || null,
+    family_label: family?.label || null,
+  });
+}
+
+function extractFormulaCandidatesFromText(text, { limit = 8, allowSingleElement = false } = {}) {
+  const source = String(text || '');
+  const formulas = [];
+  const surfaceMatches = [...source.matchAll(/\b([A-Z][a-z]?)\s*\(\s*\d{3}\s*\)/g)];
+  for (const match of surfaceMatches) {
+    if (isValidStructureFormula(match[1], { allowSingleElement: true })) formulas.push(match[1]);
+  }
+  const matches = source.match(/\b(?:[A-Z][a-z]?\d*){1,10}\b/g) || [];
+  for (const formula of matches) {
+    if (isValidStructureFormula(formula, { allowSingleElement })) formulas.push(formula);
+  }
+  return [...new Set(formulas)].slice(0, limit);
+}
+
+function extractExplicitFormulas(prompt) {
+  return extractFormulaCandidatesFromText(prompt, { limit: 8, allowSingleElement: true });
+}
+
+function inferAliasFormulas(text) {
+  const source = String(text || '');
+  const formulas = [];
+  if (/\bFLiBe\b/i.test(source)) formulas.push('LiF', 'BeF2');
+  if (/\bFLiNaK\b/i.test(source)) formulas.push('LiF', 'NaF', 'KF');
+  if (/\bLFP\b|磷酸铁锂/i.test(source)) formulas.push('LiFePO4');
+  if (/\bLCO\b/i.test(source)) formulas.push('LiCoO2');
+  if (/\bLLZO\b/i.test(source)) formulas.push('Li7La3Zr2O12');
+  if (/\bNMC\b/i.test(source)) formulas.push('LiNiO2');
+  return formulas;
+}
+
+function buildStructureQueryPlan({ userPrompt, intent, papers = [], maxFormulas = 6 } = {}) {
+  const queryItems = [];
+  const promptText = String(userPrompt || '');
+  const intentText = [intent?.interpreted_goal, intent?.literature_query, intent?.material_family].filter(Boolean).join(' ');
+  const evidenceText = [
+    promptText,
+    intentText,
+    ...(Array.isArray(papers) ? papers.flatMap((paper) => [paper?.title, paper?.abstract]) : []),
+  ].filter(Boolean).join(' ');
+
+  const promptFormulas = extractExplicitFormulas(promptText);
+  const intentFormulas = intent?.candidate_formulas || [];
+  const families = detectMaterialFamilies([promptText, intentText].filter(Boolean).join(' '));
+
+  for (const formula of inferAliasFormulas(evidenceText)) pushUniqueFormula(queryItems, formula, 'alias');
+  for (const formula of promptFormulas) pushUniqueFormula(queryItems, formula, 'user_formula');
+  for (const formula of intentFormulas) pushUniqueFormula(queryItems, formula, 'intent_formula');
+  for (const family of families) {
+    for (const formula of family.seeds) pushUniqueFormula(queryItems, formula, 'material_family_seed', family);
+  }
+
+  const fallback = inferFallbackFormula(promptText);
+  if (fallback) pushUniqueFormula(queryItems, fallback, 'domain_fallback');
+
+  const shouldUseLiteratureFormulas = families.length === 0 || promptFormulas.length > 0 || intentFormulas.length > 0;
+  if (shouldUseLiteratureFormulas) {
+    for (const formula of extractFormulaCandidatesFromText(evidenceText, { limit: 10, allowSingleElement: false })) {
+      pushUniqueFormula(queryItems, formula, 'literature_formula');
+    }
+  }
+
+  const selected = queryItems.slice(0, maxFormulas);
+  return {
+    formulas: selected.map((item) => item.formula),
+    sources: selected,
+    families: families.map((item) => ({
+      id: item.id,
+      label: item.label,
+      seed_formulas: item.seeds,
+    })),
+  };
+}
+
+function inferStructureSeedFormulas(prompt) {
+  return buildStructureQueryPlan({ userPrompt: prompt, maxFormulas: 4 }).formulas;
+}
+
 function inferFallbackFormula(prompt) {
   const text = String(prompt || '');
   const lower = text.toLowerCase();
@@ -1068,6 +1413,8 @@ function buildEvidenceText({ userPrompt, intent, papers }) {
     userPrompt,
     intent?.interpreted_goal,
     intent?.literature_query,
+    intent?.material_family,
+    ...(intent?.structure_query_plan?.formulas || []),
     ...(Array.isArray(papers) ? papers.flatMap((paper) => [paper?.title, paper?.abstract]) : []),
   ].filter(Boolean).join(' ');
 }
@@ -1079,12 +1426,32 @@ function textMentionsFormula(text, formula) {
   return normalizedText.includes(normalizedFormula);
 }
 
+function structureMatchesMaterialFamily(structure, evidenceText) {
+  const family = detectMaterialFamily(evidenceText);
+  if (!family) return false;
+  const formula = structure?.formula || structure?.formula_pretty || '';
+  const normalized = normalizeFormulaToken(formula);
+  return materialFamilySeedFormulas(family.id).some((seed) => normalizeFormulaToken(seed) === normalized);
+}
+
 function isStructureEvidenceRelated(structure, context) {
   if (!structure) return false;
   const evidenceText = buildEvidenceText(context);
   const formula = structure.formula || structure.formula_pretty || '';
   const materialId = structure.material_id || '';
-  return textMentionsFormula(evidenceText, formula) || (materialId && textMentionsFormula(evidenceText, materialId));
+  const queryFormulas = context?.structureQueryPlan?.formulas || context?.intent?.structure_query_plan?.formulas || [];
+  const queriedFormula = structure.queried_formula || '';
+  const queriedByPlan = queryFormulas.some((item) => {
+    const normalized = normalizeFormulaToken(item);
+    return normalized && (
+      normalized === normalizeFormulaToken(formula) ||
+      normalized === normalizeFormulaToken(queriedFormula)
+    );
+  });
+  return textMentionsFormula(evidenceText, formula)
+    || (materialId && textMentionsFormula(evidenceText, materialId))
+    || queriedByPlan
+    || structureMatchesMaterialFamily(structure, evidenceText);
 }
 
 function findEvidenceBackedStructureForIdea(idea, structures, context) {
@@ -1102,7 +1469,7 @@ function findEvidenceBackedStructureForIdea(idea, structures, context) {
   return matched || null;
 }
 
-function buildNoModelRecommendationPayload({ userPrompt, intent, papers, structures, reason }) {
+function buildNoModelRecommendationPayload({ userPrompt, intent, papers, structures, reason, structureQueryPlan }) {
   const message = reason || '本轮没有找到能和检索文献对应的结构数据库条目，因此不推荐 starter model。';
   return {
     summary: `${message} 请进入 Modeling Agent 根据目标文献手动建立模型，确认材料、晶面、吸附物或熔盐组分后再继续计算。`,
@@ -1115,6 +1482,7 @@ function buildNoModelRecommendationPayload({ userPrompt, intent, papers, structu
     recommended_idea_id: null,
     papers,
     structures,
+    structure_query_plan: structureQueryPlan || null,
     handoff: null,
     no_model_recommendation: {
       reason: message,
@@ -1123,8 +1491,8 @@ function buildNoModelRecommendationPayload({ userPrompt, intent, papers, structu
   };
 }
 
-function sanitizeIdeaRecommendations({ userPrompt, intent, papers, structures, ideaCards, recommendedIdeaId, overallSummary }) {
-  const context = { userPrompt, intent, papers };
+function sanitizeIdeaRecommendations({ userPrompt, intent, papers, structures, ideaCards, recommendedIdeaId, overallSummary, structureQueryPlan }) {
+  const context = { userPrompt, intent, papers, structureQueryPlan };
   const safeCards = (Array.isArray(ideaCards) ? ideaCards : []).filter((idea) => {
     const formulaText = `${idea?.blueprint?.structure_source?.formula || ''} ${idea?.title || ''} ${idea?.material_family || ''}`;
     if (/LiCoO2|NaCoO2|LiFePO4|NaMnO2|LiMn2O4|battery|cathode|电池|正极/i.test(formulaText)) {
@@ -1135,11 +1503,19 @@ function sanitizeIdeaRecommendations({ userPrompt, intent, papers, structures, i
   });
 
   if (!safeCards.length) {
+    const fallback = buildFallbackIdeaPayload({ userPrompt, intent, papers, structures, structureQueryPlan });
+    if (fallback.idea_cards?.length) {
+      return {
+        ...fallback,
+        summary: fallback.summary || overallSummary,
+      };
+    }
     return buildNoModelRecommendationPayload({
       userPrompt,
       intent,
       papers,
       structures,
+      structureQueryPlan,
       reason: '已检索到文献，但没有找到与这些文献主题相匹配的结构数据库条目；不会用无关材料充当推荐模型。',
     });
   }
@@ -1148,7 +1524,7 @@ function sanitizeIdeaRecommendations({ userPrompt, intent, papers, structures, i
     ? recommendedIdeaId
     : safeCards[0].id;
   const recommendedCard = safeCards.find((idea) => idea.id === safeRecommendedId) || safeCards[0];
-  const matchedStructure = findEvidenceBackedStructureForIdea(recommendedCard, structures, { userPrompt, intent, papers });
+  const matchedStructure = findEvidenceBackedStructureForIdea(recommendedCard, structures, { userPrompt, intent, papers, structureQueryPlan });
 
   return {
     summary: overallSummary || 'Ideas generated based on literature and database evidence.',
@@ -1193,6 +1569,24 @@ function buildHeuristicLiteratureQuery(prompt) {
   }
   if (/(核材料|反应堆|辐照|包壳|燃料)/.test(text)) {
     return `${formulas.join(' ')} nuclear reactor materials irradiation corrosion DFT`.trim();
+  }
+  const family = detectMaterialFamily(text);
+  if (family) {
+    const familyQueries = {
+      halide_perovskite: 'halide perovskite materials crystal structure stability solar cells DFT',
+      oxide_perovskite: 'oxide perovskite materials crystal structure properties DFT',
+      perovskite: 'perovskite materials crystal structure properties DFT review',
+      spinel: 'spinel oxide materials crystal structure properties DFT',
+      garnet: 'garnet solid electrolyte materials crystal structure DFT',
+      olivine: 'olivine phosphate materials crystal structure DFT',
+      layered_oxide: 'layered oxide cathode materials crystal structure DFT',
+      fluorite: 'fluorite oxide materials oxygen vacancy DFT',
+      rutile_anatase: 'TiO2 rutile anatase materials crystal structure photocatalysis DFT',
+      rocksalt: 'rock salt oxide materials crystal structure DFT',
+      alloy_corrosion: 'alloy corrosion resistant materials DFT structure',
+      semiconductor: 'semiconductor materials crystal structure properties DFT',
+    };
+    return `${formulas.join(' ')} ${familyQueries[family.id] || `${family.label} materials crystal structure DFT`}`.trim();
   }
   if (/(吸附|表面|晶面|催化)/.test(text)) {
     return `${formulas.join(' ')} catalyst surface adsorption DFT`.trim();
@@ -1282,14 +1676,15 @@ function buildSafeHandoffPrompt({ formula, modelType, recipe, bestStructure }) {
   return `Build a bulk ${safeFormula} crystal${bestStructure?.material_id ? ` using Materials Project entry ${bestStructure.material_id}` : ''} with a ${supercell} supercell`;
 }
 
-function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
+function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures, structureQueryPlan }) {
   const bestStructure = chooseBestStructure(structures);
-  if (!bestStructure || !isStructureEvidenceRelated(bestStructure, { userPrompt, intent, papers })) {
+  if (!bestStructure || !isStructureEvidenceRelated(bestStructure, { userPrompt, intent, papers, structureQueryPlan })) {
     return buildNoModelRecommendationPayload({
       userPrompt,
       intent,
       papers,
       structures,
+      structureQueryPlan,
       reason: '文本模型不可用，且本轮没有找到与检索文献相匹配的结构条目；不会用 LiCoO2 或其他无关材料作为兜底模型。',
     });
   }
@@ -1306,7 +1701,7 @@ function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
     surface: `${formula} surface/slab starter model`,
     voltage: `${formula} bulk voltage-trend starter model`,
     bulk_stability: `${formula} bulk stability starter model`,
-    general: `${formula} literature-backed starter model`,
+    general: `${formula} database-backed starter model`,
   };
 
   const propertyMap = {
@@ -1325,10 +1720,10 @@ function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
 
   const literatureBasis = papers.length > 0
     ? `Heuristic fallback based on ${papers.slice(0, 2).map((paper) => `${paper.source}:${paper.title}`).join(' | ')}.`
-    : 'Heuristic fallback based on the user prompt and common battery-computation starter practice.';
+    : `Database fallback based on real structure hits for ${structureQueryPlan?.formulas?.slice(0, 4).join(', ') || formula}.`;
 
   const blueprint = {
-    why_this_idea: `The text model is unavailable, so this recommendation uses a deterministic starter path for ${formula}. It is intended to keep your workflow moving with a conservative, literature-style first model.`,
+    why_this_idea: `This recommendation uses a deterministic starter path for ${formula} from a real structure database hit. It is intended to keep your workflow moving with a conservative first model.`,
     what_can_be_calculated: `This fallback starter model supports initial ${(propertyMap[researchType] || propertyMap.general).join(' / ')} exploration. Use it as a first-pass structure before deeper literature-specific refinement.`,
     structure_source: {
       formula,
@@ -1341,7 +1736,7 @@ function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
     modeling_recipe: recipe,
     literature_rationale: 'This is a heuristic fallback, not a full LLM-synthesized literature plan. It follows a conservative rule: start from the bulk parent structure, then expand to defect/doping/slab workflows only with a moderate supercell and explicit purpose.',
     caution_notes: [
-      'This result was generated without the text model, so treat it as a starter recommendation.',
+      'This result was selected from structure-database evidence, so treat it as a starter structure until the exact target paper phase is checked.',
       'Validate the exact phase, magnetic state, and supercell choice against target literature before publication-grade calculations.',
     ],
     first_step: `Build and relax the parent ${formula} structure first, then confirm whether the selected phase matches your target literature question.`,
@@ -1364,7 +1759,7 @@ function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
     id: 'fallback-idea-1',
     title: titleMap[researchType] || titleMap.general,
     material_family: formula,
-    fit_reason: `This fallback idea keeps the workflow moving by proposing a conservative starter model for ${formula} based on your prompt and available database evidence.`,
+    fit_reason: `This database-backed idea keeps the workflow moving by proposing a conservative starter model for ${formula} from the returned structure candidates.`,
     literature_basis: literatureBasis,
     recommended_model_type: modelType,
     target_properties: propertyMap[researchType] || propertyMap.general,
@@ -1376,7 +1771,7 @@ function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
   };
 
   return {
-    summary: `The text model was unavailable, so Idea Agent switched to deterministic fallback mode. I generated a conservative starter idea for ${formula} using available literature/MP evidence where possible; please validate the exact phase and modeling choices against your target papers before treating it as publication-grade guidance.`,
+    summary: `I generated a conservative starter idea for ${formula} using real structure-database evidence; please validate the exact phase and modeling choices against your target papers before treating it as publication-grade guidance.`,
     user_goal: {
       interpreted_goal: intent.interpreted_goal || userPrompt,
       user_profile: intent.user_profile || 'general',
@@ -1386,6 +1781,7 @@ function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures }) {
     recommended_idea_id: ideaCard.id,
     papers,
     structures,
+    structure_query_plan: structureQueryPlan || null,
     handoff: {
       idea_id: ideaCard.id,
       idea_title: ideaCard.title,
@@ -1426,6 +1822,8 @@ async function runRetrievalAgentStream(userPrompt, onChunk) {
     depth: 'starter',
     literature_query: userPrompt,
     candidate_formulas: [],
+    material_family: null,
+    structure_query_plan: null,
     research_type: inferResearchType(userPrompt),
   };
 
@@ -1433,8 +1831,9 @@ async function runRetrievalAgentStream(userPrompt, onChunk) {
     // ── Parallel Phase 1: LLM intent + heuristic search kick off simultaneously ──
 
     // Heuristic: extract formulas and build a quick English query immediately
-    const heuristicFormula = inferFallbackFormula(userPrompt);
     const heuristicQuery = buildHeuristicLiteratureQuery(userPrompt);
+    let structureQueryPlan = buildStructureQueryPlan({ userPrompt, intent, maxFormulas: 6 });
+    intent.structure_query_plan = structureQueryPlan;
 
     // Start LLM intent understanding (merged with translation)
     emit({ type: 'stage', stage: 'goal_understanding', title: 'Understanding research goal', status: 'active' });
@@ -1457,6 +1856,7 @@ JSON schema:
   "depth": "starter | paper-support | advanced",
   "literature_query": "best 4-6 ENGLISH keyword string to search academic databases. MUST be English even if input is Chinese.",
   "candidate_formulas": ["formula1", "formula2"],
+  "material_family": "specific material family or empty string",
   "research_type": "bulk_stability | voltage | diffusion | doping | surface | general"
 }
 
@@ -1466,6 +1866,8 @@ User prompt: "${userPrompt}"`,
       if (parsed) {
         intent = parsed;
         intent.research_type = intent.research_type || inferResearchType(userPrompt);
+        structureQueryPlan = buildStructureQueryPlan({ userPrompt, intent, maxFormulas: 6 });
+        intent.structure_query_plan = structureQueryPlan;
       }
       emit({ type: 'stage', stage: 'goal_understanding', title: 'Research goal understood', status: 'done', content: intent.interpreted_goal });
       return intent;
@@ -1507,160 +1909,76 @@ User prompt: "${userPrompt}"`,
       })
     )));
 
-    // Start structure database lookups in parallel (MP + OQMD + AFLOW + OPTIMADE sources)
-    const mpFormulas = heuristicFormula ? [heuristicFormula] : [];
-    emit({
-      type: 'stage', stage: 'structure_lookup',
-      title: mpFormulas.length > 0 ? `Searching Materials Project — ${mpFormulas.join(', ')}` : 'Searching Materials Project',
-      status: 'active',
-    });
-    emit({ type: 'stage', stage: 'db_oqmd', title: 'Searching OQMD…', status: 'active' });
-    emit({ type: 'stage', stage: 'db_aflow', title: 'Searching AFLOW…', status: 'active' });
-    emit({ type: 'stage', stage: 'db_jarvis', title: 'Searching JARVIS…', status: 'active' });
-    emit({ type: 'stage', stage: 'db_alexandria', title: 'Searching Alexandria…', status: 'active' });
-    emit({ type: 'stage', stage: 'db_nomad', title: 'Searching NOMAD…', status: 'active' });
+    // Start structure database lookups in parallel from a single query plan.
+    const sourceStages = [
+      { id: 'mp', stage: 'structure_lookup', label: 'Materials Project', formulaLimit: 4, perFormulaLimit: 3 },
+      { id: 'oqmd', stage: 'db_oqmd', label: 'OQMD', formulaLimit: 4, perFormulaLimit: 3 },
+      { id: 'aflow', stage: 'db_aflow', label: 'AFLOW', formulaLimit: 2, perFormulaLimit: 3 },
+      { id: 'jarvis', stage: 'db_jarvis', label: 'JARVIS', formulaLimit: 4, perFormulaLimit: 3 },
+      { id: 'alexandria', stage: 'db_alexandria', label: 'Alexandria', formulaLimit: 4, perFormulaLimit: 3 },
+      { id: 'nomad', stage: 'db_nomad', label: 'NOMAD', formulaLimit: 4, perFormulaLimit: 3 },
+    ];
 
-    let oqmdStructures = [];
-    let aflowStructures = [];
-    let jarvisStructures = [];
-    let alexandriaStructures = [];
-    let nomadStructures = [];
-
-    const getFinalFormulas = async (limit = 2) => {
-      const raceResult = await Promise.race([
-        llmIntentPromise.then(() => intent.candidate_formulas?.slice(0, limit) || []),
-        new Promise((resolve) => setTimeout(() => resolve([]), 5000)),
+    const getFinalStructurePlan = async (limit = 6) => {
+      await Promise.race([
+        llmIntentPromise,
+        new Promise((resolve) => setTimeout(resolve, 5000)),
       ]);
-      return (Array.isArray(raceResult) && raceResult.length > 0) ? raceResult : mpFormulas;
+      const nextPlan = buildStructureQueryPlan({ userPrompt, intent, maxFormulas: limit });
+      structureQueryPlan = nextPlan;
+      intent.structure_query_plan = nextPlan;
+      return nextPlan;
     };
 
-    const mpSearchPromise = (async () => {
-      const finalFormulas = await getFinalFormulas(2);
-
-      for (const formula of finalFormulas.slice(0, 2)) {
-        const mpResult = await searchMaterialsProject(formula);
-        if (mpResult.success) allStructures.push(...mpResult.results);
-      }
-
-      emit({
-        type: 'stage', stage: 'structure_lookup',
-        title: allStructures.length > 0 ? `Materials Project — ${allStructures.length} structures` : 'Materials Project — no structures found',
-        status: 'done',
-        content: allStructures.length > 0
-          ? allStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (${s.crystal_system}, E_hull=${s.energy_above_hull})`).join('\n')
-          : 'No MP results.',
-        structures: allStructures,
-      });
-    })();
-
-    const oqmdSearchPromise = (async () => {
-      const finalFormulas = await getFinalFormulas(2);
-
-      for (const formula of finalFormulas.slice(0, 2)) {
-        const oqmdResult = await searchOQMD(formula, 4);
-        if (oqmdResult.success) oqmdStructures.push(...oqmdResult.results);
-      }
-
-      emit({
-        type: 'stage', stage: 'db_oqmd',
-        title: oqmdStructures.length > 0 ? `OQMD — ${oqmdStructures.length} entries` : 'OQMD — no results',
-        status: 'done',
-        content: oqmdStructures.length > 0
-          ? oqmdStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (${s.space_group}, ΔHf=${s.formation_energy || '?'} eV/atom)`).join('\n')
-          : 'No OQMD results.',
-        structures: oqmdStructures,
-      });
-    })().catch(() => {
-      emit({ type: 'stage', stage: 'db_oqmd', title: 'OQMD — unavailable', status: 'done' });
+    emit({
+      type: 'stage',
+      stage: 'structure_query_plan',
+      title: structureQueryPlan.formulas.length
+        ? `Structure query plan — ${structureQueryPlan.formulas.join(', ')}`
+        : 'Structure query plan — waiting for literature formulas',
+      status: 'done',
+      content: structureQueryPlan.sources.map((item) => `${item.formula} (${queryReasonLabel(item.reason)})`).join('\n') || 'No concrete structure query yet.',
     });
 
-    const aflowSearchPromise = (async () => {
-      const finalFormulas = await getFinalFormulas(2);
+    for (const source of sourceStages) {
+      emit({ type: 'stage', stage: source.stage, title: `Searching ${source.label}…`, status: 'active' });
+    }
 
-      for (const formula of finalFormulas.slice(0, 1)) {
-        const aflowResult = await searchAFLOW(formula, 4);
-        if (aflowResult.success) aflowStructures.push(...aflowResult.results);
+    const structureSourcePromises = sourceStages.map((source) => (async () => {
+      const plan = await getFinalStructurePlan(6);
+      if (!plan.formulas.length) {
+        emit({
+          type: 'stage',
+          stage: source.stage,
+          title: `${source.label} — no formula query yet`,
+          status: 'done',
+          content: 'Will retry after literature formula extraction.',
+          structures: [],
+        });
+        return [];
       }
-
-      emit({
-        type: 'stage', stage: 'db_aflow',
-        title: aflowStructures.length > 0 ? `AFLOW — ${aflowStructures.length} entries` : 'AFLOW — no results',
-        status: 'done',
-        content: aflowStructures.length > 0
-          ? aflowStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (SG ${s.space_group}, ${s.crystal_system})`).join('\n')
-          : 'No AFLOW results.',
-        structures: aflowStructures,
+      const result = await searchStructureSourceForPlan(source.id, plan, {
+        formulaLimit: source.formulaLimit,
+        perFormulaLimit: source.perFormulaLimit,
       });
-    })().catch(() => {
-      emit({ type: 'stage', stage: 'db_aflow', title: 'AFLOW — unavailable', status: 'done' });
-    });
-
-    const jarvisSearchPromise = (async () => {
-      const finalFormulas = await getFinalFormulas(2);
-      for (const formula of finalFormulas.slice(0, 2)) {
-        const result = await searchJARVIS(formula, 4);
-        if (result.success) jarvisStructures.push(...result.results);
-      }
       emit({
-        type: 'stage', stage: 'db_jarvis',
-        title: jarvisStructures.length > 0 ? `JARVIS — ${jarvisStructures.length} entries` : 'JARVIS — no results',
+        type: 'stage',
+        stage: source.stage,
+        title: result.results.length > 0 ? `${source.label} — ${result.results.length} structure candidates` : `${source.label} — no matching structures`,
         status: 'done',
-        content: jarvisStructures.length > 0
-          ? jarvisStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (${s.space_group || s.crystal_system}, E_hull=${s.energy_above_hull})`).join('\n')
-          : 'No JARVIS results.',
-        structures: jarvisStructures,
+        content: result.results.length > 0 ? summarizeStructureCandidates(result.results, 3) : (result.error || `No ${source.label} results.`),
+        structures: result.results,
       });
-    })().catch(() => {
-      emit({ type: 'stage', stage: 'db_jarvis', title: 'JARVIS — unavailable', status: 'done' });
-    });
-
-    const alexandriaSearchPromise = (async () => {
-      const finalFormulas = await getFinalFormulas(2);
-      for (const formula of finalFormulas.slice(0, 2)) {
-        const result = await searchAlexandria(formula, 4);
-        if (result.success) alexandriaStructures.push(...result.results);
-      }
-      emit({
-        type: 'stage', stage: 'db_alexandria',
-        title: alexandriaStructures.length > 0 ? `Alexandria — ${alexandriaStructures.length} entries` : 'Alexandria — no results',
-        status: 'done',
-        content: alexandriaStructures.length > 0
-          ? alexandriaStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (${s.space_group || s.crystal_system}, E_hull=${s.energy_above_hull})`).join('\n')
-          : 'No Alexandria results.',
-        structures: alexandriaStructures,
-      });
-    })().catch(() => {
-      emit({ type: 'stage', stage: 'db_alexandria', title: 'Alexandria — unavailable', status: 'done' });
-    });
-
-    const nomadSearchPromise = (async () => {
-      const finalFormulas = await getFinalFormulas(2);
-      for (const formula of finalFormulas.slice(0, 2)) {
-        const result = await searchNOMAD(formula, 4);
-        if (result.success) nomadStructures.push(...result.results);
-      }
-      emit({
-        type: 'stage', stage: 'db_nomad',
-        title: nomadStructures.length > 0 ? `NOMAD — ${nomadStructures.length} entries` : 'NOMAD — no results',
-        status: 'done',
-        content: nomadStructures.length > 0
-          ? nomadStructures.slice(0, 3).map((s) => `${s.formula} ${s.material_id} (${s.space_group || s.crystal_system})`).join('\n')
-          : 'No NOMAD results.',
-        structures: nomadStructures,
-      });
-    })().catch(() => {
-      emit({ type: 'stage', stage: 'db_nomad', title: 'NOMAD — unavailable', status: 'done' });
-    });
+      return result.results;
+    })().catch((error) => {
+      emit({ type: 'stage', stage: source.stage, title: `${source.label} — unavailable`, status: 'done', content: error?.message || String(error) });
+      return [];
+    }));
 
     // ── Wait for all parallel work to complete ──
-    const [litResults] = await Promise.all([
+    const [litResults, structureResults] = await Promise.all([
       litSearchPromise,
-      mpSearchPromise,
-      oqmdSearchPromise,
-      aflowSearchPromise,
-      jarvisSearchPromise,
-      alexandriaSearchPromise,
-      nomadSearchPromise,
+      Promise.all(structureSourcePromises),
       llmIntentPromise,
     ]);
 
@@ -1668,14 +1986,56 @@ User prompt: "${userPrompt}"`,
     // placeholder papers as evidence.
     papers = dedupeVerifiedPapers(litResults.flat(), 10);
 
-    // Merge non-MP structures into allStructures (after MP)
-    allStructures.push(...oqmdStructures, ...aflowStructures, ...jarvisStructures, ...alexandriaStructures, ...nomadStructures);
+    allStructures = dedupeStructures(structureResults.flat(), 50);
 
     // If LLM gave us a better literature query and we got few results, do a supplementary search
     const llmQuery = intent.literature_query || '';
     if (llmQuery && llmQuery !== heuristicQuery && papers.length < 3) {
       const extraResults = await searchAllLiterature(llmQuery).catch(() => []);
       papers = dedupeVerifiedPapers([...papers, ...extraResults], 10);
+    }
+
+    const literatureStructurePlan = buildStructureQueryPlan({ userPrompt, intent, papers, maxFormulas: 8 });
+    const alreadyQueried = new Set((structureQueryPlan.formulas || []).map(normalizeFormulaToken));
+    const supplementalItems = (literatureStructurePlan.sources || [])
+      .filter((item) => !alreadyQueried.has(normalizeFormulaToken(item.formula)))
+      .slice(0, 3);
+    structureQueryPlan = {
+      ...literatureStructurePlan,
+      searched_formulas: [...new Set([
+        ...(structureQueryPlan.formulas || []),
+        ...supplementalItems.map((item) => item.formula),
+      ])],
+    };
+    intent.structure_query_plan = structureQueryPlan;
+
+    if (supplementalItems.length) {
+      emit({
+        type: 'stage',
+        stage: 'structure_literature_followup',
+        title: `Searching structures from literature formulas — ${supplementalItems.map((item) => item.formula).join(', ')}`,
+        status: 'active',
+      });
+      const supplementalPlan = {
+        formulas: supplementalItems.map((item) => item.formula),
+        sources: supplementalItems,
+        families: literatureStructurePlan.families || [],
+      };
+      const supplemental = await searchStructuresForPlan(supplementalPlan, SUPPLEMENTAL_STRUCTURE_SOURCE_IDS, {
+        formulaLimit: 3,
+        perFormulaLimit: 2,
+      }).catch((error) => ({ structures: [], errors: { followup: error?.message || String(error) } }));
+      allStructures = dedupeStructures([...allStructures, ...(supplemental.structures || [])], 60);
+      emit({
+        type: 'stage',
+        stage: 'structure_literature_followup',
+        title: supplemental.structures?.length
+          ? `Literature-derived structures — ${supplemental.structures.length} candidates`
+          : 'Literature-derived structures — no new candidates',
+        status: 'done',
+        content: supplemental.structures?.length ? summarizeStructureCandidates(supplemental.structures, 4) : 'No additional database hits from literature-extracted formulas.',
+        structures: supplemental.structures || [],
+      });
     }
 
     // Stage 4: idea generation (LLM with deterministic fallback)
@@ -1692,7 +2052,7 @@ User prompt: "${userPrompt}"`,
       ).join('\n');
 
       const structureSummary = allStructures.map((structure) =>
-        `${structure.formula} — ${structure.material_id}, ${structure.crystal_system}, E_hull=${structure.energy_above_hull} eV/atom${structure.source ? ` [${structure.source}]` : ''} (${structure.selection_reason})`
+        `${structure.formula} — ${structure.material_id}, ${structure.crystal_system}, E_hull=${structure.energy_above_hull} eV/atom${structure.source ? ` [${structure.source}]` : ''}; query=${structure.queried_formula || structure.formula} (${queryReasonLabel(structure.query_reason)}) (${structure.selection_reason})`
       ).join('\n') || 'No structures retrieved from any database.';
 
       const ideaRaw = await llm([
@@ -1709,6 +2069,9 @@ ${paperSummary || 'No source-backed papers were returned. Do not invent paper ti
 
 Materials database structures (Materials Project + OQMD + AFLOW + JARVIS + Alexandria + NOMAD):
 ${structureSummary}
+
+Structure query plan:
+${(structureQueryPlan.sources || []).map((item) => `${item.formula}: ${queryReasonLabel(item.reason)}${item.family_label ? ` (${item.family_label})` : ''}`).join('\n') || 'No formula query could be planned.'}
 
 Generate 2-3 research idea cards. For each idea, provide concrete literature-grounded modeling advice.
 
@@ -1777,13 +2140,14 @@ Return ONLY a JSON object — no markdown, no prose:
         ideaCards: ideaData?.idea_cards || [],
         recommendedIdeaId: ideaData?.recommended_idea_id || null,
         overallSummary: ideaData?.overall_summary || 'Ideas generated based on literature and database evidence.',
+        structureQueryPlan,
       });
       ideaCards = sanitized.idea_cards;
       recommendedIdeaId = sanitized.recommended_idea_id;
       overallSummary = sanitized.summary;
     } catch (_error) {
       usedFallback = true;
-      const fallback = buildFallbackIdeaPayload({ userPrompt, intent, papers, structures: allStructures });
+      const fallback = buildFallbackIdeaPayload({ userPrompt, intent, papers, structures: allStructures, structureQueryPlan });
       ideaCards = fallback.idea_cards;
       recommendedIdeaId = fallback.recommended_idea_id;
       overallSummary = fallback.summary;
@@ -1807,6 +2171,7 @@ Return ONLY a JSON object — no markdown, no prose:
       ideaCards,
       recommendedIdeaId,
       overallSummary,
+      structureQueryPlan,
     });
     ideaCards = sanitizedPayload.idea_cards;
     recommendedIdeaId = sanitizedPayload.recommended_idea_id;
@@ -1837,6 +2202,7 @@ Return ONLY a JSON object — no markdown, no prose:
         recommended_idea_id: recommendedIdeaId,
         papers,
         structures: allStructures,
+        structure_query_plan: structureQueryPlan,
         handoff,
         no_model_recommendation: sanitizedPayload.no_model_recommendation || null,
       },
@@ -1844,7 +2210,7 @@ Return ONLY a JSON object — no markdown, no prose:
   } catch (error) {
     try {
       emit({ type: 'stage', stage: 'idea_generation', title: 'Running fallback mode', status: 'active' });
-      const fallback = buildFallbackIdeaPayload({ userPrompt, intent, papers, structures: allStructures });
+      const fallback = buildFallbackIdeaPayload({ userPrompt, intent, papers, structures: allStructures, structureQueryPlan: intent.structure_query_plan });
       emit({
         type: 'stage',
         stage: 'idea_generation',
@@ -1879,6 +2245,7 @@ module.exports = {
   searchAllLiterature,
   formulaToOptimadeReduced,
   buildHeuristicLiteratureQuery,
+  buildStructureQueryPlan,
   buildFallbackIdeaPayload,
   sanitizeIdeaRecommendations,
 };
