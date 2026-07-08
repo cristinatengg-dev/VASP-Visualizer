@@ -18,6 +18,8 @@ services:
       - SMTP_FROM=${SMTP_FROM:-SCI Visualizer <noreply@scivisualizer.com>}
       - TOKEN_SECRET=vasp_token_secret_2026_scivisualizer
       - ADMIN_SECRET=vasp_admin_secret_2026_secure
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./server/.env:/app/.env:ro
       - ./server/db.json:/app/db.json
