@@ -1,0 +1,24 @@
+{
+  "total": 4061,
+  "categories": {
+    "seed_modeling_intent": 175,
+    "seed_idea_retrieval": 90,
+    "seed_vasp_inputs": 54,
+    "seed_rendering_parse": 15,
+    "seed_integrated_workflow": 63,
+    "modeling_crystal_variants": 153,
+    "modeling_provider_order": 102,
+    "modeling_doping_variants": 714,
+    "modeling_defect_variants": 255,
+    "idea_retrieval_variants": 306,
+    "vasp_inputs_extended": 408,
+    "integrated_strict_schema": 102,
+    "self_repair_modeling": 459,
+    "vasp_error_fix": 357,
+    "rendering_extraction_variants": 153,
+    "answer_quality_eval": 102,
+    "modeling_surface_variants": 78,
+    "modeling_adsorption_variants": 468,
+    "modeling_molecule": 7
+  }
+}

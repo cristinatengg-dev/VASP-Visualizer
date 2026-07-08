@@ -1,0 +1,10 @@
+{
+  "total": 397,
+  "categories": {
+    "modeling_intent": 175,
+    "idea_retrieval": 90,
+    "vasp_inputs": 54,
+    "rendering_parse": 15,
+    "integrated_workflow": 63
+  }
+}

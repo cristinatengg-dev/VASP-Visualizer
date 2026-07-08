@@ -1,3 +1,4 @@
+const http = require('http');
 const https = require('https');
 const { proxyAgent } = require('../proxy-agent');
 
@@ -17,6 +18,7 @@ function hasExplicitTextLlmConfig() {
     'TEXT_LLM_MODEL',
     'TEXT_LLM_AUTH_HEADER',
     'TEXT_LLM_AUTH_SCHEME',
+    'TEXT_LLM_LOCAL_ADDRESS',
   ].some((name) => clean(process.env[name]));
 }
 
@@ -46,12 +48,15 @@ function getTextChatConfig() {
       || (authHeader.toLowerCase() === 'authorization' ? 'Bearer' : '')
   );
   const responseFormatSetting = clean(process.env.TEXT_LLM_RESPONSE_FORMAT).toLowerCase();
+  const localAddress = clean(process.env.TEXT_LLM_LOCAL_ADDRESS);
 
   return {
     apiKey,
     authHeader,
     authScheme,
     baseUrl,
+    explicitTextConfig,
+    localAddress,
     model,
     useJsonResponseFormat: !['0', 'false', 'off', 'disabled', 'none'].includes(responseFormatSetting),
   };
@@ -59,7 +64,7 @@ function getTextChatConfig() {
 
 function isTextChatConfigured() {
   const config = getTextChatConfig();
-  return Boolean(config.apiKey && config.baseUrl && config.model);
+  return Boolean(config.baseUrl && config.model && (config.apiKey || config.explicitTextConfig));
 }
 
 function buildHeaders(config) {
@@ -85,14 +90,22 @@ function buildHeaders(config) {
 async function fetchWithTimeout(url, init, timeoutMs = 60000) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
+    const isHttps = parsed.protocol === 'https:';
+    const isHttp = parsed.protocol === 'http:';
+    if (!isHttps && !isHttp) {
+      reject(new Error(`Unsupported Text LLM protocol: ${parsed.protocol}`));
+      return;
+    }
+
     const options = {
       hostname: parsed.hostname,
-      port: parsed.port || 443,
+      port: parsed.port || (isHttps ? 443 : 80),
       path: parsed.pathname + parsed.search,
       method: init.method || 'GET',
       headers: init.headers || {},
     };
-    if (proxyAgent) options.agent = proxyAgent;
+    if (init.localAddress) options.localAddress = init.localAddress;
+    if (proxyAgent && isHttps && !init.localAddress) options.agent = proxyAgent;
 
     let req;
     const timeoutId = setTimeout(() => {
@@ -100,7 +113,8 @@ async function fetchWithTimeout(url, init, timeoutMs = 60000) {
       reject(new Error(`Text LLM request timeout after ${timeoutMs}ms`));
     }, timeoutMs);
 
-    req = https.request(options, (res) => {
+    const transport = isHttps ? https : http;
+    req = transport.request(options, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
@@ -130,7 +144,7 @@ async function textChat(messages, jsonMode = false, {
   temperature = 0.2,
 } = {}) {
   const config = getTextChatConfig();
-  if (!config.apiKey) {
+  if (!config.apiKey && !config.explicitTextConfig) {
     throw new Error('TEXT_LLM_API_KEY/GEMINI_API_KEY is not configured');
   }
   if (!config.baseUrl || !config.model) {
@@ -158,6 +172,7 @@ async function textChat(messages, jsonMode = false, {
           method: 'POST',
           headers: buildHeaders(config),
           body: JSON.stringify(body),
+          localAddress: config.localAddress,
         },
         timeoutMs
       );
