@@ -444,7 +444,7 @@ async function searchPubMed(query, limit = 4) {
     });
 }
 
-async function searchAllLiterature(query) {
+async function searchAllLiterature(query, relevanceContext = null) {
   const [crossref, openalex, arxiv, core, semanticScholar, europePmc, pubmed] = await Promise.allSettled([
     searchCrossRef(query, 4),
     searchOpenAlex(query, 4),
@@ -466,7 +466,9 @@ async function searchAllLiterature(query) {
     ...gather(pubmed),
   ];
 
-  return dedupeVerifiedPapers(all, 10);
+  return relevanceContext
+    ? rankAndFilterEvidencePapers(all, relevanceContext, 10, { allowFallback: false })
+    : dedupeVerifiedPapers(all, 10);
 }
 
 // ─── Materials Project ───────────────────────────────────────────────────────
@@ -1172,6 +1174,105 @@ const NON_FORMULA_TOKENS = new Set([
   'IR', 'NMR', 'FTIR', 'BET', 'TOF', 'REST', 'JSON', 'POSS', 'MOF', 'COF',
 ]);
 
+const ELEMENT_NAME_BY_SYMBOL = {
+  H: 'hydrogen',
+  Li: 'lithium',
+  Be: 'beryllium',
+  B: 'boron',
+  C: 'carbon',
+  N: 'nitrogen',
+  O: 'oxygen',
+  F: 'fluorine',
+  Na: 'sodium',
+  Mg: 'magnesium',
+  Al: 'aluminum',
+  Si: 'silicon',
+  P: 'phosphorus',
+  S: 'sulfur',
+  Cl: 'chlorine',
+  K: 'potassium',
+  Ca: 'calcium',
+  Sc: 'scandium',
+  Ti: 'titanium',
+  V: 'vanadium',
+  Cr: 'chromium',
+  Mn: 'manganese',
+  Fe: 'iron',
+  Co: 'cobalt',
+  Ni: 'nickel',
+  Cu: 'copper',
+  Zn: 'zinc',
+  Ga: 'gallium',
+  Ge: 'germanium',
+  As: 'arsenic',
+  Se: 'selenium',
+  Br: 'bromine',
+  Rb: 'rubidium',
+  Sr: 'strontium',
+  Y: 'yttrium',
+  Zr: 'zirconium',
+  Nb: 'niobium',
+  Mo: 'molybdenum',
+  Ru: 'ruthenium',
+  Rh: 'rhodium',
+  Pd: 'palladium',
+  Ag: 'silver',
+  Cd: 'cadmium',
+  In: 'indium',
+  Sn: 'tin',
+  Sb: 'antimony',
+  Te: 'tellurium',
+  I: 'iodine',
+  Cs: 'cesium',
+  Ba: 'barium',
+  La: 'lanthanum',
+  Ce: 'cerium',
+  Pr: 'praseodymium',
+  Nd: 'neodymium',
+  Sm: 'samarium',
+  Eu: 'europium',
+  Gd: 'gadolinium',
+  Tb: 'terbium',
+  Dy: 'dysprosium',
+  Ho: 'holmium',
+  Er: 'erbium',
+  Tm: 'thulium',
+  Yb: 'ytterbium',
+  Lu: 'lutetium',
+  Hf: 'hafnium',
+  Ta: 'tantalum',
+  W: 'tungsten',
+  Re: 'rhenium',
+  Os: 'osmium',
+  Ir: 'iridium',
+  Pt: 'platinum',
+  Au: 'gold',
+  Hg: 'mercury',
+  Tl: 'thallium',
+  Pb: 'lead',
+  Bi: 'bismuth',
+  Th: 'thorium',
+  U: 'uranium',
+};
+
+const FORMULA_LITERAL_ALIASES = {
+  nacoo2: ['NaxCoO2', 'sodium cobalt oxide', 'sodium cobaltate', 'layered sodium cobalt oxide', 'sodium cobalt dioxide'],
+  licoo2: ['LixCoO2', 'lithium cobalt oxide', 'lithium cobaltate', 'layered lithium cobalt oxide', 'lithium cobalt dioxide'],
+  lifepo4: ['LFP', 'lithium iron phosphate', 'olivine lithium iron phosphate'],
+  nafepo4: ['sodium iron phosphate', 'olivine sodium iron phosphate'],
+  limn2o4: ['lithium manganese oxide', 'spinel lithium manganese oxide'],
+  namn2o4: ['sodium manganese oxide', 'spinel sodium manganese oxide'],
+  namno2: ['sodium manganese oxide', 'layered sodium manganese oxide'],
+  linio2: ['lithium nickel oxide', 'layered lithium nickel oxide'],
+  tio2: ['titanium dioxide', 'titania', 'rutile', 'anatase'],
+  ceo2: ['cerium dioxide', 'ceria'],
+  zro2: ['zirconium dioxide', 'zirconia'],
+  uo2: ['uranium dioxide'],
+  tho2: ['thorium dioxide'],
+};
+
+const UNRELATED_LITERATURE_PATTERN = /\b(pulsar|telescope|observatory|cosmology|galax|planet|stellar|supernova|quasar|astrophys|clinical|patient|tumou?r|cancer|cell line|protein|gene expression|enzyme|crop yield|soil microbi|social media|stock market)\b/i;
+
 const STRUCTURE_QUERY_SOURCE_IDS = ['mp', 'oqmd', 'aflow', 'jarvis', 'alexandria', 'nomad'];
 const SUPPLEMENTAL_STRUCTURE_SOURCE_IDS = ['jarvis', 'alexandria', 'nomad', 'oqmd'];
 
@@ -1419,6 +1520,289 @@ function buildEvidenceText({ userPrompt, intent, papers }) {
   ].filter(Boolean).join(' ');
 }
 
+function uniqueStrings(values) {
+  const seen = new Set();
+  const output = [];
+  for (const value of values) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(text);
+  }
+  return output;
+}
+
+function splitFormulaSegments(formula) {
+  return [...String(formula || '').matchAll(/([A-Z][a-z]?)(\d*)/g)]
+    .map((match) => ({ symbol: match[1], count: match[2] || '' }))
+    .filter((item) => VALID_ELEMENT_SYMBOLS.has(item.symbol));
+}
+
+function formulaSearchAliases(formula) {
+  const token = String(formula || '').trim();
+  if (!token) return [];
+  const normalized = normalizeFormulaToken(token);
+  const segments = splitFormulaSegments(token);
+  const aliases = new Set([token]);
+  for (const alias of FORMULA_LITERAL_ALIASES[normalized] || []) aliases.add(alias);
+
+  if (segments.length) {
+    aliases.add(segments.map((item) => `${item.symbol}${item.count}`).join(' '));
+    aliases.add(segments.map((item) => `${item.symbol}${item.count}`).join('-'));
+
+    const names = segments.map((item) => ELEMENT_NAME_BY_SYMBOL[item.symbol]).filter(Boolean);
+    if (names.length >= 2) aliases.add(names.join(' '));
+    if (segments.some((item) => item.symbol === 'O') && names.length >= 2) {
+      const nonOxygenNames = segments
+        .filter((item) => item.symbol !== 'O')
+        .map((item) => ELEMENT_NAME_BY_SYMBOL[item.symbol])
+        .filter(Boolean);
+      if (nonOxygenNames.length) aliases.add(`${nonOxygenNames.join(' ')} oxide`);
+    }
+    if (segments.some((item) => item.symbol === 'F')) {
+      const nonFluorineNames = segments
+        .filter((item) => item.symbol !== 'F')
+        .map((item) => ELEMENT_NAME_BY_SYMBOL[item.symbol])
+        .filter(Boolean);
+      if (nonFluorineNames.length) aliases.add(`${nonFluorineNames.join(' ')} fluoride`);
+    }
+    if (segments.some((item) => item.symbol === 'Cl')) {
+      const nonChlorineNames = segments
+        .filter((item) => item.symbol !== 'Cl')
+        .map((item) => ELEMENT_NAME_BY_SYMBOL[item.symbol])
+        .filter(Boolean);
+      if (nonChlorineNames.length) aliases.add(`${nonChlorineNames.join(' ')} chloride`);
+    }
+    if (segments.some((item) => item.symbol === 'P') && segments.some((item) => item.symbol === 'O')) {
+      const nonPhosphateNames = segments
+        .filter((item) => !['P', 'O'].includes(item.symbol))
+        .map((item) => ELEMENT_NAME_BY_SYMBOL[item.symbol])
+        .filter(Boolean);
+      if (nonPhosphateNames.length) aliases.add(`${nonPhosphateNames.join(' ')} phosphate`);
+    }
+  }
+
+  return uniqueStrings([...aliases]);
+}
+
+function buildFormulaSearchTerms(formulas, maxTerms = 8) {
+  return uniqueStrings(
+    formulas.flatMap((formula) => formulaSearchAliases(formula).slice(0, 4))
+  ).slice(0, maxTerms).join(' ');
+}
+
+function inferFormulaDomainTerms(formulas) {
+  const normalized = formulas.map(normalizeFormulaToken);
+  if (normalized.some((formula) => ['nacoo2', 'licoo2', 'linio2', 'namno2', 'limn2o4'].includes(formula))) {
+    return 'layered oxide cathode';
+  }
+  if (normalized.some((formula) => ['lifepo4', 'nafepo4'].includes(formula))) {
+    return 'olivine phosphate cathode';
+  }
+  if (normalized.some((formula) => ['ceo2', 'zro2', 'uo2', 'tho2'].includes(formula))) {
+    return 'oxide defect materials';
+  }
+  return '';
+}
+
+function buildLiteratureRelevanceContext({ userPrompt, intent, query, structureQueryPlan } = {}) {
+  const promptText = String(userPrompt || '');
+  const intentText = [
+    intent?.interpreted_goal,
+    intent?.literature_query,
+    intent?.material_family,
+    ...(intent?.candidate_formulas || []),
+    ...(intent?.structure_query_plan?.formulas || []),
+    ...(structureQueryPlan?.formulas || []),
+    query,
+  ].filter(Boolean).join(' ');
+  const combinedText = [promptText, intentText].filter(Boolean).join(' ');
+  const explicitFormulas = uniqueStrings([
+    ...extractExplicitFormulas(promptText),
+    ...(intent?.candidate_formulas || []),
+  ]);
+  const plannedFormulas = uniqueStrings([
+    ...(structureQueryPlan?.formulas || []),
+    ...(intent?.structure_query_plan?.formulas || []),
+  ]);
+  const fallbackFormula = inferFallbackFormula(promptText);
+  const inferredFormulas = uniqueStrings([
+    ...explicitFormulas,
+    ...plannedFormulas,
+    ...inferAliasFormulas(combinedText),
+    fallbackFormula,
+  ]).filter((formula) => isValidStructureFormula(formula, { allowSingleElement: true }));
+  const formulas = explicitFormulas.length ? explicitFormulas : inferredFormulas;
+  const formulaAliases = Object.fromEntries(formulas.map((formula) => [formula, formulaSearchAliases(formula)]));
+  const families = detectMaterialFamilies(combinedText);
+  return {
+    promptText,
+    query: String(query || ''),
+    formulas,
+    explicitFormulas,
+    formulaAliases,
+    families,
+    researchType: intent?.research_type || inferResearchType(combinedText),
+    requiresMaterialMatch: explicitFormulas.length > 0,
+    wantsComputation: /(DFT|VASP|first[-\s]?principles|ab\s*initio|density functional|理论|计算|第一性原理|补充计算)/i.test(combinedText),
+    wantsBattery: /(battery|cathode|anode|electrode|电池|正极|负极|储钠|储锂|脱钠|脱锂|层状氧化物)/i.test(combinedText),
+  };
+}
+
+function normalizedContains(haystack, needle) {
+  const normalizedNeedle = normalizeFormulaToken(needle);
+  if (!normalizedNeedle || normalizedNeedle.length < 2) return false;
+  return normalizeFormulaToken(haystack).includes(normalizedNeedle);
+}
+
+function phraseInText(text, phrase) {
+  const source = String(text || '').toLowerCase();
+  const target = String(phrase || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!target || target.length < 3) return false;
+  return source.includes(target) || normalizedContains(source, target);
+}
+
+function countFormulaElementNameHits(text, formula) {
+  const source = String(text || '').toLowerCase();
+  const names = splitFormulaSegments(formula)
+    .map((item) => ELEMENT_NAME_BY_SYMBOL[item.symbol])
+    .filter(Boolean);
+  const uniqueNames = [...new Set(names)];
+  let hits = 0;
+  for (const name of uniqueNames) {
+    if (source.includes(name)) hits += 1;
+    if (name === 'oxygen' && /\boxides?\b/i.test(source)) hits += 1;
+  }
+  return hits;
+}
+
+function formulaVariantInText(text, formula) {
+  const normalizedText = normalizeFormulaToken(text);
+  const normalizedFormula = normalizeFormulaToken(formula);
+  const variantPatterns = {
+    nacoo2: /na(?:x|\d+)?coo2/,
+    licoo2: /li(?:x|\d+)?coo2/,
+    linio2: /li(?:x|\d+)?nio2/,
+    namno2: /na(?:x|\d+)?mno2/,
+    limn2o4: /li(?:x|\d+)?mn2o4/,
+  };
+  return Boolean(variantPatterns[normalizedFormula]?.test(normalizedText));
+}
+
+function scorePaperRelevance(paper, context) {
+  const text = [paper?.title, paper?.abstract, paper?.authors, paper?.source].filter(Boolean).join(' ');
+  const formulas = context?.formulas || [];
+  const reasons = [];
+  let score = 0;
+  let materialHit = false;
+  let strongMaterialHit = false;
+
+  for (const formula of formulas) {
+    if (normalizedContains(text, formula) || formulaVariantInText(text, formula)) {
+      score += 14;
+      materialHit = true;
+      strongMaterialHit = true;
+      reasons.push(`formula:${formula}`);
+      continue;
+    }
+
+    const aliases = context?.formulaAliases?.[formula] || [];
+    const aliasHit = aliases.find((alias) => alias !== formula && phraseInText(text, alias));
+    if (aliasHit) {
+      score += 10;
+      materialHit = true;
+      strongMaterialHit = true;
+      reasons.push(`alias:${aliasHit}`);
+      continue;
+    }
+
+    const elementHits = countFormulaElementNameHits(text, formula);
+    const elementCount = new Set(splitFormulaSegments(formula).map((item) => item.symbol)).size;
+    if (elementHits >= Math.min(2, elementCount)) {
+      score += elementHits >= elementCount ? 6 : 4;
+      materialHit = true;
+      reasons.push(`elements:${formula}`);
+    }
+  }
+
+  for (const family of context?.families || []) {
+    if (family.pattern.test(text)) {
+      score += 3;
+      materialHit = true;
+      reasons.push(`family:${family.id}`);
+    }
+  }
+
+  if (context?.wantsComputation) {
+    const matches = text.match(/\b(DFT|VASP|first[-\s]?principles|ab\s*initio|density functional|computational|calculation|theoretical)\b/gi) || [];
+    if (matches.length) {
+      score += Math.min(5, matches.length * 2);
+      reasons.push('calculation');
+    }
+  }
+
+  if (context?.wantsBattery) {
+    const matches = text.match(/\b(battery|batteries|cathode|anode|electrode|sodium[-\s]?ion|lithium[-\s]?ion|intercalation|deintercalation|desodiation|delithiation|layered oxide)\b/gi) || [];
+    if (matches.length) {
+      score += Math.min(5, matches.length * 2);
+      reasons.push('battery');
+    }
+  }
+
+  if (context?.researchType === 'diffusion' && /\b(diffusion|migration|NEB|barrier|vacanc)/i.test(text)) score += 3;
+  if (context?.researchType === 'surface' && /\b(surface|slab|adsorption|facet|interface)\b/i.test(text)) score += 3;
+  if (context?.researchType === 'doping' && /\b(dop|substitution|defect)\w*/i.test(text)) score += 3;
+  if (context?.researchType === 'voltage' && /\b(voltage|deintercalation|desodiation|delithiation|redox)\b/i.test(text)) score += 3;
+
+  if (UNRELATED_LITERATURE_PATTERN.test(text)) {
+    score -= 12;
+    reasons.push('unrelated-domain');
+  }
+
+  const paperFormulas = extractFormulaCandidatesFromText(text, { limit: 8, allowSingleElement: false });
+  if (context?.requiresMaterialMatch && !materialHit) score -= 10;
+  if (context?.requiresMaterialMatch && paperFormulas.length && !materialHit) {
+    const targetElements = new Set(formulas.flatMap((formula) => parseFormulaElements(formula)));
+    const paperElements = new Set(paperFormulas.flatMap((formula) => parseFormulaElements(formula)));
+    const overlap = [...paperElements].filter((element) => targetElements.has(element));
+    if (overlap.length <= 1) {
+      score -= 5;
+      reasons.push('formula-mismatch');
+    }
+  }
+
+  return { score, materialHit, strongMaterialHit, reasons };
+}
+
+function rankAndFilterEvidencePapers(input, context, limit = 10, options = {}) {
+  const candidates = dedupeVerifiedPapers(input, Math.max(50, limit * 6))
+    .map((paper) => {
+      const relevance = scorePaperRelevance(paper, context);
+      return {
+        ...paper,
+        relevance_score: relevance.score,
+        relevance_reasons: relevance.reasons,
+        material_relevance_confirmed: context?.requiresMaterialMatch ? relevance.strongMaterialHit : relevance.materialHit,
+      };
+    })
+    .sort((a, b) => b.relevance_score - a.relevance_score);
+
+  const requiresMaterialMatch = Boolean(context?.requiresMaterialMatch);
+  const minScore = requiresMaterialMatch ? 4 : 1;
+  const filtered = candidates.filter((paper) => {
+    if (paper.relevance_score < minScore) return false;
+    if (requiresMaterialMatch && !paper.material_relevance_confirmed) return false;
+    return true;
+  });
+
+  if (filtered.length || options.allowFallback === false) return filtered.slice(0, limit);
+  return candidates
+    .filter((paper) => paper.relevance_score > -8)
+    .slice(0, limit);
+}
+
 function textMentionsFormula(text, formula) {
   const normalizedFormula = normalizeFormulaToken(formula);
   if (!normalizedFormula || normalizedFormula.length < 2) return false;
@@ -1556,19 +1940,24 @@ function sanitizeIdeaRecommendations({ userPrompt, intent, papers, structures, i
 function buildHeuristicLiteratureQuery(prompt) {
   const text = String(prompt || '').trim();
   if (!text) return '';
-  const formulas = (text.match(/[A-Z][a-z]?(?:\d+)?(?:[A-Z][a-z]?(?:\d+)?)*/g) || [])
-    .filter((item) => item.length > 1);
+  const formulas = uniqueStrings([
+    ...extractExplicitFormulas(text),
+    ...inferAliasFormulas(text),
+    inferFallbackFormula(text),
+  ]).filter((item) => item && isValidStructureFormula(item, { allowSingleElement: true }));
+  const formulaTerms = buildFormulaSearchTerms(formulas, 8);
+  const formulaDomainTerms = inferFormulaDomainTerms(formulas);
   if (!/[\u4e00-\u9fff]/.test(text)) return text;
 
   const lower = text.toLowerCase();
   if (/(co2|二氧化碳).*(加氢|hydrogenation|催化|catalyst)|加氢.*(co2|二氧化碳)/i.test(text)) {
-    return `${formulas.join(' ')} CO2 hydrogenation catalyst DFT surface adsorption methanol`.trim();
+    return `${formulaTerms} ${formulaDomainTerms} CO2 hydrogenation catalyst DFT surface adsorption methanol`.trim();
   }
   if (/(熔盐堆|熔盐反应堆|molten\s*salt\s*reactor|msr|氟盐|氯盐|FLiBe|FLiNaK)/i.test(text)) {
-    return `${formulas.join(' ')} molten salt reactor materials corrosion fuel salt fluoride chloride`.trim();
+    return `${formulaTerms} ${formulaDomainTerms} molten salt reactor materials corrosion fuel salt fluoride chloride`.trim();
   }
   if (/(核材料|反应堆|辐照|包壳|燃料)/.test(text)) {
-    return `${formulas.join(' ')} nuclear reactor materials irradiation corrosion DFT`.trim();
+    return `${formulaTerms} ${formulaDomainTerms} nuclear reactor materials irradiation corrosion DFT`.trim();
   }
   const family = detectMaterialFamily(text);
   if (family) {
@@ -1586,18 +1975,18 @@ function buildHeuristicLiteratureQuery(prompt) {
       alloy_corrosion: 'alloy corrosion resistant materials DFT structure',
       semiconductor: 'semiconductor materials crystal structure properties DFT',
     };
-    return `${formulas.join(' ')} ${familyQueries[family.id] || `${family.label} materials crystal structure DFT`}`.trim();
+    return `${formulaTerms} ${formulaDomainTerms} ${familyQueries[family.id] || `${family.label} materials crystal structure DFT`}`.trim();
   }
   if (/(吸附|表面|晶面|催化)/.test(text)) {
-    return `${formulas.join(' ')} catalyst surface adsorption DFT`.trim();
+    return `${formulaTerms} ${formulaDomainTerms} catalyst surface adsorption DFT`.trim();
   }
   if (/(电池|正极|负极|脱锂|脱钠|储锂|储钠)/.test(text)) {
-    return `${formulas.join(' ')} battery electrode DFT calculation`.trim();
+    return `${formulaTerms} ${formulaDomainTerms} battery electrode DFT calculation first principles`.trim();
   }
   if (/(扩散|迁移|neb)/i.test(lower)) {
-    return `${formulas.join(' ')} diffusion migration NEB DFT`.trim();
+    return `${formulaTerms} ${formulaDomainTerms} diffusion migration NEB DFT`.trim();
   }
-  return `${formulas.join(' ')} materials science DFT calculation`.trim();
+  return `${formulaTerms} ${formulaDomainTerms} materials science DFT calculation`.trim();
 }
 
 function numericHullEnergy(structure) {
@@ -1670,10 +2059,13 @@ function buildSafeHandoffPrompt({ formula, modelType, recipe, bestStructure }) {
   const safeFormula = formula && formula !== 'candidate battery material' ? formula : null;
   if (!safeFormula) return null;
   const supercell = extractSupercellSpec(recipe?.supercell);
+  const databaseEntry = bestStructure?.material_id
+    ? ` using ${bestStructure.source || 'structure database'} entry ${bestStructure.material_id}`
+    : '';
   if (modelType === 'slab') {
     return `Build a ${safeFormula}(001) slab with a ${supercell} supercell and 15 A vacuum`;
   }
-  return `Build a bulk ${safeFormula} crystal${bestStructure?.material_id ? ` using Materials Project entry ${bestStructure.material_id}` : ''} with a ${supercell} supercell`;
+  return `Build a bulk ${safeFormula} crystal${databaseEntry} with a ${supercell} supercell`;
 }
 
 function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures, structureQueryPlan }) {
@@ -1834,6 +2226,12 @@ async function runRetrievalAgentStream(userPrompt, onChunk) {
     const heuristicQuery = buildHeuristicLiteratureQuery(userPrompt);
     let structureQueryPlan = buildStructureQueryPlan({ userPrompt, intent, maxFormulas: 6 });
     intent.structure_query_plan = structureQueryPlan;
+    const heuristicRelevanceContext = buildLiteratureRelevanceContext({
+      userPrompt,
+      intent,
+      query: heuristicQuery,
+      structureQueryPlan,
+    });
 
     // Start LLM intent understanding (merged with translation)
     emit({ type: 'stage', stage: 'goal_understanding', title: 'Understanding research goal', status: 'active' });
@@ -1893,13 +2291,15 @@ User prompt: "${userPrompt}"`,
 
     const litSearchPromise = Promise.all(literatureSources.map((source) => (
       source.search().then((r) => {
-        const verified = dedupeVerifiedPapers(r, 4);
+        const verified = rankAndFilterEvidencePapers(r, heuristicRelevanceContext, 4, { allowFallback: false });
         emit({
           type: 'stage',
           stage: source.stage,
-          title: `${source.label} — ${verified.length} verified ${source.kind}`,
+          title: verified.length
+            ? `${source.label} — ${verified.length} relevant ${source.kind}`
+            : `${source.label} — no relevant ${source.kind}`,
           status: 'done',
-          content: verified.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No verifiable results',
+          content: verified.slice(0, 2).map((p) => truncate(p.title, 80)).join('\n') || 'No source-backed results matched the target material closely enough.',
           papers: verified,
         });
         return verified;
@@ -1983,16 +2383,28 @@ User prompt: "${userPrompt}"`,
     ]);
 
     // Deduplicate and keep only source-backed literature. The UI must not show
-    // placeholder papers as evidence.
-    papers = dedupeVerifiedPapers(litResults.flat(), 10);
+    // placeholder or off-topic papers as evidence.
+    let literatureRelevanceContext = buildLiteratureRelevanceContext({
+      userPrompt,
+      intent,
+      query: heuristicQuery,
+      structureQueryPlan,
+    });
+    papers = rankAndFilterEvidencePapers(litResults.flat(), literatureRelevanceContext, 10, { allowFallback: false });
 
     allStructures = dedupeStructures(structureResults.flat(), 50);
 
     // If LLM gave us a better literature query and we got few results, do a supplementary search
     const llmQuery = intent.literature_query || '';
     if (llmQuery && llmQuery !== heuristicQuery && papers.length < 3) {
-      const extraResults = await searchAllLiterature(llmQuery).catch(() => []);
-      papers = dedupeVerifiedPapers([...papers, ...extraResults], 10);
+      literatureRelevanceContext = buildLiteratureRelevanceContext({
+        userPrompt,
+        intent,
+        query: llmQuery,
+        structureQueryPlan,
+      });
+      const extraResults = await searchAllLiterature(llmQuery, literatureRelevanceContext).catch(() => []);
+      papers = rankAndFilterEvidencePapers([...papers, ...extraResults], literatureRelevanceContext, 10, { allowFallback: false });
     }
 
     const literatureStructurePlan = buildStructureQueryPlan({ userPrompt, intent, papers, maxFormulas: 8 });
@@ -2245,6 +2657,9 @@ module.exports = {
   searchAllLiterature,
   formulaToOptimadeReduced,
   buildHeuristicLiteratureQuery,
+  buildLiteratureRelevanceContext,
+  rankAndFilterEvidencePapers,
+  scorePaperRelevance,
   buildStructureQueryPlan,
   buildFallbackIdeaPayload,
   sanitizeIdeaRecommendations,
