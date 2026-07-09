@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "check": "tsc -b --noEmit",
+    "benchmark:llm": "node server/scripts/benchmark-llm.cjs",
     "recipes:build-ceder-index": "node server/scripts/build-ceder-recipe-index.cjs"
   },
   "dependencies": {

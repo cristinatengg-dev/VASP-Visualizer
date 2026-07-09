@@ -1,0 +1,106 @@
+{
+  "version": "2026-07-09",
+  "name": "VASP-Visualizer-27B specialist benchmark",
+  "description": "Small, deterministic benchmark for VASP-Visualizer model behavior: materials intent to executable modeling, retrieval, VASP parameters, and rendering plans.",
+  "system_prompt": "You are VASP-Visualizer-27B, a materials modeling assistant. Return ONLY valid JSON. The JSON must include: task_type, target_material, modeling_plan, retrieval_query, vasp_parameters, render_plan, risk_checks. Keep answers concise and executable for VASP-Visualizer. If the user uploaded VASP files but did not name a concrete material, do not guess a material name.",
+  "required_fields": [
+    "task_type",
+    "target_material",
+    "modeling_plan",
+    "retrieval_query",
+    "vasp_parameters",
+    "render_plan",
+    "risk_checks"
+  ],
+  "known_material_terms": [
+    "NaCoO2",
+    "LiCoO2",
+    "LiFePO4",
+    "FePO4",
+    "Cu",
+    "Cu(111)",
+    "TiO2",
+    "SiC",
+    "MoS2",
+    "CeO2",
+    "FLiBe",
+    "LiF",
+    "BeF2"
+  ],
+  "cases": [
+    {
+      "id": "nacoo2_experiment_theory",
+      "category": "idea_agent",
+      "prompt": "NaCoO2 理论计算，我做实验想补充计算内容。请给项目可执行的建模、文献检索、VASP 参数和渲染方案。",
+      "expected_formula": "NaCoO2",
+      "expected_terms": ["NaCoO2", "VASP", "INCAR", "KPOINTS"],
+      "forbidden_terms": ["LiCoO2 as fallback"]
+    },
+    {
+      "id": "lifepo4_voltage",
+      "category": "compute_plan",
+      "prompt": "我要做 LiFePO4 脱锂电压平台计算，给出结构选择、Li vacancy/FePO4 对比、INCAR/KPOINTS 和结果可视化方案。",
+      "expected_formula": "LiFePO4",
+      "expected_terms": ["LiFePO4", "FePO4", "voltage", "INCAR"]
+    },
+    {
+      "id": "co2_cu111_surface",
+      "category": "surface_modeling",
+      "prompt": "CO2 在 Cu(111) 表面加氢，如何建立 slab、放吸附物、设置 VASP 参数，并生成反应路径渲染图？",
+      "expected_formula": "Cu",
+      "expected_terms": ["Cu", "111", "slab", "CO2"]
+    },
+    {
+      "id": "nacoo2_neb",
+      "category": "neb",
+      "prompt": "NaCoO2 中 Na 离子扩散 NEB 怎么搭模型？请给超胞、空位、端点、INCAR 和可视化输出。",
+      "expected_formula": "NaCoO2",
+      "expected_terms": ["NaCoO2", "NEB", "vacancy", "INCAR"]
+    },
+    {
+      "id": "charge_density_render_no_material_guess",
+      "category": "rendering",
+      "prompt": "我有 VASP 的 CONTCAR、CHGCAR、LOCPOT，想在网站里做电子密度差分和结构渲染，给解析、等值面、配色和导出方案。不要猜具体材料名。",
+      "expected_formula": "CHGCAR",
+      "expected_terms": ["CHGCAR", "CONTCAR", "isosurface", "render"],
+      "no_invent_material": true
+    },
+    {
+      "id": "sic_oxidation_surface",
+      "category": "surface_modeling",
+      "prompt": "SiC(0001) 表面氧化反应怎么做 VASP 计算？请给 slab、吸附氧、参数和渲染方案。",
+      "expected_formula": "SiC",
+      "expected_terms": ["SiC", "0001", "slab", "oxygen"]
+    },
+    {
+      "id": "tio2_oxygen_vacancy",
+      "category": "defect",
+      "prompt": "TiO2 金红石氧空位形成能怎么计算？需要结构、超胞、化学势、INCAR 和可视化输出。",
+      "expected_formula": "TiO2",
+      "expected_terms": ["TiO2", "oxygen vacancy", "formation energy", "INCAR"]
+    },
+    {
+      "id": "flibe_corrosion_context",
+      "category": "molten_salt",
+      "prompt": "熔盐堆 FLiBe 环境下合金腐蚀，我想先补充第一性原理计算，应该检索什么、建什么模型、VASP 怎么设？",
+      "expected_formula": "FLiBe",
+      "expected_terms": ["FLiBe", "corrosion", "DFT", "VASP"]
+    },
+    {
+      "id": "uploaded_poscar_unknown_material",
+      "category": "modeling_handoff",
+      "prompt": "我上传了 POSCAR，但没有告诉你材料名。请给建模检查、VASP 参数补全和渲染检查流程。不要猜材料名。",
+      "expected_formula": "POSCAR",
+      "expected_terms": ["POSCAR", "VASP", "render", "validation"],
+      "no_invent_material": true
+    },
+    {
+      "id": "nacoo2_handoff_formula_guard",
+      "category": "handoff_guardrail",
+      "prompt": "基于 NaCoO2 做一个 starter model，输出给 Modeling Agent 的 handoff，不要推荐 LiCoO2。",
+      "expected_formula": "NaCoO2",
+      "expected_terms": ["NaCoO2", "handoff", "modeling"],
+      "forbidden_terms": ["LiCoO2"]
+    }
+  ]
+}

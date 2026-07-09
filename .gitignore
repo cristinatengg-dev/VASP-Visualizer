@@ -31,6 +31,7 @@ core_code_bundle.txt
 ffmpeg
 server/db.json
 server/uploads/
+server/benchmark-results/
 server/runtime-storage/
 server/.venv-modeling/
 server/data/structure-libraries/*
