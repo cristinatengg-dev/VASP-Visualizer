@@ -1877,8 +1877,18 @@ function buildNoModelRecommendationPayload({ userPrompt, intent, papers, structu
 
 function sanitizeIdeaRecommendations({ userPrompt, intent, papers, structures, ideaCards, recommendedIdeaId, overallSummary, structureQueryPlan }) {
   const context = { userPrompt, intent, papers, structureQueryPlan };
+  const explicitTargets = explicitTargetFormulasFromContext(context);
   const safeCards = (Array.isArray(ideaCards) ? ideaCards : []).filter((idea) => {
-    const formulaText = `${idea?.blueprint?.structure_source?.formula || ''} ${idea?.title || ''} ${idea?.material_family || ''}`;
+    const ideaFormula = idea?.blueprint?.structure_source?.formula || idea?.material_family || '';
+    if (
+      explicitTargets.length &&
+      ideaFormula &&
+      !explicitTargets.some((formula) => normalizeFormulaToken(formula) === normalizeFormulaToken(ideaFormula))
+    ) {
+      return false;
+    }
+
+    const formulaText = `${ideaFormula} ${idea?.title || ''} ${idea?.material_family || ''}`;
     if (/LiCoO2|NaCoO2|LiFePO4|NaMnO2|LiMn2O4|battery|cathode|电池|正极/i.test(formulaText)) {
       const evidenceText = buildEvidenceText(context);
       if (!/(LiCoO2|NaCoO2|LiFePO4|NaMnO2|LiMn2O4|battery|cathode|电池|正极)/i.test(evidenceText)) return false;
@@ -1999,6 +2009,34 @@ function chooseBestStructure(structures) {
   return [...structures].sort((a, b) => numericHullEnergy(a) - numericHullEnergy(b))[0];
 }
 
+function explicitTargetFormulasFromContext(context) {
+  return uniqueStrings([
+    ...extractExplicitFormulas(context?.userPrompt || ''),
+    ...(context?.intent?.candidate_formulas || []),
+  ]).filter((formula) => isValidStructureFormula(formula, { allowSingleElement: true }));
+}
+
+function structureMatchesFormula(structure, formula) {
+  const target = normalizeFormulaToken(formula);
+  if (!target) return false;
+  return [
+    structure?.formula,
+    structure?.formula_pretty,
+    structure?.queried_formula,
+  ].some((value) => normalizeFormulaToken(value) === target);
+}
+
+function chooseBestStructureForContext(structures, context) {
+  const explicitTargets = explicitTargetFormulasFromContext(context);
+  if (explicitTargets.length) {
+    const exactMatches = (Array.isArray(structures) ? structures : [])
+      .filter((structure) => explicitTargets.some((formula) => structureMatchesFormula(structure, formula)));
+    if (exactMatches.length) return chooseBestStructure(exactMatches);
+    return null;
+  }
+  return chooseBestStructure(structures);
+}
+
 function fallbackRecipeForType(researchType, formula, bestStructure) {
   const phase = bestStructure?.space_group
     ? `${bestStructure.crystal_system || 'Unknown'} / ${bestStructure.space_group}`
@@ -2069,7 +2107,8 @@ function buildSafeHandoffPrompt({ formula, modelType, recipe, bestStructure }) {
 }
 
 function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures, structureQueryPlan }) {
-  const bestStructure = chooseBestStructure(structures);
+  const context = { userPrompt, intent, papers, structureQueryPlan };
+  const bestStructure = chooseBestStructureForContext(structures, context);
   if (!bestStructure || !isStructureEvidenceRelated(bestStructure, { userPrompt, intent, papers, structureQueryPlan })) {
     return buildNoModelRecommendationPayload({
       userPrompt,
@@ -2077,7 +2116,7 @@ function buildFallbackIdeaPayload({ userPrompt, intent, papers, structures, stru
       papers,
       structures,
       structureQueryPlan,
-      reason: '文本模型不可用，且本轮没有找到与检索文献相匹配的结构条目；不会用 LiCoO2 或其他无关材料作为兜底模型。',
+      reason: '文本模型不可用，且本轮没有找到与用户目标材料和检索文献同时匹配的结构条目；不会用 LiCoO2 或其他无关材料作为兜底模型。',
     });
   }
 
