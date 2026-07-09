@@ -216,6 +216,7 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
             onClick={() => navigate('/materials')}
             className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-white"
             title="返回资料库"
+            aria-label="返回资料库"
           >
             <ArrowLeft size={16} />
           </button>
@@ -243,6 +244,8 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
                 onClick={() => handleSearch()}
                 disabled={isSearching || !query.trim()}
                 className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl bg-indigo-600 text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                title="Search structures"
+                aria-label="Search structures"
               >
                 {isSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
               </button>

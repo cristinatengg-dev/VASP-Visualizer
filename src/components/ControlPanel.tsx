@@ -935,6 +935,8 @@ C/H/1.2`
                        <button 
                            onClick={() => toggleTrajectoryPlay()}
                            className="p-1.5 bg-[#0A1128] text-white rounded-[32px] hover:bg-[#162044] transition-colors"
+                           title={molecularData.trajectory.isPlaying ? 'Pause trajectory' : 'Play trajectory'}
+                           aria-label={molecularData.trajectory.isPlaying ? 'Pause trajectory' : 'Play trajectory'}
                        >
                            {molecularData.trajectory.isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                        </button>
@@ -946,16 +948,17 @@ C/H/1.2`
                            value={molecularData.trajectory.currentFrame}
                            onChange={(e) => setTrajectoryFrame(parseInt(e.target.value))}
                            className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#0A1128]"
+                           aria-label="Trajectory frame"
                        />
                    </div>
                    
                    <div className="flex justify-between text-gray-600">
-                       <button onClick={() => setTrajectoryFrame(Math.max(0, molecularData.trajectory!.currentFrame - 1))} className="p-1 hover:bg-gray-200 rounded-[32px]">
+                       <button onClick={() => setTrajectoryFrame(Math.max(0, molecularData.trajectory!.currentFrame - 1))} className="p-1 hover:bg-gray-200 rounded-[32px]" title="Previous trajectory frame" aria-label="Previous trajectory frame">
                            <SkipBack className="w-3 h-3" />
                        </button>
                        <button onClick={() => setTrajectoryFrame(Math.max(0, molecularData.trajectory!.currentFrame - 10))} className="text-[10px] font-mono hover:underline">-10</button>
                        <button onClick={() => setTrajectoryFrame(Math.min(molecularData.trajectory!.totalFrames - 1, molecularData.trajectory!.currentFrame + 10))} className="text-[10px] font-mono hover:underline">+10</button>
-                       <button onClick={() => setTrajectoryFrame(Math.min(molecularData.trajectory!.totalFrames - 1, molecularData.trajectory!.currentFrame + 1))} className="p-1 hover:bg-gray-200 rounded-[32px]">
+                       <button onClick={() => setTrajectoryFrame(Math.min(molecularData.trajectory!.totalFrames - 1, molecularData.trajectory!.currentFrame + 1))} className="p-1 hover:bg-gray-200 rounded-[32px]" title="Next trajectory frame" aria-label="Next trajectory frame">
                            <SkipForward className="w-3 h-3" />
                        </button>
                    </div>
@@ -1371,6 +1374,7 @@ C/H/1.2`
                value={lightSettings.intensity}
                onChange={(e) => setLightSettings({ intensity: parseFloat(e.target.value) })}
                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+               aria-label="Light intensity"
              />
            </div>
         </div>
@@ -1501,6 +1505,7 @@ C/H/1.2`
                              value={val}
                              onChange={(e) => setter(Math.max(1, parseInt(e.target.value) || 1))}
                              className="w-full px-2 py-1 text-xs border rounded-[24px] focus:ring-1 focus:ring-blue-500 outline-none text-center"
+                             aria-label={`Supercell ${label}`}
                          />
                      </div>
                  ))}
@@ -1662,6 +1667,7 @@ C/H/1.2`
                 checked={usePBCLocal}
                 onChange={(e) => setUsePBCLocal(e.target.checked)}
                 className="w-3.5 h-3.5 accent-blue-600"
+                aria-label="Enable periodic boundary conditions"
               />
               <span className="text-xs text-gray-600">Enable periodic boundary conditions (PBC)</span>
             </label>

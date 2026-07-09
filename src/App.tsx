@@ -175,6 +175,7 @@ function App() {
       <Route path="/agent/runtime" element={<AgentRoute><RuntimeInspector /></AgentRoute>} />
       {/* 旧路由兼容 */}
       <Route path="/hero" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

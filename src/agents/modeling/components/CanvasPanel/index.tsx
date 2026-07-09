@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Trash2 } from 'lucide-react';
 import { ModelingIntent } from '../../types/modeling';
 import { Scene3D } from '../../../../components/Scene3D';
 import { useStore } from '../../../../store/useStore';
@@ -26,8 +26,24 @@ const CanvasPanel: React.FC<CanvasPanelProps> = ({
   const setIsEditMode = useStore(state => state.setIsEditMode);
   const triggerRotation = useStore(state => state.triggerRotation);
   const setMeasurementInfo = useStore(state => state.setMeasurementInfo);
+  const selectedAtomIds = useStore(state => state.selectedAtomIds);
+  const deleteSelectedAtoms = useStore(state => state.deleteSelectedAtoms);
   const atomCount = molecularData?.atoms?.length ?? null;
   const [activeMode, setActiveMode] = useState<ToolMode>('select');
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      const target = event.target as HTMLElement | null;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      if (selectedAtomIds.length === 0) return;
+      event.preventDefault();
+      deleteSelectedAtoms();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [deleteSelectedAtoms, selectedAtomIds.length]);
 
   const handleModeChange = (mode: ToolMode) => {
     setActiveMode(mode);
@@ -97,6 +113,16 @@ const CanvasPanel: React.FC<CanvasPanelProps> = ({
             <ToolbarButton icon="measure" active={activeMode === 'measure'} onClick={() => handleModeChange('measure')} />
             <ToolbarButton icon="angle" active={activeMode === 'angle'} onClick={() => handleModeChange('angle')} />
           </div>
+          <button
+            type="button"
+            onClick={() => deleteSelectedAtoms()}
+            disabled={selectedAtomIds.length === 0}
+            className="h-10 inline-flex items-center gap-2 rounded-[16px] border border-red-100 bg-white px-3 text-[10px] font-semibold uppercase tracking-wider text-red-600 shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:border-gray-100 disabled:bg-gray-50 disabled:text-gray-300"
+            title={selectedAtomIds.length > 0 ? `Delete ${selectedAtomIds.length} selected atom${selectedAtomIds.length > 1 ? 's' : ''}` : 'Select atoms to delete'}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {selectedAtomIds.length > 0 ? `Delete ${selectedAtomIds.length}` : 'Delete'}
+          </button>
         </div>
 
         <div className="flex gap-2 pointer-events-auto">

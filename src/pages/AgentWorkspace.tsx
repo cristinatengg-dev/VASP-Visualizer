@@ -2143,11 +2143,12 @@ const AgentWorkspace: React.FC = () => {
     } catch (error) {
       harnessSessionIdRef.current = null;
       setHarnessSession(null);
+      console.warn('[AgentWorkspace] Runtime harness session unavailable', error);
       addMessage({
         role: 'assistant',
-        title: 'Harness 记录失败',
-        content: `连续 agent 仍会执行，但本次无法写入 runtime harness：${error instanceof Error ? error.message : String(error)}`,
-        status: 'error',
+        title: '运行记录暂不可用',
+        content: '连续 agent 会继续执行；这次只是无法写入 runtime harness 记录，不影响检索、建模和计算输入生成。',
+        status: 'success',
       });
       return null;
     }
@@ -2216,11 +2217,12 @@ const AgentWorkspace: React.FC = () => {
         });
       }
     } catch (error) {
+      console.warn('[AgentWorkspace] Runtime harness checkpoint unavailable', error);
       appendHarnessCheckpoint({
         id: newId('harness-error'),
         phase: checkpointPhase,
-        status: 'error',
-        summary: `Harness write failed: ${error instanceof Error ? error.message : String(error)}`,
+        status: 'info',
+        summary: 'Runtime harness checkpoint was skipped; workflow continued.',
       });
     }
   }, [appendHarnessCheckpoint, postJson]);

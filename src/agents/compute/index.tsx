@@ -360,7 +360,12 @@ const ComputeAgent: React.FC = () => {
       <header className="bg-white border-b border-gray-100 sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/')} className="p-2 hover:bg-gray-50 rounded-full transition-colors">
+            <button
+              onClick={() => navigate('/')}
+              className="p-2 hover:bg-gray-50 rounded-full transition-colors"
+              title="Back to home"
+              aria-label="Back to home"
+            >
               <ArrowLeft size={20} className="text-gray-500" />
             </button>
             <div className="flex items-center gap-3">
@@ -464,11 +469,11 @@ const ComputeAgent: React.FC = () => {
                       <div className="grid grid-cols-2 gap-3">
                         <div className="p-4 border border-gray-100 rounded-[24px]">
                           <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest font-semibold">Total Charge</label>
-                          <input type="number" value={charge} onChange={e => setCharge(Number(e.target.value))} className="w-full text-xs font-mono font-bold focus:outline-none" />
+                          <input type="number" value={charge} onChange={e => setCharge(Number(e.target.value))} className="w-full text-xs font-mono font-bold focus:outline-none" aria-label="Total charge" />
                         </div>
                         <div className="p-4 border border-gray-100 rounded-[24px]">
                           <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest font-semibold">Multiplicity</label>
-                          <input type="number" value={multiplicity} onChange={e => setMultiplicity(Number(e.target.value))} className="w-full text-xs font-mono font-bold focus:outline-none" />
+                          <input type="number" value={multiplicity} onChange={e => setMultiplicity(Number(e.target.value))} className="w-full text-xs font-mono font-bold focus:outline-none" aria-label="Multiplicity" />
                         </div>
                       </div>
                     </div>

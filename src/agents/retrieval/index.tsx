@@ -550,7 +550,12 @@ const IdeaAgent: React.FC = () => {
         {/* Header */}
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <button onClick={() => navigate('/')} className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-400">
+            <button
+              onClick={() => navigate('/')}
+              className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-400"
+              title="Back to home"
+              aria-label="Back to home"
+            >
               <ArrowLeft size={15} />
             </button>
             <div className="flex items-center gap-2">
@@ -612,8 +617,13 @@ const IdeaAgent: React.FC = () => {
               placeholder="描述你的研究目标..."
               className="w-full resize-none bg-gray-50 border border-gray-200 rounded-2xl py-2.5 px-3 pr-10 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all disabled:opacity-50"
             />
-            <button onClick={() => handleSearch()} disabled={isStreaming || !query.trim()}
-              className="absolute right-2 bottom-2 w-7 h-7 flex items-center justify-center bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed">
+            <button
+              onClick={() => handleSearch()}
+              disabled={isStreaming || !query.trim()}
+              className="absolute right-2 bottom-2 w-7 h-7 flex items-center justify-center bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              title="Run idea search"
+              aria-label="Run idea search"
+            >
               {isStreaming ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
             </button>
           </div>
