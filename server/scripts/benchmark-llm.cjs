@@ -164,9 +164,18 @@ function parseAssistantJson(text) {
 }
 
 function includesTerm(haystack, term) {
-  const source = String(haystack || '').toLowerCase();
-  const target = String(term || '').toLowerCase();
-  return Boolean(target) && source.includes(target);
+  const source = String(haystack || '');
+  const target = String(term || '').trim();
+  if (!target) return false;
+
+  // Single element symbols such as Cu should not match ordinary words such as
+  // "Accurate". Treat them as standalone chemistry tokens.
+  if (/^[A-Z][a-z]?$/.test(target)) {
+    const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^A-Za-z0-9])${escaped}([^A-Za-z0-9]|$)`, 'i').test(source);
+  }
+
+  return source.toLowerCase().includes(target.toLowerCase());
 }
 
 function scoreCase(testCase, benchmark, assistantText, assistantJson) {
