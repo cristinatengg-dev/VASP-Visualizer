@@ -9,11 +9,11 @@
 | 项目名 | SCI Visualizer / VASP-Visualizer |
 |--------|----------------------------------|
 | 域名 | https://scivisualizer.com |
-| 服务器 | 腾讯云香港 |
-| 服务器 IP | 43.154.165.254 |
-| 服务器用户 | root |
-| 服务器密码 | 1Yitengteng_ |
-| 服务器项目路径 | /root/VASP-Visualizer |
+| 服务器 | 腾讯云轻量应用服务器（上海） |
+| 服务器 IP | 118.25.15.120 |
+| 服务器用户 | deploy（部署）/ ubuntu（系统默认用户） |
+| 登录方式 | SSH 公钥登录，默认密钥 `~/.ssh/id_ed25519` |
+| 服务器项目路径 | /home/deploy/VASP-Visualizer |
 | 云服务商 | 腾讯云（Tencent Cloud） |
 
 ---
@@ -22,8 +22,8 @@
 
 ```
 ┌─────────────────────────────────────────────────┐
-│              Cloudflare CDN / DNS               │
-│           (scivisualizer.com → 43.154.165.254)  │
+│                 DNSPod / HTTPS                  │
+│          (scivisualizer.com → 118.25.15.120)    │
 └─────────────────────┬───────────────────────────┘
                       │ HTTPS :443 / HTTP :80
 ┌─────────────────────▼───────────────────────────┐
@@ -87,15 +87,15 @@ SMTP_FROM=SCI Visualizer <noreply@scivisualizer.com>
 ### 域名邮箱
 
 - 域名：`scivisualizer.com`
-- DNS 托管：Cloudflare
-- 当前 DNS 状态：Cloudflare Email Routing 已开启，旧网易根域 MX 已删除；Resend 发信用的 `send` MX/TXT 和 `resend._domainkey` DKIM TXT 记录已添加到 Cloudflare
+- DNS 托管：DNSPod
+- 当前 DNS 状态：根域和 `www` 指向新服务器；邮件相关 MX/TXT/CNAME 记录保留在 DNSPod
 - 已配置收信地址：`support@scivisualizer.com` 转发到 `cristinatengg@gmail.com`
 - Catch-all：关闭，未创建的域名前缀不会自动转发
 - 推荐项目发信方案：Resend SMTP，域名验证后由 `noreply@scivisualizer.com` 发送验证码
 - 建议项目发信账号：`noreply@scivisualizer.com`
 - 后端发信配置：`SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM`
 
-生产环境切换域名邮箱前，需要先在 Resend 添加并验证 `scivisualizer.com`，按 Resend 给出的 DNS 记录在 Cloudflare 中配置 DKIM/SPF/验证记录，然后在服务器 `/home/deploy/VASP-Visualizer/.env` 或部署 shell 环境中写入：
+生产环境切换域名邮箱前，需要先在 Resend 添加并验证 `scivisualizer.com`，按 Resend 给出的 DNS 记录在 DNSPod 中配置 DKIM/SPF/验证记录，然后在服务器 `/home/deploy/VASP-Visualizer/.env` 或部署 shell 环境中写入：
 
 ```
 SMTP_HOST=smtp.resend.com
@@ -107,7 +107,7 @@ SMTP_FROM=SCI Visualizer <noreply@scivisualizer.com>
 ```
 
 DNS 补充检查项：
-- Cloudflare Email Routing 负责收信，根域 MX 应指向 `route*.mx.cloudflare.net`。
+- 邮件收信由当前 DNSPod 邮件记录负责，调整 MX/TXT 前先确认现有邮箱服务。
 - 添加 Resend DNS 记录时，按 Resend dashboard 生成值配置；若涉及根域 SPF，必须合并为单条 SPF，不能创建多条根域 SPF。
 - 验证邮件发信后，用 `/api/auth/send-email-code` 实测验证码是否能从域名邮箱发出。
 
@@ -117,79 +117,60 @@ DNS 补充检查项：
 
 ### 首次部署 / 全量部署
 
-#### 方法一：upload_and_deploy.sh 一键部署（推荐）
+#### 方法一：deploy.sh 一键部署（推荐）
 
-新部署方式使用 `deploy` 用户 + 公钥登录 + rsync 同步 + 远端手动 `docker build` + `docker compose up --no-build` + health check。
+当前部署方式使用 `deploy` 用户 + 公钥登录 + 远端 `git pull` + 手动 `docker build` + `docker compose up --no-build` + health check。
 
 **使用方式：**
 ```bash
 cd /Users/a1234/VASP-Visualizer
 
-DEPLOY_HOST=43.154.165.254 \
-DEPLOY_PORT=2222 \
+DEPLOY_HOST=118.25.15.120 \
+DEPLOY_PORT=22 \
 DEPLOY_USER=deploy \
-DEPLOY_KEY=~/.ssh/vasp_deploy \
+DEPLOY_KEY=~/.ssh/id_ed25519 \
 DEPLOY_DIR=/home/deploy/VASP-Visualizer \
-bash upload_and_deploy.sh
+bash deploy.sh
 ```
 
 **该脚本流程：**
-1. 通过 rsync（端口 2222，`deploy` 用户，公钥认证）同步代码到服务器
-2. 在服务器上执行手动 `docker build`（避免 `compose build requires buildx 0.17` 问题）
-3. 执行 `docker compose up --no-build` 启动容器
-4. 运行 health check 验证部署成功（期望 HTTP 200）
+1. 推送或确认 GitHub `main` 已是最新代码
+2. 通过 SSH（端口 22，`deploy` 用户，公钥认证）在新服务器执行 `git pull`
+3. 在服务器上执行手动 `docker build`
+4. 执行 `docker compose up --no-build` 启动容器
+5. 运行 health check 验证部署成功（期望 HTTP 200）
 
 **关键变更说明：**
-- SSH 端口从 22 改为 **2222**
-- 登录用户从 `root` 改为 **`deploy`**
-- 认证方式改为**公钥登录**（密钥：`~/.ssh/vasp_deploy`）
-- 服务器项目路径从 `/root/VASP-Visualizer` 改为 `/home/deploy/VASP-Visualizer`
-- 服务器端 `deploy_to_tencent.sh` 也改为手动 `docker build`，避免 buildx 版本问题
+- SSH 端口为 **22**
+- 部署用户为 **`deploy`**
+- 认证方式为**公钥登录**（密钥：`~/.ssh/id_ed25519`）
+- 服务器项目路径为 `/home/deploy/VASP-Visualizer`
 
 > **注意**：已在 `.gitignore` 中加入 `*.tar.gz` / `*.tgz`，并清理了之前遗留的部署压缩包文件，避免误提交。
 
-#### 方法二：使用旧版自动化脚本（备用）
+#### 方法二：腾讯云控制台 WebShell（当 SSH 不可用时）
 
-```bash
-cd /Users/a1234/VASP-Visualizer
-expect secure_deploy.expect
-```
-
-该脚本会自动：
-1. 创建服务器目录 `/root/VASP-Visualizer/ssl`
-2. 上传 SSL 证书（`ssl/scivisualizer.com.crt` 和 `.key`）
-3. 通过 rsync 同步代码（排除 `node_modules`、`.git`、`dist`、`.DS_Store`）
-4. 在服务器上执行 `deploy_to_tencent.sh`
-
-#### 方法三：腾讯云控制台 WebShell（当 SSH 不可用时）
-
-**当本地 SSH 无法连接服务器时，使用此方法：**
+当本地 SSH 无法连接服务器时，使用此方法：
 
 1. 登录 [腾讯云控制台](https://console.cloud.tencent.com)
-2. 进入「云服务器 CVM」→ 找到 IP 为 `43.154.165.254` 的实例
+2. 进入「轻量应用服务器」→ 找到 IP 为 `118.25.15.120` 的实例
 3. 点击「登录」→「VNC 登录」或「WebShell 登录」
 4. 在服务器终端执行：
 
 ```bash
 cd /home/deploy/VASP-Visualizer
-./deploy_to_tencent.sh
+git pull origin main
+docker build -t vasp-visualizer-backend ./server
+docker build -t vasp-visualizer-frontend .
+docker compose down
+docker compose up -d --no-build --force-recreate --remove-orphans
 ```
 
-`deploy_to_tencent.sh` 脚本内容（已更新为手动 docker build）：
+验证状态：
 ```bash
-# 手动 docker build（避免 buildx 0.17 问题）
-docker build -t vasp-visualizer-frontend .
-docker build -t vasp-visualizer-backend ./server
-
-# 启动容器（不再重新构建）
-docker compose up -d --no-build --force-recreate --remove-orphans
-
-# 验证状态
-sleep 5
 docker compose ps
-
-# Health check
-curl -s http://localhost/api/health
+curl -sk https://localhost/api/health
+curl -sk https://localhost/api/runtime-demo/health
 ```
 
 ### 仅更新后端代码（快速部署）
@@ -217,20 +198,13 @@ expect upload_server_only.expect
 
 **当前本地 SSH 配置** (`~/.ssh/config`)：
 ```
-Host 43.154.165.254
-    User root
-    IdentityFile /Users/a1234/.ssh/vasp_deploy
-    KexAlgorithms +diffie-hellman-group14-sha1,diffie-hellman-group1-sha1
-    HostKeyAlgorithms +ssh-rsa
-```
-
-**本地公钥** (`~/.ssh/vasp_deploy.pub`)：
-```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFliDryLTJYHWvsAitaSQyq93Ua/fybGUrKMpQZY7tVl a1234@MacBook-Pro-2.local
+Host 118.25.15.120
+    User deploy
+    IdentityFile /Users/a1234/.ssh/id_ed25519
 ```
 
 **解决方案**：
-- 通过腾讯云 WebShell 在服务器执行：
+- 通过腾讯云 WebShell 在服务器确认 `deploy` 用户的 `~/.ssh/authorized_keys` 已包含本机公钥：
   ```bash
   echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFliDryLTJYHWvsAitaSQyq93Ua/fybGUrKMpQZY7tVl" >> ~/.ssh/authorized_keys
   chmod 600 ~/.ssh/authorized_keys
@@ -261,7 +235,7 @@ docker compose ps
 
 | 日期 | 部署方式 | 结果 | 备注 |
 |------|---------|------|------|
-| 2026-03-07 | 腾讯云 WebShell 执行 deploy_to_tencent.sh | ✅ 成功 | 三容器 Up，API 正常 |
+| 2026-07-17 | 新服务器 GitHub pull + Docker 重建 | ✅ 成功 | 118.25.15.120 三容器 Up，API 正常 |
 
 ---
 
@@ -278,9 +252,9 @@ docker compose ps
 ## SSL 证书
 
 - **证书路径（本地）**: `ssl/scivisualizer.com.crt` 和 `ssl/scivisualizer.com.key`
-- **证书路径（服务器）**: `/root/VASP-Visualizer/ssl/`
+- **证书路径（服务器）**: `/home/deploy/VASP-Visualizer/ssl/`
 - **Nginx 引用**: `/etc/nginx/ssl/scivisualizer.com.crt`
-- **当前 CDN**: Cloudflare（HTTPS 也由 Cloudflare 代理，服务器实际接收 HTTP）
+- **当前入口**: 新服务器 Nginx 直接终止 HTTPS；大陆公网域名访问需要完成腾讯云接入备案。
 
 ---
 
@@ -299,9 +273,7 @@ VASP-Visualizer/
 ├── Dockerfile              # 前端 Docker 镜像构建（多阶段：Node→Nginx）
 ├── docker-compose.yml      # 三服务编排（frontend + backend + mongo）
 ├── nginx.conf              # Nginx 配置（HTTP/HTTPS + API 反向代理）
-├── deploy_to_tencent.sh    # 服务器端部署脚本
-├── secure_deploy.expect    # 本地全量部署脚本（rsync + 远程执行）
-├── upload_server_only.expect # 仅更新后端代码脚本
+├── deploy.sh               # 本地触发新服务器部署脚本
 ├── .env                    # 本地开发环境变量
 ├── .env.production         # 生产环境变量
 ├── DEPLOY.md               # 部署说明文档
@@ -330,8 +302,8 @@ docker compose restart frontend
 # 停止所有服务
 docker compose down
 
-# 完整重新部署
-./deploy_to_tencent.sh
+# 完整重新部署（本地执行）
+bash deploy.sh
 
 # 进入 backend 容器 shell
 docker exec -it vasp-visualizer-backend-1 sh

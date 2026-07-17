@@ -3,7 +3,7 @@
  *
  * Use this as a temporary fallback entrypoint when the primary domain
  * is blocked on some networks. The worker terminates TLS at Cloudflare
- * and forwards requests to the known-good origin.
+ * and forwards requests to the new Tencent Lighthouse origin.
  *
  * Deploy:
  *   cd server/cloudflare-site-proxy
@@ -13,7 +13,7 @@
  *   https://scivisualizer-site-proxy.<your-subdomain>.workers.dev
  */
 
-const DEFAULT_ORIGIN_BASE_URL = 'http://43.154.165.254';
+const DEFAULT_ORIGIN_BASE_URL = 'http://118.25.15.120';
 
 export default {
   async fetch(request, env) {

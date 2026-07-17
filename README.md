@@ -81,8 +81,7 @@ npm run dev
 推荐方式：
 
 ```bash
-cp deploy.env.example deploy.env
-bash upload_and_deploy.sh
+bash deploy.sh
 ```
 
 或使用：
