@@ -1,6 +1,8 @@
 # Stage 1: Build
 FROM node:18-alpine as builder
 
+RUN npm config set registry https://registry.npmmirror.com
+
 WORKDIR /app
 
 COPY package*.json ./

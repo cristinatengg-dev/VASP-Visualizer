@@ -11,11 +11,11 @@ set -euo pipefail
 #   bash deploy.sh --no-push    # deploy only (code already pushed)
 # ─────────────────────────────────────────────────────────────────────────────
 
-DEPLOY_HOST="43.154.165.254"
-DEPLOY_PORT="2222"
-DEPLOY_USER="deploy"
-DEPLOY_KEY="$HOME/.ssh/vasp_deploy"
-DEPLOY_DIR="/home/deploy/VASP-Visualizer"
+DEPLOY_HOST="${DEPLOY_HOST:-118.25.15.120}"
+DEPLOY_PORT="${DEPLOY_PORT:-22}"
+DEPLOY_USER="${DEPLOY_USER:-deploy}"
+DEPLOY_KEY="${DEPLOY_KEY:-$HOME/.ssh/id_ed25519}"
+DEPLOY_DIR="${DEPLOY_DIR:-/home/deploy/VASP-Visualizer}"
 
 SSH_OPTS=(-i "$DEPLOY_KEY" -p "$DEPLOY_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
 SKIP_PUSH=false

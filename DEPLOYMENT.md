@@ -24,17 +24,17 @@ bash deploy.sh --no-push
 
 | Item | Value |
 |---|---|
-| Host | `43.154.165.254` |
-| SSH port | `2222` |
+| Host | `118.25.15.120` |
+| SSH port | `22` |
 | User | `deploy` |
-| SSH key | `~/.ssh/vasp_deploy` |
+| SSH key | `~/.ssh/id_ed25519` |
 | Project dir | `/home/deploy/VASP-Visualizer` |
 | Health check | `https://localhost/api/health` → 200 |
 
 ## Manual server access
 
 ```bash
-ssh -i ~/.ssh/vasp_deploy -p 2222 deploy@43.154.165.254
+ssh -i ~/.ssh/id_ed25519 deploy@118.25.15.120
 cd /home/deploy/VASP-Visualizer
 docker compose logs --tail=50
 ```
