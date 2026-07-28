@@ -34,6 +34,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { useStore } from "../store/useStore";
+import ComplianceFooter from "./ComplianceFooter";
 import { COMPANY_NAME, SUPPORT_EMAIL, SUPPORT_MAILTO } from "../constants/contact";
 import { LEGAL_LINKS } from "../constants/legal";
 import { MATERIAL_EXPLORER_CARDS } from "../data/materialExplorerRegistry";
@@ -472,6 +473,10 @@ const CopyrightStrip: React.FC = () => (
     <p className="text-[11px] text-gray-400 font-mono text-center">
       {COMPANY_NAME}
     </p>
+    <ComplianceFooter
+      className="text-[11px] text-gray-400 font-mono"
+      linkClassName="hover:text-gray-600 transition-colors duration-150 underline-offset-2 hover:underline"
+    />
     <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
       <a
         href={SUPPORT_MAILTO}

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import ComplianceFooter from '../ComplianceFooter';
 import { COMPANY_NAME, SUPPORT_EMAIL, SUPPORT_MAILTO } from '../../constants/contact';
 import { LEGAL_LINKS } from '../../constants/legal';
 
@@ -101,6 +102,10 @@ const LegalDocumentLayout: React.FC<LegalDocumentLayoutProps> = ({
             Support: <a href={SUPPORT_MAILTO} className="hover:text-gray-600 underline underline-offset-2">{SUPPORT_EMAIL}</a>
           </p>
           <p className="mt-1">{COMPANY_NAME}</p>
+          <ComplianceFooter
+            className="mt-1"
+            linkClassName="hover:text-gray-600 underline underline-offset-2"
+          />
           <p className="mt-1">This document constitutes a legally binding agreement between you and SCI Visualizer.</p>
         </footer>
       </div>
