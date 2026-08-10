@@ -49,6 +49,18 @@ test('workspace runtime schemas accept persisted sessions and snapshot artifacts
   }
 });
 
+test('workspace task uniqueness index only covers active tasks', () => {
+  const index = SessionModel.schema.indexes().find(([keys]) => (
+    keys.ownerId === 1 && keys.clientTaskId === 1
+  ));
+  assert.ok(index, 'workspace task uniqueness index should exist');
+  assert.equal(index[1].unique, true);
+  assert.deepEqual(index[1].partialFilterExpression, {
+    clientTaskId: { $type: 'string' },
+    deletedAt: null,
+  });
+});
+
 test('workspace snapshot normalization enforces JSON objects and size limits', () => {
   const normalized = normalizeWorkspaceSnapshot({ version: 1, phase: 'idle', messages: [] });
   assert.deepEqual(normalized, { version: 1, phase: 'idle', messages: [] });

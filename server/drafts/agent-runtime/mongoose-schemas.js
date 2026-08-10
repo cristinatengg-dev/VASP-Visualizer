@@ -103,7 +103,9 @@ SessionSchema.index(
     unique: true,
     partialFilterExpression: {
       clientTaskId: { $type: 'string' },
-      deletedAt: { $exists: false },
+      // Equality-to-null matches active documents where deletedAt is absent,
+      // while remaining valid inside a MongoDB partial index expression.
+      deletedAt: null,
     },
   }
 );
