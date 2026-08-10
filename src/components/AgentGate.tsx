@@ -52,7 +52,7 @@ export const AgentGate: React.FC<AgentGateProps> = ({ agent, label, children }) 
       try {
         const token = localStorage.getItem('vasp_token') || '';
         const res = await fetch(
-          `${API_BASE_URL}/agent-access?userId=${encodeURIComponent(user.email)}&agent=${encodeURIComponent(agent)}`,
+          `${API_BASE_URL}/agent-access?userId=${encodeURIComponent(user.phone)}&agent=${encodeURIComponent(agent)}`,
           { headers: token ? { Authorization: `Bearer ${token}` } : {} }
         );
         const data = await res.json();

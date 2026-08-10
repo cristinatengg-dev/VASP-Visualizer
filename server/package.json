@@ -4,7 +4,9 @@
   "description": "Backend API for SCI Visualizer",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node --test test/*.test.js",
+    "migrate-users-to-phone": "node scripts/migrate-users-to-phone.cjs"
   },
   "dependencies": {
     "alipay-sdk": "^3.6.2",
@@ -15,9 +17,9 @@
     "jszip": "^3.10.1",
     "mongoose": "^9.1.4",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^7.0.12",
     "pdf-parse": "^2.4.5",
     "ssh2": "^1.17.0",
+    "tencentcloud-sdk-nodejs": "^4.1.287",
     "uuid": "^13.0.0"
   }
 }

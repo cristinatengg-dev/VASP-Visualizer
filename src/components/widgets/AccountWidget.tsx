@@ -22,12 +22,12 @@ export const AccountWidget: React.FC = () => {
       <div className="flex items-center gap-4">
         <div className="w-12 h-12 rounded-full bg-snap-bg overflow-hidden border-2 border-white shadow-sm">
            <img 
-             src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`} 
+             src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.phone)}`}
              alt="Avatar" 
            />
         </div>
         <div>
-          <p className="text-sm font-bold text-snap-text">{user.email}</p>
+          <p className="text-sm font-bold text-snap-text">{user.phone}</p>
           <div className="flex items-center gap-1 mt-1">
              <span className={clsx(
                "text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wide",

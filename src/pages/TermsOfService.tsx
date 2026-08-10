@@ -31,7 +31,7 @@ const TermsOfService: React.FC = () => (
 
     <LegalSection title="2. Eligibility and Account Registration">
       <p>2.1. You must be at least eighteen (18) years of age or the age of legal majority in your jurisdiction to use the Service. By using the Service, you represent and warrant that you meet this requirement.</p>
-      <p>2.2. To access certain features, you must register for an account by providing a valid email address and completing verification. You agree to: (a) provide accurate and complete registration information; (b) maintain the security of your account credentials; (c) promptly notify us of any unauthorized use of your account.</p>
+      <p>2.2. To access the Service, you must provide a valid mobile phone number and complete SMS verification. You agree to: (a) provide accurate and complete registration information; (b) maintain control of the verified phone number and the security of your account; (c) promptly notify us of any unauthorized use of your account.</p>
       <p>2.3. You are solely responsible for all activities that occur under your account, whether or not authorized by you. We reserve the right to suspend or terminate accounts that violate these Terms or exhibit signs of unauthorized access.</p>
       <p>2.4. Account access is limited to three (3) concurrent active sessions per User unless otherwise specified in your Subscription Plan.</p>
     </LegalSection>

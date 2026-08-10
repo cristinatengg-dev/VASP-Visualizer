@@ -1487,7 +1487,7 @@ const applyEvidenceBackedRecommendation = (prompt: string, data: CompleteData): 
 const AgentWorkspace: React.FC = () => {
   const navigate = useNavigate();
   const { user, setMolecularData, setShowBonds } = useStore();
-  const accountLabel = user?.email || 'Research user';
+  const accountLabel = user?.phone || 'Research user';
   const [workspacePrompt, setWorkspacePrompt] = useState('');
   const [taskSearch, setTaskSearch] = useState('');
   const [tasks, setTasks] = useState<AgentTaskRecord[]>([]);
@@ -2036,12 +2036,12 @@ const AgentWorkspace: React.FC = () => {
   }, []);
 
   const withUserPayload = useCallback((payload: Record<string, any> = {}) => {
-    const userId = user?.email || localStorage.getItem('vasp_user_id') || '';
+    const userId = user?.phone || localStorage.getItem('vasp_user_id') || '';
     return {
       ...payload,
       ...(userId ? { userId, ownerId: userId } : {}),
     };
-  }, [user?.email]);
+  }, [user?.phone]);
 
   const postJson = useCallback(async <T,>(
     path: string,

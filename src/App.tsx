@@ -30,7 +30,6 @@ import { Loader2 } from 'lucide-react';
 import { API_BASE_URL } from './config';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AgentGate } from './components/AgentGate';
-import { createLocalTrustedUser, getLocalTrustedEmail } from './utils/localTrustedDevice';
 
 // Protected route: redirect to /login if not authenticated
 const AppRoute: React.FC = () => {
@@ -76,25 +75,12 @@ function App() {
   const { user, setUser } = useStore();
   
   const [isAuthChecking, setIsAuthChecking] = useState(() => {
-      const hasLocalTrustedDevice = !!getLocalTrustedEmail();
       const hasToken = !!(localStorage.getItem('vasp_user_id') && localStorage.getItem('vasp_token'));
-      return (hasLocalTrustedDevice || hasToken) && !user;
+      return hasToken && !user;
   });
 
   useEffect(() => {
     const checkAuth = async () => {
-        const localTrustedEmail = getLocalTrustedEmail();
-        if (localTrustedEmail) {
-            if (!user) {
-                localStorage.setItem('vasp_user_id', localTrustedEmail);
-                localStorage.setItem('vasp_local_trusted_device', '1');
-                localStorage.removeItem('vasp_token');
-                setUser(createLocalTrustedUser(localTrustedEmail));
-            }
-            setIsAuthChecking(false);
-            return;
-        }
-
         const userId = localStorage.getItem('vasp_user_id');
         const token = localStorage.getItem('vasp_token');
         
@@ -105,7 +91,7 @@ function App() {
             }
 
             try {
-                const res = await fetch(`${API_BASE_URL}/user/${userId}`, {
+                const res = await fetch(`${API_BASE_URL}/user/${encodeURIComponent(userId)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
@@ -128,12 +114,6 @@ function App() {
     }
   }, [isAuthChecking, setUser, user]);
 
-  useEffect(() => {
-    if (!user && !isAuthChecking && getLocalTrustedEmail()) {
-      setIsAuthChecking(true);
-    }
-  }, [isAuthChecking, user]);
-
   if (isAuthChecking) {
       return (
           <div className="flex w-screen h-screen items-center justify-center bg-white">
@@ -151,22 +131,22 @@ function App() {
       {/* 主应用（需要登录） */}
       <Route path="/app" element={<AppRoute />} />
       {/* 其他页面 */}
-      <Route path="/explore" element={<Explore />} />
+      <Route path="/explore" element={<AgentRoute><Explore /></AgentRoute>} />
       <Route path="/workspace" element={<AgentRoute><AgentWorkspace /></AgentRoute>} />
       <Route path="/agent" element={<AgentRoute><AgentWorkspace /></AgentRoute>} />
-      <Route path="/materials" element={<MaterialsLibrary />} />
-      <Route path="/materials/battery" element={<MaterialsExplorer />} />
-      <Route path="/materials/nuclear" element={<NuclearMaterialsExplorer />} />
-      <Route path="/materials/supercapacitor" element={<SupercapacitorMaterialsExplorer />} />
-      <Route path="/materials/hydrogen-storage" element={<HydrogenStorageMaterialsExplorer />} />
-      <Route path="/materials/thermal-storage" element={<ThermalStorageMaterialsExplorer />} />
-      <Route path="/materials/flow-battery" element={<FlowBatteryMaterialsExplorer />} />
-      <Route path="/materials/aerospace" element={<AerospaceMaterialsExplorer />} />
+      <Route path="/materials" element={<AgentRoute><MaterialsLibrary /></AgentRoute>} />
+      <Route path="/materials/battery" element={<AgentRoute><MaterialsExplorer /></AgentRoute>} />
+      <Route path="/materials/nuclear" element={<AgentRoute><NuclearMaterialsExplorer /></AgentRoute>} />
+      <Route path="/materials/supercapacitor" element={<AgentRoute><SupercapacitorMaterialsExplorer /></AgentRoute>} />
+      <Route path="/materials/hydrogen-storage" element={<AgentRoute><HydrogenStorageMaterialsExplorer /></AgentRoute>} />
+      <Route path="/materials/thermal-storage" element={<AgentRoute><ThermalStorageMaterialsExplorer /></AgentRoute>} />
+      <Route path="/materials/flow-battery" element={<AgentRoute><FlowBatteryMaterialsExplorer /></AgentRoute>} />
+      <Route path="/materials/aerospace" element={<AgentRoute><AerospaceMaterialsExplorer /></AgentRoute>} />
       <Route path="/manual" element={<Manual />} />
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
       <Route path="/cookie-policy" element={<CookiePolicy />} />
-      <Route path="/admin/video-generator" element={<VideoGenerator />} />
+      <Route path="/admin/video-generator" element={<AgentRoute><VideoGenerator /></AgentRoute>} />
       {/* Agent 工作台 */}
       <Route path="/agent/rendering" element={<AgentRoute><AgentGate agent="rendering" label="Rendering Agent"><RenderingAgent /></AgentGate></AgentRoute>} />
       <Route path="/agent/retrieval" element={<AgentRoute><AgentGate agent="retrieval" label="Idea Agent"><RetrievalAgent /></AgentGate></AgentRoute>} />

@@ -1,5 +1,6 @@
 const { AGENT_ACCESS } = require('../../config');
-const { User } = require('../../utils/db');
+const { getUser, updateUser } = require('../../utils/db');
+const { isAdminUser } = require('./admin');
 
 function currentMonthKey() {
   const now = new Date();
@@ -12,7 +13,7 @@ function todayKey() {
 }
 
 /**
- * Extract user email from the request.
+ * Extract the authenticated user's phone identifier from the request.
  * Tries: req.body.userId → req.query.userId → Authorization header (HMAC token).
  */
 function extractUserId(req) {
@@ -36,8 +37,6 @@ function extractUserId(req) {
   }
 }
 
-const ADMIN_EMAILS = ['2218114919@qq.com', 'haayy@foxmail.com', 'yiteng1881273@163.com'];
-
 /**
  * Check whether a user can access a given agent.
  */
@@ -48,8 +47,8 @@ async function checkAgentAccess(user, agentName) {
 
   let tier = String(user.tier || 'personal').toLowerCase();
 
-  // Admin emails always get enterprise access
-  if (ADMIN_EMAILS.includes(user.email)) {
+  // Configured admin phone numbers always get enterprise access
+  if (isAdminUser(user)) {
     tier = 'enterprise';
   }
 
@@ -162,8 +161,8 @@ async function checkAgentAccess(user, agentName) {
 /**
  * Record one usage of an agent for a user. Call after successful agent execution.
  */
-async function recordAgentUsage(userEmail, agentName) {
-  const user = await User.findOne({ email: userEmail });
+async function recordAgentUsage(userId, agentName) {
+  const user = await getUser(userId);
   if (!user) return;
 
   const tier = String(user.tier || 'personal').toLowerCase();
@@ -190,7 +189,7 @@ async function recordAgentUsage(userEmail, agentName) {
     }
   }
 
-  await User.findOneAndUpdate({ email: userEmail }, { $set: updates });
+  await updateUser(userId, updates);
 }
 
 /**
@@ -209,10 +208,10 @@ function requireAgentAccess(agentName) {
       return next();
     }
 
-    let user = await User.findOne({ email: userId });
+    let user = await getUser(userId);
 
     if (!user) {
-      user = { email: userId, tier: 'personal', subscribed_agents: [], agent_daily_usage: {} };
+      user = { id: userId, phone: userId, tier: 'personal', subscribed_agents: [], agent_daily_usage: {} };
     }
 
     const result = await checkAgentAccess(user, agentName);
@@ -246,7 +245,7 @@ async function handleAgentAccessCheck(req, res) {
     return res.json({ success: true, agents: {} });
   }
 
-  const user = await User.findOne({ email: userId });
+  const user = await getUser(userId);
   if (!user) {
     return res.json({ success: true, agents: {} });
   }

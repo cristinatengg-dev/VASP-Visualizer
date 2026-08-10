@@ -79,7 +79,7 @@ export interface GlobalElementSettings {
 
 export interface User {
   id: string;
-  email: string;
+  phone: string;
   tier: 'trial' | 'personal' | 'academic' | 'enterprise';
   trial_img_left: number;
   trial_vid_left: number;
@@ -134,7 +134,7 @@ interface AppState {
   // User System
   user: User | null;
   setUser: (user: User | null) => void;
-  login: (email: string, code: string) => Promise<User | null>;
+  login: (phone: string, code: string) => Promise<User | null>;
   logout: () => void;
   checkExport: (type: 'img' | 'vid') => Promise<{ cost: number, status: string }>;
   deductExport: (type: 'img' | 'vid') => Promise<boolean>;
@@ -419,7 +419,7 @@ export const useStore = create<AppState>((set, get) => ({
     const token = localStorage.getItem('vasp_token');
     if (!userId || !token) return;
     try {
-        const res = await fetch(`${API_BASE_URL}/user/${userId}`, {
+        const res = await fetch(`${API_BASE_URL}/user/${encodeURIComponent(userId)}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -435,7 +435,7 @@ export const useStore = create<AppState>((set, get) => ({
           const res = await fetch(`${API_BASE_URL}/auth/redeem`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: user.email, code })
+              body: JSON.stringify({ userId: user.phone, code })
           });
           const data = await res.json();
           if (data.success) {
@@ -446,12 +446,12 @@ export const useStore = create<AppState>((set, get) => ({
       } catch (e) { throw e; }
   },
 
-  login: async (email, code) => {
+  login: async (phone, code) => {
     try {
         const res = await fetch(`${API_BASE_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, code })
+            body: JSON.stringify({ phone, code })
         });
         const data = await res.json();
         if (data.success) {
@@ -460,7 +460,7 @@ export const useStore = create<AppState>((set, get) => ({
             set({ user: vipUser });
             
             localStorage.setItem('vasp_token', data.token);
-            localStorage.setItem('vasp_user_id', vipUser.email);
+            localStorage.setItem('vasp_user_id', vipUser.phone);
             return vipUser; // 返回处理后的用户
         }
         throw new Error(data.error);
@@ -507,7 +507,7 @@ export const useStore = create<AppState>((set, get) => ({
           const res = await fetch(`${API_BASE_URL}/check-export`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('vasp_token')}` },
-              body: JSON.stringify({ userId: user.email, type })
+              body: JSON.stringify({ userId: user.phone, type })
           });
           return await res.json();
       } catch (e) { return { cost: 0, status: 'error' }; }
@@ -520,7 +520,7 @@ export const useStore = create<AppState>((set, get) => ({
           const res = await fetch(`${API_BASE_URL}/deduct-export`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('vasp_token')}` },
-              body: JSON.stringify({ userId: user.email, type })
+              body: JSON.stringify({ userId: user.phone, type })
           });
           const data = await res.json();
           if (data.success) {
@@ -540,7 +540,7 @@ export const useStore = create<AppState>((set, get) => ({
           const res = await fetch(`${API_BASE_URL}/payment/create`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('vasp_token')}` },
-              body: JSON.stringify({ userId: user.email, type, tier, count })
+              body: JSON.stringify({ userId: user.phone, type, tier, count })
           });
           return await res.json();
       } catch (e) {

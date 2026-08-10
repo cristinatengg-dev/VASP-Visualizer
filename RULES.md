@@ -38,7 +38,7 @@
 │         Docker: vasp-visualizer-backend-1       │
 │              Node.js (server/index.js)          │
 │  • 端口: 3000（仅内网，不暴露给外部）           │
-│  • 数据文件: server/db.json, server/uploads/    │
+│  • 数据文件: server/user-data/db.json, server/uploads/ │
 └─────────────────────┬───────────────────────────┘
                       │
 ┌─────────────────────▼───────────────────────────┐
@@ -63,53 +63,52 @@
 ### `.env`（本地开发）
 ```
 VITE_API_URL=http://localhost:3000
-SMTP_HOST=smtp.resend.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=resend
-SMTP_PASS=<Resend API key>
-SMTP_FROM=SCI Visualizer <noreply@scivisualizer.com>
+TOKEN_SECRET=<随机长密钥>
+TENCENTCLOUD_SECRET_ID=<腾讯云 SecretId>
+TENCENTCLOUD_SECRET_KEY=<腾讯云 SecretKey>
+TENCENT_SMS_SDK_APP_ID=<短信应用 SDK AppId>
+TENCENT_SMS_SIGN_NAME=<已审核短信签名>
+TENCENT_SMS_TEMPLATE_ID=<已审核验证码模板 ID>
+TENCENT_SMS_REGION=ap-guangzhou
+ADMIN_PHONES=+8613800000000
 ```
 
 ### `.env.production`（生产构建）
 ```
 VITE_API_URL=/api
-SMTP_HOST=smtp.resend.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=resend
-SMTP_PASS=<Resend API key>
-SMTP_FROM=SCI Visualizer <noreply@scivisualizer.com>
+TOKEN_SECRET=<随机长密钥>
+TENCENTCLOUD_SECRET_ID=<腾讯云 SecretId>
+TENCENTCLOUD_SECRET_KEY=<腾讯云 SecretKey>
+TENCENT_SMS_SDK_APP_ID=<短信应用 SDK AppId>
+TENCENT_SMS_SIGN_NAME=<已审核短信签名>
+TENCENT_SMS_TEMPLATE_ID=<已审核验证码模板 ID>
+TENCENT_SMS_REGION=ap-guangzhou
+ADMIN_PHONES=<逗号分隔的 E.164 手机号>
 ```
 
 > **注意**: 生产环境 `VITE_API_URL=/api` 使用相对路径，由 Nginx 代理转发到 backend:3000。
 
-### 域名邮箱
+### 手机短信登录
 
-- 域名：`scivisualizer.com`
-- DNS 托管：DNSPod
-- 当前 DNS 状态：根域和 `www` 指向新服务器；邮件相关 MX/TXT/CNAME 记录保留在 DNSPod
-- 已配置收信地址：`support@scivisualizer.com` 转发到 `cristinatengg@gmail.com`
-- Catch-all：关闭，未创建的域名前缀不会自动转发
-- 推荐项目发信方案：Resend SMTP，域名验证后由 `noreply@scivisualizer.com` 发送验证码
-- 建议项目发信账号：`noreply@scivisualizer.com`
-- 后端发信配置：`SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM`
+- 登录仅支持手机号 + 短信验证码，不保留邮箱验证码接口。
+- 中国大陆 11 位手机号会规范化为 E.164（例如 `+8613800000000`）；国际号码必须包含 `+国家/地区码`。
+- 腾讯云短信签名和正文模板必须先审核通过，国内短信需有可用套餐包。
+- 验证码模板参数顺序必须是 `{1}` 验证码、`{2}` 有效分钟数。
+- 验证码有效期 5 分钟、同一手机号 60 秒内不可重复发送，验证码验证成功后立即作废。
+- `ADMIN_PHONES` 仅用于给明确配置的手机号自动授予企业权限，不得在代码中硬编码管理员账号。
 
-生产环境切换域名邮箱前，需要先在 Resend 添加并验证 `scivisualizer.com`，按 Resend 给出的 DNS 记录在 DNSPod 中配置 DKIM/SPF/验证记录，然后在服务器 `/home/deploy/VASP-Visualizer/.env` 或部署 shell 环境中写入：
+生产环境需要先在腾讯云短信控制台创建应用、审核签名和验证码模板，然后在服务器 `/home/deploy/VASP-Visualizer/.env` 中写入：
 
 ```
-SMTP_HOST=smtp.resend.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=resend
-SMTP_PASS=<Resend API key>
-SMTP_FROM=SCI Visualizer <noreply@scivisualizer.com>
+TENCENTCLOUD_SECRET_ID=<腾讯云 SecretId>
+TENCENTCLOUD_SECRET_KEY=<腾讯云 SecretKey>
+TENCENT_SMS_SDK_APP_ID=<短信应用 SDK AppId>
+TENCENT_SMS_SIGN_NAME=<已审核短信签名>
+TENCENT_SMS_TEMPLATE_ID=<已审核验证码模板 ID>
+TENCENT_SMS_REGION=ap-guangzhou
 ```
 
-DNS 补充检查项：
-- 邮件收信由当前 DNSPod 邮件记录负责，调整 MX/TXT 前先确认现有邮箱服务。
-- 添加 Resend DNS 记录时，按 Resend dashboard 生成值配置；若涉及根域 SPF，必须合并为单条 SPF，不能创建多条根域 SPF。
-- 验证邮件发信后，用 `/api/auth/send-email-code` 实测验证码是否能从域名邮箱发出。
+部署后用 `/api/auth/send-phone-code` 实测指定手机号能否收到短信；请求体为 `{"phone":"+8613800000000"}`。支持邮箱 `support@scivisualizer.com` 仅用于客户支持，不参与账号登录。
 
 ---
 
@@ -243,7 +242,7 @@ docker compose ps
 
 | 数据类型 | 存储位置 | 说明 |
 |---------|---------|------|
-| 用户数据（JSON） | `server/db.json` → 容器内 `/app/db.json` | 卷挂载，重启不丢失 |
+| 用户数据（JSON） | `server/user-data/db.json` → 容器内 `/app/user-data/db.json` | 目录卷挂载，重建容器不丢失 |
 | 上传文件 | `server/uploads/` → 容器内 `/app/uploads` | 卷挂载，重启不丢失 |
 | MongoDB 数据 | Docker Volume `mongo-data` | 命名卷，持久化 |
 
@@ -265,7 +264,7 @@ VASP-Visualizer/
 ├── src/                    # 前端源代码 (React + TypeScript)
 ├── server/                 # 后端源代码 (Node.js + Express)
 │   ├── index.js            # 后端主入口
-│   ├── db.json             # 用户数据（持久化）
+│   ├── user-data/db.json   # 用户数据（持久化）
 │   └── uploads/            # 上传文件（持久化）
 ├── public/                 # 静态资源
 ├── dist/                   # 构建输出（不上传，Docker 内自动构建）

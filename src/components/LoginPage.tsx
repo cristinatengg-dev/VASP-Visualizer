@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { Mail, Lock, ArrowRight, Loader2, ShieldCheck } from 'lucide-react';
+import { Phone, Lock, ArrowRight, Loader2, ShieldCheck } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { COMPANY_NAME, SUPPORT_EMAIL, SUPPORT_MAILTO } from '../constants/contact';
 import { useNavigate } from 'react-router-dom';
+import { normalizePhoneNumber } from '../utils/phone';
 
 export const LoginPage: React.FC = () => {
     const { login } = useStore();
     const navigate = useNavigate();
-    const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
     const [code, setCode] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -25,18 +26,19 @@ export const LoginPage: React.FC = () => {
     }, [countdown]);
 
     const handleSendCode = async () => {
-        if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
-            setError('Please enter a valid email address');
+        const normalizedPhone = normalizePhoneNumber(phone);
+        if (!normalizedPhone) {
+            setError('请输入有效手机号');
             return;
         }
         
         setError('');
         setIsSending(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/auth/send-email-code`, {
+            const res = await fetch(`${API_BASE_URL}/auth/send-phone-code`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
+                body: JSON.stringify({ phone: normalizedPhone })
             });
             const contentType = res.headers.get('content-type') || '';
             const isJson = contentType.includes('application/json');
@@ -49,12 +51,12 @@ export const LoginPage: React.FC = () => {
             
             if (data.success) {
                 setCountdown(60);
-                setSuccessMessage(data.message || 'Verification code sent to your email.');
+                setSuccessMessage(data.message || '验证码已通过短信发送。');
             } else {
-                setError(data.error || 'Failed to send code');
+                setError(data.error || '验证码发送失败');
             }
-        } catch (e: any) {
-            setError(e?.message || 'Network error');
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : '网络连接失败');
         } finally {
             setIsSending(false);
         }
@@ -62,16 +64,20 @@ export const LoginPage: React.FC = () => {
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!email || !code) return;
+        const normalizedPhone = normalizePhoneNumber(phone);
+        if (!normalizedPhone || !/^\d{6}$/.test(code)) {
+            setError('请输入有效手机号和 6 位验证码');
+            return;
+        }
         
         setError('');
         setIsLoggingIn(true);
         try {
-            await login(email, code);
+            await login(normalizedPhone, code);
             // Login successful — return to the main landing page
             navigate('/', { replace: true });
-        } catch (e: any) {
-            setError(e.message || 'Login failed');
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : '登录失败');
         } finally {
             setIsLoggingIn(false);
         }
@@ -85,31 +91,37 @@ export const LoginPage: React.FC = () => {
                         <ShieldCheck className="w-8 h-8 text-[#0A1128]" />
                     </div>
                     <h1 className="text-2xl font-bold text-[#0A1128] mb-1">SCI Visualizer</h1>
-                    <p className="text-gray-400 text-sm">Secure Research Platform</p>
+                    <p className="text-gray-400 text-sm">手机号验证后即可使用</p>
                 </div>
 
                 <div className="p-10">
                     <form onSubmit={handleLogin} className="space-y-6">
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">Email Address</label>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">手机号</label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                     <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                                        <Mail className="h-4 w-4 text-gray-500" />
+                                        <Phone className="h-4 w-4 text-gray-500" />
                                     </div>
                                 </div>
                                 <input
-                                    type="email"
+                                    type="tel"
+                                    inputMode="tel"
+                                    autoComplete="tel"
                                     className="block w-full pl-14 pr-4 py-3.5 border border-gray-200 rounded-[24px] bg-gray-50 focus:ring-2 focus:ring-[#0A1128]/20 focus:border-[#0A1128] transition-all outline-none text-gray-800 placeholder-gray-400"
-                                    placeholder="Enter your email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="138 0000 0000"
+                                    value={phone}
+                                    onChange={(e) => {
+                                        setPhone(e.target.value);
+                                        setError('');
+                                        setSuccessMessage('');
+                                    }}
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">Verification Code</label>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">短信验证码</label>
                             <div className="flex gap-3">
                                 <div className="relative flex-1">
                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -119,17 +131,19 @@ export const LoginPage: React.FC = () => {
                                     </div>
                                     <input
                                         type="text"
+                                        inputMode="numeric"
+                                        autoComplete="one-time-code"
                                         className="block w-full pl-14 pr-4 py-3.5 border border-gray-200 rounded-[24px] bg-gray-50 focus:ring-2 focus:ring-[#0A1128]/20 focus:border-[#0A1128] transition-all outline-none text-gray-800 placeholder-gray-400"
-                                        placeholder="6-digit code"
+                                        placeholder="6 位验证码"
                                         value={code}
-                                        onChange={(e) => setCode(e.target.value)}
+                                        onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                         maxLength={6}
                                     />
                                 </div>
                                 <button
                                     type="button"
                                     onClick={handleSendCode}
-                                    disabled={countdown > 0 || isSending || !email}
+                                    disabled={countdown > 0 || isSending || !phone}
                                     className={`px-5 py-3 rounded-[32px] text-sm font-semibold transition-all w-36 flex items-center justify-center shadow-sm
                                         ${countdown > 0 
                                             ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
@@ -137,7 +151,7 @@ export const LoginPage: React.FC = () => {
                                         }`}
                                 >
                                     {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : 
-                                     countdown > 0 ? `${countdown}s` : 'Get Code'}
+                                     countdown > 0 ? `${countdown}s` : '获取验证码'}
                                 </button>
                             </div>
                         </div>
@@ -158,17 +172,17 @@ export const LoginPage: React.FC = () => {
 
                         <button
                             type="submit"
-                            disabled={isLoggingIn || !email || !code}
+                            disabled={isLoggingIn || !phone || code.length !== 6}
                             className="w-full flex items-center justify-center gap-2 py-4 px-6 border border-transparent rounded-[32px] shadow-lg shadow-[#0A1128]/20 text-sm font-bold text-white bg-[#0A1128] hover:bg-[#162044] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0A1128] disabled:opacity-70 disabled:cursor-not-allowed transition-all active:scale-95"
                         >
                             {isLoggingIn ? (
                                 <>
                                     <Loader2 className="w-5 h-5 animate-spin" />
-                                    Verifying...
+                                    验证中...
                                 </>
                             ) : (
                                 <>
-                                    Sign In securely
+                                    验证并登录
                                     <ArrowRight className="w-5 h-5" />
                                 </>
                             )}
@@ -176,9 +190,9 @@ export const LoginPage: React.FC = () => {
                     </form>
                     
                     <p className="mt-8 text-center text-xs text-gray-400 leading-relaxed">
-                        Protected by Enterprise Grade Security. <br/>
-                        Device limit: 3 active sessions max. <br/>
-                        Support: <a href={SUPPORT_MAILTO} className="hover:text-gray-600 underline underline-offset-2">{SUPPORT_EMAIL}</a> <br/>
+                        中国大陆手机号可直接输入 11 位号码，其他地区请输入带国家/地区码的号码。<br/>
+                        每个账号最多绑定 3 个活跃设备。<br/>
+                        支持：<a href={SUPPORT_MAILTO} className="hover:text-gray-600 underline underline-offset-2">{SUPPORT_EMAIL}</a> <br/>
                         {COMPANY_NAME} <br/>
                         &copy; {new Date().getFullYear()} SCI Visualizer. All rights reserved.
                     </p>

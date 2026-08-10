@@ -5,13 +5,14 @@ const connectDB = async () => {
     console.log('Mock DB Connected (JSON File Mode)');
 };
 
-const getUser = async (email) => {
-    return await User.findOne({ email });
+const getUser = async (phone) => {
+    return await User.findOne({ phone });
 };
 
-const createUser = async (email, ip) => {
+const createUser = async (phone, ip) => {
     return await User.create({
-        email,
+        id: phone,
+        phone,
         tier: 'personal',
         trial_img_left: 2,
         trial_vid_left: 1,
@@ -30,8 +31,8 @@ const createUser = async (email, ip) => {
     });
 };
 
-const updateUser = async (email, updates) => {
-    return await User.findOneAndUpdate({ email }, { $set: updates }, { new: true });
+const updateUser = async (phone, updates) => {
+    return await User.findOneAndUpdate({ phone }, { $set: updates }, { new: true });
 };
 
 const redeemCode = async (codeStr, userId) => {
@@ -43,34 +44,50 @@ const redeemCode = async (codeStr, userId) => {
 
     // Update User
     const plan = code.planType || 'academic';
-    await User.findOneAndUpdate({ _id: userId }, { $set: { tier: plan } });
+    const updated = await User.findOneAndUpdate({ phone: userId }, { $set: { tier: plan } }, { new: true }) ||
+        await User.findOneAndUpdate({ id: userId }, { $set: { tier: plan } }, { new: true }) ||
+        await User.findOneAndUpdate({ _id: userId }, { $set: { tier: plan } }, { new: true });
+    if (!updated) throw new Error('User not found');
     
     return true;
 };
 
-const createVerificationCode = async (email, otp) => {
-    // Invalidate old codes
-    // MockDB doesn't support deleteMany well, but we can just ignore old ones by checking expiry
-    // Or we can implement deleteMany in mockDb if needed. 
-    // For now, just create new one.
+const createVerificationCode = async (phone, codeHash) => {
+    const previousCodes = await VerificationCode.find({ phone });
+    await Promise.all(previousCodes
+        .filter(record => !record.consumedAt)
+        .map(record => VerificationCode.findOneAndUpdate(
+            { _id: record._id },
+            { $set: { consumedAt: new Date() } },
+            { new: true }
+        )));
+
     return await VerificationCode.create({
-        email,
-        code: otp,
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 min
+        phone,
+        codeHash,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        consumedAt: null,
     });
 };
 
-const verifyCode = async (email, otp) => {
-    const record = await VerificationCode.findOne({ 
-        email, 
-        code: otp,
-        expiresAt: { $gt: new Date() }
-    });
-    return !!record;
+const verifyCode = async (phone, codeHash) => {
+    const records = await VerificationCode.find({ phone });
+    const record = records
+        .filter(item => !item.consumedAt && new Date(item.expiresAt).getTime() > Date.now())
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .find(item => item.codeHash === codeHash);
+    if (!record) return false;
+
+    await VerificationCode.findOneAndUpdate(
+        { _id: record._id },
+        { $set: { consumedAt: new Date() } },
+        { new: true }
+    );
+    return true;
 };
 
-const getLastCodeTime = async (email) => {
-    const codes = await VerificationCode.find({ email });
+const getLastCodeTime = async (phone) => {
+    const codes = await VerificationCode.find({ phone });
     if (codes.length === 0) return null;
     // Sort by createdAt desc
     codes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));

@@ -158,7 +158,7 @@ const ComputeAgent: React.FC = () => {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          userId: user?.email,
+          userId: user?.phone,
           channel: {
             host: remoteChannel.host.trim(),
             user: remoteChannel.user.trim(),

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '../db.json');
+const DB_PATH = process.env.USER_DB_PATH || path.join(__dirname, '../db.json');
 const FALLBACK_DB_PATH = path.join(__dirname, '../db.fallback.json');
 
 function resolveDbPath() {
@@ -78,7 +78,7 @@ class MockModel {
             // Convert back to object map if that was the format
             const map = {};
             newCollection.forEach(item => {
-                map[item.id || item.email || Math.random().toString()] = item;
+                map[item.id || item.phone || item.email || Math.random().toString()] = item;
             });
             db.users = map;
         } else {

@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const { normalizePhoneNumber } = require('./src/auth/phone-auth');
 
-const DB_PATH = path.join(__dirname, 'db.json');
+const DB_PATH = process.env.USER_DB_PATH || path.join(__dirname, 'user-data', 'db.json');
 
 if (!fs.existsSync(DB_PATH)) {
     console.error('DB file not found at', DB_PATH);
@@ -10,18 +11,19 @@ if (!fs.existsSync(DB_PATH)) {
 
 try {
     const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-    const email = '2218114919@qq.com';
+    const phone = normalizePhoneNumber(process.argv[2]);
+    if (!phone) throw new Error('Usage: node reset_ips_json.js <phone>');
     
     // Check if users is array or object map
     let user = null;
     let userKey = null;
 
     if (Array.isArray(data.users)) {
-        user = data.users.find(u => u.email === email);
+        user = data.users.find(u => u.phone === phone);
     } else {
         // Object map
         for (const key in data.users) {
-            if (data.users[key].email === email) {
+            if (data.users[key].phone === phone) {
                 user = data.users[key];
                 userKey = key;
                 break;
@@ -30,7 +32,7 @@ try {
     }
 
     if (!user) {
-        console.log(`User ${email} not found.`);
+        console.log(`User ${phone} not found.`);
         process.exit(1);
     }
 
@@ -42,7 +44,7 @@ try {
     // If it was object map, 'user' is reference to object in map.
     
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-    console.log(`Device limit reset for ${email}. New IPs: []`);
+    console.log(`Device limit reset for ${phone}. New IPs: []`);
 
 } catch (e) {
     console.error('Error processing DB:', e);

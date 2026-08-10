@@ -30,6 +30,7 @@ server/.env.local
 core_code_bundle.txt
 ffmpeg
 server/db.json
+server/user-data/
 server/uploads/
 server/benchmark-results/
 server/runtime-storage/

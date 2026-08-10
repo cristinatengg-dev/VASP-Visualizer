@@ -23,7 +23,7 @@ const PrivacyPolicy: React.FC = () => (
     }
   >
     <LegalSection title="1. Information We Collect">
-      <p>1.1. <strong>Account Information.</strong> When you register for an account, we collect your email address and generate account identifiers. We use email-based verification codes for authentication.</p>
+      <p>1.1. <strong>Account Information.</strong> When you register for an account, we collect your mobile phone number and generate account identifiers. We use SMS verification codes for authentication.</p>
       <p>1.2. <strong>User Content.</strong> We collect and process files, data, and materials that you upload to or create through the Service, including but not limited to: POSCAR, CONTCAR, CIF, XYZ, and XDATCAR structure files; prompts and agent instructions; calculation parameters and configuration settings; generated images, videos, and reports.</p>
       <p>1.3. <strong>Usage Data.</strong> We automatically collect information about your interaction with the Service, including: IP address and approximate geographic location; device type, operating system, and browser information; pages visited, features used, and timestamps; export history and quota usage.</p>
       <p>1.4. <strong>Payment Information.</strong> If you purchase a Subscription Plan or make other payments, our authorized payment processors may collect payment-related information. We store order records and transaction metadata but do not directly store payment card numbers or payment account credentials.</p>
@@ -43,7 +43,7 @@ const PrivacyPolicy: React.FC = () => (
     <LegalSection title="3. Information Sharing and Disclosure">
       <p>3.1. We do not sell, rent, or trade your personal information to third parties for marketing purposes.</p>
       <p>3.2. We may share information with third parties only in the following circumstances:</p>
-      <p className="pl-8">(a) <strong>Service Providers:</strong> with hosting providers, infrastructure vendors, payment processors, and other service providers who assist in operating the Service, subject to confidentiality obligations;</p>
+      <p className="pl-8">(a) <strong>Service Providers:</strong> with hosting providers, SMS delivery providers, infrastructure vendors, payment processors, and other service providers who assist in operating the Service, subject to confidentiality obligations;</p>
       <p className="pl-8">(b) <strong>Legal Requirements:</strong> when required by law, regulation, legal process, or governmental request, or when we believe disclosure is necessary to protect our rights, your safety, or the safety of others;</p>
       <p className="pl-8">(c) <strong>Business Transfers:</strong> in connection with a merger, acquisition, financing, reorganization, bankruptcy, or sale of all or a portion of our assets;</p>
       <p className="pl-8">(d) <strong>Institutional Administrators:</strong> if your access is provided through an institution, laboratory, or enterprise deployment, your administrator may have access to account and usage information as defined by your institutional agreement;</p>

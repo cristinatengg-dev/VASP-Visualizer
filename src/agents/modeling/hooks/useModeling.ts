@@ -431,8 +431,8 @@ export const useModeling = () => {
     const savedSessionId = typeof window !== 'undefined'
       ? window.localStorage.getItem(RUNTIME_SESSION_STORAGE_KEY)
       : null;
-    const ownerId = user?.email || user?.id || 'modeling-agent-user';
-    const projectId = user?.email ? `modeling:${user.email}` : 'modeling-agent';
+    const ownerId = user?.phone || user?.id || 'modeling-agent-user';
+    const projectId = user?.phone ? `modeling:${user.phone}` : 'modeling-agent';
 
     const requestBody: Record<string, unknown> = {
       intent: requestIntent,

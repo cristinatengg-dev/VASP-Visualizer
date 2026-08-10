@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore';
 import { User, LogOut, CreditCard, ChevronDown, User as UserIcon, Crown, Zap, LogIn } from 'lucide-react';
 import { clsx } from 'clsx';
 import { SubscriptionPanel } from './SubscriptionPanel';
+import { maskPhoneNumber } from '../utils/phone';
 
 const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { user } = useStore();
@@ -80,7 +81,7 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <div className="space-y-6">
                     <div className="bg-gray-50/50 p-4 rounded-[24px] border border-gray-100">
                         <div className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">Account ID</div>
-                        <div className="font-mono text-lg text-gray-700 font-medium tracking-tight">{(user as any).id || (user as any)._id || user.email}</div>
+                        <div className="font-mono text-lg text-gray-700 font-medium tracking-tight">{user.phone}</div>
                     </div>
                     
                     {/* Invitation Code Redeem */}
@@ -237,8 +238,7 @@ export const AccountDropdown: React.FC = () => {
         }
     }, [isOpen, showProfile, refreshUser]);
 
-    // Mask email: t***t@example.com
-    const maskedPhone = user?.id ? user.id.replace(/(.{1}).+(@.+)/, '$1****$2') : 'Guest';
+    const maskedPhone = maskPhoneNumber(user?.phone || '');
 
     if (!user) {
         return (

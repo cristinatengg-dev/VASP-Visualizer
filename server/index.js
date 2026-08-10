@@ -8,10 +8,9 @@ const { spawn } = require('child_process');
 const cors = require('cors');
 const fs = require('fs');
 const { parseXDATCARStream } = require('./utils/parser');
-const nodemailer = require('nodemailer');
 const ffmpeg = require('fluent-ffmpeg');
 const JSZip = require('jszip');
-const { randomUUID, createHash, createHmac } = require('crypto');
+const { randomUUID, createHash, createHmac, timingSafeEqual } = require('crypto');
 const zlib = require('zlib');
 const os = require('os');
 const readline = require('readline');
@@ -57,9 +56,23 @@ const { querySlurmJobStatus, queryPbsJobStatus, queryLocalJobStatus } = require(
 const { testRemoteComputeChannel } = require('./src/compute/ssh-channel');
 const { buildResultMetrics, collectWarnings } = require('./src/compute/parse-results');
 const { requireAgentAccess, recordAgentUsage, handleAgentAccessCheck } = require('./src/auth/agent-access');
+const { isAdminUser } = require('./src/auth/admin');
+const {
+    generateVerificationCode,
+    hashVerificationCode,
+    normalizePhoneNumber,
+} = require('./src/auth/phone-auth');
+const { sendLoginCode } = require('./src/auth/sms-service');
 
 // --- Fail-fast: required environment variables ---
-const REQUIRED_ENV = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'TOKEN_SECRET'];
+const REQUIRED_ENV = [
+    'TOKEN_SECRET',
+    'TENCENTCLOUD_SECRET_ID',
+    'TENCENTCLOUD_SECRET_KEY',
+    'TENCENT_SMS_SDK_APP_ID',
+    'TENCENT_SMS_SIGN_NAME',
+    'TENCENT_SMS_TEMPLATE_ID',
+];
 const missingEnv = REQUIRED_ENV.filter(k => !process.env[k]);
 if (missingEnv.length > 0) {
     console.error(`[FATAL] Missing required environment variables: ${missingEnv.join(', ')}`);
@@ -68,16 +81,6 @@ if (missingEnv.length > 0) {
 }
 
 const TOKEN_SECRET = process.env.TOKEN_SECRET;
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
-if (!Number.isInteger(SMTP_PORT)) {
-    console.error(`[FATAL] Invalid SMTP_PORT: ${process.env.SMTP_PORT}`);
-    process.exit(1);
-}
-const parseBooleanEnv = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
-const SMTP_SECURE = process.env.SMTP_SECURE === undefined
-    ? [465, 994].includes(SMTP_PORT)
-    : parseBooleanEnv(process.env.SMTP_SECURE);
-const SMTP_FROM = process.env.SMTP_FROM || `"SCI Visualizer" <${process.env.SMTP_USER}>`;
 
 const app = express();
 const PORT = 3000;
@@ -96,17 +99,6 @@ const MONGO_URI = process.env.RUNTIME_MONGODB_URI || process.env.MONGODB_URI || 
 mongoose.connect(MONGO_URI)
     .then(() => console.log(`[MongoDB] Connected for Orders: ${MONGO_URI}`))
     .catch(err => console.error('[MongoDB] Connection failed:', err.message));
-
-// Email Transporter
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_SECURE,
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-    }
-});
 
 // Enable CORS for frontend
 app.use(cors({
@@ -297,14 +289,15 @@ const clearVolumetricCache = () => {
 };
 
 // HMAC-SHA256 token generation and verification
-const generateToken = (email) => {
-    const payload = Buffer.from(`${email}:${Date.now()}`).toString('base64');
+const generateToken = (phone) => {
+    const payload = Buffer.from(`${phone}:${Date.now()}`).toString('base64');
     const sig = createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 };
 
 const verifyToken = (userId, token) => {
     if (!userId || !token) return false;
+    if (normalizePhoneNumber(userId) !== userId) return false;
     let raw = String(token).trim();
     if (raw.toLowerCase().startsWith('bearer ')) raw = raw.slice(7).trim();
     try {
@@ -313,13 +306,17 @@ const verifyToken = (userId, token) => {
         const payload = raw.slice(0, dotIndex);
         const sig = raw.slice(dotIndex + 1);
         const expectedSig = createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
-        if (sig !== expectedSig) return false;
+        const suppliedSignature = Buffer.from(sig, 'utf8');
+        const expectedSignature = Buffer.from(expectedSig, 'utf8');
+        if (suppliedSignature.length !== expectedSignature.length || !timingSafeEqual(suppliedSignature, expectedSignature)) {
+            return false;
+        }
         const decoded = Buffer.from(payload, 'base64').toString('utf8');
         const parts = decoded.split(':');
         if (parts.length < 2) return false;
-        const email = parts[0];
+        const phone = parts[0];
         const ts = Number(parts[1]);
-        if (email !== userId) return false;
+        if (phone !== userId) return false;
         if (!Number.isFinite(ts)) return false;
         if (Date.now() - ts > 24 * 60 * 60 * 1000) return false;
         return true;
@@ -727,37 +724,34 @@ const getClientIp = (req) => {
 };
 
 // --- 🔥 核心修复：后端强制企业端逻辑 ---
-const ADMIN_EMAILS = ['2218114919@qq.com', 'haayy@foxmail.com', 'yiteng1881273@163.com'];
-
 const enforceAdminPrivileges = async (user) => {
     if (!user) return user;
-    if (ADMIN_EMAILS.includes(user.email)) {
+    if (isAdminUser(user)) {
         // Auto-upgrade admin accounts to enterprise
         if (user.tier !== 'enterprise') {
-            await updateUser(user.email, { tier: 'enterprise' });
+            await updateUser(user.phone, { tier: 'enterprise' });
             user.tier = 'enterprise';
         }
     }
     return user;
 };
 
-const isEmailLike = (val) => typeof val === 'string' && val.includes('@');
-
 const getUserFlexible = async (userId) => {
     if (!userId) return null;
-    if (isEmailLike(userId)) return await getUser(userId);
+    const byPhone = await getUser(userId);
+    if (byPhone) return byPhone;
     const byId = await User.findById(userId);
     if (byId) return byId;
-    return await getUser(userId);
+    return await User.findOne({ id: userId });
 };
 
 const updateUserFlexible = async (userId, updates) => {
     if (!userId) return null;
-    if (isEmailLike(userId)) return await updateUser(userId, updates);
+    const byPhone = await updateUser(userId, updates);
+    if (byPhone) return byPhone;
     const updated = await User.findOneAndUpdate({ _id: userId }, { $set: updates }, { new: true }) ||
         await User.findOneAndUpdate({ id: userId }, { $set: updates }, { new: true });
-    if (updated) return updated;
-    return await updateUser(userId, updates);
+    return updated;
 };
 
 // --- 🛠️ 新增：服务器端解析逻辑 (移植自前端修复版) ---
@@ -1099,81 +1093,81 @@ const parseVolumetricDownsampleStream = async (filePath, maxTotalPoints) => {
 };
 
 // --- Auth Routes ---
-app.post('/api/auth/send-email-code', async (req, res) => {
-    const { email } = req.body;
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Invalid email address' });
-    
-    const lastTime = await getLastCodeTime(email);
-    if (lastTime && Date.now() - new Date(lastTime).getTime() < 60000) {
-        return res.status(429).json({ error: 'Please wait 60 seconds before retrying.' });
-    }
-    
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    await createVerificationCode(email, otp);
-    
-    const mailOptions = {
-        from: SMTP_FROM,
-        to: email,
-        subject: '[SCI Visualizer] Your Verification Code',
-        html: `
-        <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f7f9; padding: 50px 0; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <!-- Header -->
-                <div style="background-color: #0A1128; padding: 30px; text-align: center;">
-                    <h1 style="color: #ffffff; margin: 0; font-size: 28px; letter-spacing: 1px;">SCI Visualizer</h1>
-                </div>
-                
-                <!-- Body -->
-                <div style="padding: 40px; line-height: 1.6;">
-                    <p style="font-size: 18px; margin-bottom: 20px;">Hello,</p>
-                    <p style="font-size: 16px; color: #666; margin-bottom: 30px;">Your verification code is:</p>
-                    
-                    <div style="background-color: #f0f4f8; border-radius: 12px; padding: 30px; text-align: center; margin-bottom: 30px;">
-                        <span style="font-size: 42px; font-weight: bold; color: #0A1128; letter-spacing: 8px;">${otp}</span>
-                    </div>
-                    
-                    <p style="font-size: 14px; color: #999; margin-bottom: 10px;">It will expire in 5 minutes.</p>
-                    <p style="font-size: 14px; color: #999;">If you did not request this, please ignore this email.</p>
-                </div>
-                
-                <!-- Footer -->
-                <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #eee;">
-                    <p style="font-size: 12px; color: #aaa; margin: 0;">&copy; 2026 SCI Visualizer. All rights reserved.</p>
-                </div>
-            </div>
-        </div>
-        `
-    };
+const smsSendAttemptsByIp = new Map();
+const SMS_IP_WINDOW_MS = 10 * 60 * 1000;
+const SMS_IP_MAX_ATTEMPTS = 10;
 
+const consumeSmsIpAttempt = (ip) => {
+    const now = Date.now();
+    const recent = (smsSendAttemptsByIp.get(ip) || [])
+        .filter(timestamp => now - timestamp < SMS_IP_WINDOW_MS);
+    if (recent.length >= SMS_IP_MAX_ATTEMPTS) return false;
+    recent.push(now);
+    smsSendAttemptsByIp.set(ip, recent);
+    return true;
+};
+
+app.post('/api/auth/send-phone-code', async (req, res) => {
+    const phone = normalizePhoneNumber(req.body?.phone);
+    if (!phone) {
+        return res.status(400).json({ error: '请输入有效的手机号；中国大陆号码可直接输入 11 位手机号。' });
+    }
+
+    const ip = getClientIp(req);
+    if (!consumeSmsIpAttempt(ip)) {
+        return res.status(429).json({ error: '请求过于频繁，请稍后再试。' });
+    }
+
+    const lastTime = await getLastCodeTime(phone);
+    if (lastTime && Date.now() - new Date(lastTime).getTime() < 60000) {
+        return res.status(429).json({ error: '请等待 60 秒后再重新获取验证码。' });
+    }
+
+    const otp = generateVerificationCode();
     try {
-        await transporter.sendMail(mailOptions);
-        return res.json({ success: true, message: 'Code sent.' });
+        const delivery = await sendLoginCode(phone, otp);
+        const codeHash = hashVerificationCode(phone, otp, TOKEN_SECRET);
+        await createVerificationCode(phone, codeHash);
+        console.log(`[Auth] SMS verification code sent: request=${delivery.requestId}`);
+        return res.json({ success: true, message: '验证码已通过短信发送，5 分钟内有效。' });
     } catch (error) {
-        return res.status(500).json({ error: 'Mail delivery failed', details: error.message });
+        console.error('[Auth] SMS delivery failed:', {
+            code: error.providerCode || error.code || 'Unknown',
+            requestId: error.requestId || '',
+            message: error.message,
+        });
+        return res.status(502).json({ error: '短信发送失败，请稍后重试或联系支持。' });
     }
 });
 
 app.post('/api/auth/login', async (req, res) => {
-    const { email, code } = req.body; 
+    const phone = normalizePhoneNumber(req.body?.phone);
+    const code = String(req.body?.code || '').trim();
     const ip = getClientIp(req);
-    
-    const isValid = await verifyCode(email, code);
-    if (!isValid) return res.status(401).json({ error: 'Invalid code' });
-    
-    let user = await getUser(email); 
-    if (!user) user = await createUser(email, ip);
+
+    if (!phone || !/^\d{6}$/.test(code)) {
+        return res.status(400).json({ error: '请输入有效的手机号和 6 位验证码。' });
+    }
+
+    const codeHash = hashVerificationCode(phone, code, TOKEN_SECRET);
+    const isValid = await verifyCode(phone, codeHash);
+    if (!isValid) return res.status(401).json({ error: '验证码无效或已过期。' });
+
+    let user = await getUser(phone);
+    if (!user) user = await createUser(phone, ip);
     else {
-        if (!user.associated_ips.includes(ip)) {
-            if (user.associated_ips.length >= IP_LIMIT) return res.status(403).json({ error: 'Device limit reached.' });
-            user.associated_ips.push(ip);
-            await updateUser(email, { associated_ips: user.associated_ips });
+        const associatedIps = Array.isArray(user.associated_ips) ? user.associated_ips : [];
+        if (!associatedIps.includes(ip)) {
+            if (associatedIps.length >= IP_LIMIT) return res.status(403).json({ error: '已达到设备数量上限。' });
+            associatedIps.push(ip);
+            await updateUser(phone, { associated_ips: associatedIps });
         }
     }
 
-    if (user.prepaid_img === undefined) await updateUser(email, { prepaid_img: 0 });
+    if (user.prepaid_img === undefined) await updateUser(phone, { prepaid_img: 0 });
     user = await enforceAdminPrivileges(user);
-    
-    const token = generateToken(email);
+
+    const token = generateToken(phone);
     res.json({ success: true, user, token });
 });
 
@@ -1341,20 +1335,21 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET || 'CHANGE_THIS_TO_A_COMPLEX_SECRE
 
 app.post('/api/admin/grant', async (req, res) => {
     try {
-        const { secret, email, tier, prepaid_img, prepaid_vid, trial_img_left, trial_vid_left } = req.body;
+        const { secret, tier, prepaid_img, prepaid_vid, trial_img_left, trial_vid_left } = req.body;
+        const phone = normalizePhoneNumber(req.body?.phone);
         
         // Verify admin secret
         if (!secret || secret !== ADMIN_SECRET) {
             return res.status(403).json({ error: 'Forbidden: Invalid admin secret' });
         }
         
-        if (!email) {
-            return res.status(400).json({ error: 'Email is required' });
+        if (!phone) {
+            return res.status(400).json({ error: 'A valid phone number is required' });
         }
         
-        let user = await getUser(email);
+        let user = await getUser(phone);
         if (!user) {
-            return res.status(404).json({ error: `User not found: ${email}` });
+            return res.status(404).json({ error: `User not found: ${phone}` });
         }
         
         const updates = {};
@@ -1368,12 +1363,12 @@ app.post('/api/admin/grant', async (req, res) => {
             return res.status(400).json({ error: 'No updates provided. Use tier, prepaid_img, prepaid_vid, trial_img_left, or trial_vid_left.' });
         }
         
-        const updatedUser = await updateUser(email, updates);
-        console.log(`[Admin] Granted to ${email}:`, updates);
+        const updatedUser = await updateUser(phone, updates);
+        console.log(`[Admin] Granted to ${phone}:`, updates);
         
         res.json({ 
             success: true, 
-            message: `Successfully updated user ${email}`,
+            message: `Successfully updated user ${phone}`,
             updates,
             user: updatedUser
         });
@@ -1393,7 +1388,7 @@ app.post('/api/admin/users', async (req, res) => {
         
         const allUsers = await User.find({});
         const safeUsers = allUsers.map(u => ({
-            email: u.email,
+            phone: u.phone,
             tier: u.tier,
             prepaid_img: u.prepaid_img || 0,
             prepaid_vid: u.prepaid_vid || 0,

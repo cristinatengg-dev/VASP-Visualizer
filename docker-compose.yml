@@ -8,21 +8,18 @@ services:
     # unless you want direct access. Proxying via nginx is safer.
     # ports:
     #   - "3000:3000" 
+    env_file:
+      - ./server/.env
     environment:
       - MONGO_URI=mongodb://mongo:27017/sci_visualizer
-      - SMTP_HOST=${SMTP_HOST:-smtp.resend.com}
-      - SMTP_PORT=${SMTP_PORT:-465}
-      - SMTP_SECURE=${SMTP_SECURE:-true}
-      - SMTP_USER=${SMTP_USER:-resend}
-      - SMTP_PASS=${SMTP_PASS:?Set SMTP_PASS to the Resend API key}
-      - SMTP_FROM=${SMTP_FROM:-SCI Visualizer <noreply@scivisualizer.com>}
+      - USER_DB_PATH=/app/user-data/db.json
       - TOKEN_SECRET=vasp_token_secret_2026_scivisualizer
       - ADMIN_SECRET=vasp_admin_secret_2026_secure
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./server/.env:/app/.env:ro
-      - ./server/db.json:/app/db.json
+      - ./server/user-data:/app/user-data
       - ./server/uploads:/app/uploads
     depends_on:
       - mongo
