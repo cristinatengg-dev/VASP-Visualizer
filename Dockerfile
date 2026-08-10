@@ -11,6 +11,8 @@ RUN npm install
 COPY . .
 
 # Build for production
+ARG VITE_PHONE_AUTH_ENABLED=false
+ENV VITE_PHONE_AUTH_ENABLED=${VITE_PHONE_AUTH_ENABLED}
 RUN npm run build
 
 # Stage 2: Serve

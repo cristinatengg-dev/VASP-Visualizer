@@ -27,14 +27,14 @@ import VideoGenerator from './pages/VideoGenerator';
 import { useStore } from './store/useStore';
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { API_BASE_URL } from './config';
+import { API_BASE_URL, PHONE_AUTH_ENABLED } from './config';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AgentGate } from './components/AgentGate';
 
-// Protected route: redirect to /login if not authenticated
+// Protected route when phone authentication is enabled.
 const AppRoute: React.FC = () => {
   const { user } = useStore();
-  if (!user) return <Navigate to="/login" replace />;
+  if (PHONE_AUTH_ENABLED && !user) return <Navigate to="/login" replace />;
   return (
     <div className="flex w-screen h-screen overflow-hidden bg-[#F5F5F0] p-6 gap-6">
       <ControlPanel />
@@ -48,7 +48,7 @@ const AppRoute: React.FC = () => {
 
 const AgentRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { user } = useStore();
-  if (!user) return <Navigate to="/login" replace />;
+  if (PHONE_AUTH_ENABLED && !user) return <Navigate to="/login" replace />;
   return children;
 };
 
@@ -75,6 +75,7 @@ function App() {
   const { user, setUser } = useStore();
   
   const [isAuthChecking, setIsAuthChecking] = useState(() => {
+      if (!PHONE_AUTH_ENABLED) return false;
       const hasToken = !!(localStorage.getItem('vasp_user_id') && localStorage.getItem('vasp_token'));
       return hasToken && !user;
   });
@@ -127,7 +128,14 @@ function App() {
       {/* 默认首页：HeroSection */}
       <Route path="/" element={<HomePage />} />
       {/* 登录页 */}
-      <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route
+        path="/login"
+        element={
+          !PHONE_AUTH_ENABLED || user
+            ? <Navigate to={PHONE_AUTH_ENABLED ? "/" : "/workspace"} replace />
+            : <LoginPage />
+        }
+      />
       {/* 主应用（需要登录） */}
       <Route path="/app" element={<AppRoute />} />
       {/* 其他页面 */}

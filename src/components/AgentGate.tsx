@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Lock, Sparkles, Crown, Zap, ArrowRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, PHONE_AUTH_ENABLED } from '../config';
 import { SubscriptionPanel } from './SubscriptionPanel';
 
 interface AgentAccessResult {
@@ -35,6 +35,11 @@ export const AgentGate: React.FC<AgentGateProps> = ({ agent, label, children }) 
 
   useEffect(() => {
     if (!user) {
+      if (!PHONE_AUTH_ENABLED) {
+        setAccess({ allowed: true });
+        setLoading(false);
+        return;
+      }
       setAccess({ allowed: false, reason: 'login_required', message: '请先登录' });
       setLoading(false);
       return;

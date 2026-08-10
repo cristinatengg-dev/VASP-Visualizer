@@ -5,6 +5,7 @@ import { User, LogOut, CreditCard, ChevronDown, User as UserIcon, Crown, Zap, Lo
 import { clsx } from 'clsx';
 import { SubscriptionPanel } from './SubscriptionPanel';
 import { maskPhoneNumber } from '../utils/phone';
+import { PHONE_AUTH_ENABLED } from '../config';
 
 const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { user } = useStore();
@@ -241,6 +242,7 @@ export const AccountDropdown: React.FC = () => {
     const maskedPhone = maskPhoneNumber(user?.phone || '');
 
     if (!user) {
+        if (!PHONE_AUTH_ENABLED) return null;
         return (
             <div className="absolute top-6 right-6 z-50">
                 <button

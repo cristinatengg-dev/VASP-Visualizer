@@ -3,3 +3,8 @@
 // 自动检测环境。在部署环境中直接使用 '/api' 相对路径，让 Nginx 负责代理
 // 在本地开发环境中，通过 Vite 的 proxy 转发到后端端口
 export const API_BASE_URL = '/api';
+
+// Keep the phone-auth implementation deployable while allowing production to
+// stay open until the SMS signature has completed carrier registration.
+// Authentication remains enabled unless a build explicitly opts out.
+export const PHONE_AUTH_ENABLED = import.meta.env.VITE_PHONE_AUTH_ENABLED !== 'false';

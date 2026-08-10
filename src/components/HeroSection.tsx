@@ -38,6 +38,7 @@ import ComplianceFooter from "./ComplianceFooter";
 import { COMPANY_NAME, SUPPORT_EMAIL, SUPPORT_MAILTO } from "../constants/contact";
 import { LEGAL_LINKS } from "../constants/legal";
 import { MATERIAL_EXPLORER_CARDS } from "../data/materialExplorerRegistry";
+import { PHONE_AUTH_ENABLED } from "../config";
 
 // ─── 动画配置 ─────────────────────────────────────────────────────────────────
 
@@ -510,7 +511,7 @@ const HeroSection: React.FC = () => {
       setTimeout(() => setPreviewToast(false), 2500);
       return;
     }
-    navigate(user ? card.route : "/login");
+    navigate(!PHONE_AUTH_ENABLED || user ? card.route : "/login");
   };
 
   return (
@@ -526,7 +527,7 @@ const HeroSection: React.FC = () => {
     >
       {/* 右上角 Sign In / Go to App 按钮 */}
       <div className="absolute top-6 right-8 z-30">
-        {user ? (
+        {!PHONE_AUTH_ENABLED || user ? (
           <button
             onClick={() => navigate("/workspace")}
             className="
@@ -604,7 +605,7 @@ const HeroSection: React.FC = () => {
 
           {/* ④ CTA 按钮（居中，单个） */}
           <motion.div variants={itemVariants}>
-            <CTAButton onClick={() => navigate(user ? "/workspace" : "/login")} />
+            <CTAButton onClick={() => navigate(!PHONE_AUTH_ENABLED || user ? "/workspace" : "/login")} />
           </motion.div>
 
           {/* ⑤ Agent 卡片（横向一行，不溢出） */}
