@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM node:18-alpine as builder
+FROM node:22-alpine as builder
 
 RUN npm config set registry https://registry.npmmirror.com
 
