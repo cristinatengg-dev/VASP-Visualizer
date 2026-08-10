@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Activity,
   Archive,
@@ -10,7 +10,6 @@ import {
   BrainCircuit,
   BriefcaseBusiness,
   Check,
-  ChevronRight,
   CircleDot,
   Cpu,
   Database,
@@ -33,7 +32,6 @@ import {
   Server,
   Settings2,
   ShieldCheck,
-  Sparkles,
   Trash2,
   WandSparkles,
   Zap,
@@ -51,6 +49,16 @@ import type {
   JobStatus,
   ServerComputeProfile,
 } from '../agents/compute/types';
+import {
+  RuntimeTaskRequestError,
+  createRuntimeWorkspaceTask,
+  deleteRuntimeWorkspaceTask,
+  getRuntimeIdentity,
+  listRuntimeWorkspaceTasks,
+  saveRuntimeWorkspaceTask,
+  setRuntimeWorkspaceTaskArchived,
+  type RuntimeWorkspaceTask,
+} from '../services/workspaceTaskRuntime';
 
 type AgentStatus = 'active' | 'ready' | 'handoff' | 'gated';
 type MessageRole = 'user' | 'assistant' | 'tool' | 'system';
@@ -453,6 +461,8 @@ interface ModelingReturnPayload {
 
 interface AgentTaskRecord {
   id: string;
+  runtimeSessionId?: string;
+  snapshotRevision?: number;
   title: string;
   createdAt: number;
   updatedAt: number;
@@ -704,6 +714,31 @@ const phaseLabel: Record<WorkflowPhase, string> = {
   error: '需要处理',
 };
 
+const workflowStageIndex: Record<WorkflowPhase, number> = {
+  idle: -1,
+  retrieving: 0,
+  await_model: 1,
+  modeling: 1,
+  await_software: 2,
+  compiling: 2,
+  await_input: 2,
+  await_submit: 3,
+  submitting: 3,
+  monitoring: 3,
+  await_ppt: 4,
+  ppt: 4,
+  done: 5,
+  error: -1,
+};
+
+const workflowStageItems = [
+  { label: '证据检索', icon: Search },
+  { label: '模型确认', icon: AtomIcon },
+  { label: '输入编译', icon: FileText },
+  { label: '受控计算', icon: Cpu },
+  { label: '结果汇报', icon: Archive },
+];
+
 const isWorkflowPrompt = (content: string, hasFiles = false) => {
   if (hasFiles) return true;
   const text = content.trim();
@@ -784,6 +819,36 @@ const createTaskRecord = (snapshot: AgentWorkflowSnapshot = createEmptyWorkflowS
     snapshot: { ...snapshot, savedAt: now },
   };
 };
+
+const normalizeTaskSnapshot = (snapshot: Partial<AgentWorkflowSnapshot> | null | undefined): AgentWorkflowSnapshot => {
+  const base = createEmptyWorkflowSnapshot();
+  const phase = snapshot?.phase || 'idle';
+  return {
+    ...base,
+    ...(snapshot || {}),
+    version: 1,
+    savedAt: Number(snapshot?.savedAt || Date.now()),
+    modelStructure: cloneWorkflowStructure(snapshot?.modelStructure || null),
+    toolEvents: normalizeSnapshotToolEvents(snapshot?.toolEvents || [], phase),
+    chatSessionId: snapshot?.chatSessionId || null,
+  };
+};
+
+const runtimeTaskToRecord = (task: RuntimeWorkspaceTask<AgentWorkflowSnapshot>): AgentTaskRecord => ({
+  id: String(task.id),
+  runtimeSessionId: String(task.runtimeSessionId),
+  snapshotRevision: Number(task.snapshotRevision || 0),
+  title: String(task.title || deriveTaskTitle(task.snapshot)),
+  createdAt: Number(task.createdAt || task.snapshot?.savedAt || Date.now()),
+  updatedAt: Number(task.updatedAt || task.snapshot?.savedAt || Date.now()),
+  archived: Boolean(task.archived),
+  snapshot: normalizeTaskSnapshot(task.snapshot),
+});
+
+const taskServerFingerprint = (task: AgentTaskRecord) => JSON.stringify({
+  title: task.title,
+  snapshot: task.snapshot,
+});
 
 const taskSearchText = (task: AgentTaskRecord) => [
   task.title,
@@ -1486,7 +1551,9 @@ const applyEvidenceBackedRecommendation = (prompt: string, data: CompleteData): 
 
 const AgentWorkspace: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, setMolecularData, setShowBonds } = useStore();
+  const runtimeIdentity = useMemo(() => getRuntimeIdentity(user?.phone), [user?.phone]);
   const accountLabel = user?.phone || 'Research user';
   const [workspacePrompt, setWorkspacePrompt] = useState('');
   const [taskSearch, setTaskSearch] = useState('');
@@ -1516,6 +1583,8 @@ const AgentWorkspace: React.FC = () => {
   const [harnessSession, setHarnessSession] = useState<HarnessSessionState | null>(null);
   const [structureSources, setStructureSources] = useState<StructureSourceRegistry | null>(null);
   const [sourceProbe, setSourceProbe] = useState<SourceProbeState | null>(null);
+  const [runtimeSyncState, setRuntimeSyncState] = useState<'connecting' | 'saving' | 'synced' | 'offline'>('connecting');
+  const [runtimeSyncError, setRuntimeSyncError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1526,6 +1595,9 @@ const AgentWorkspace: React.FC = () => {
   const taskHydratedRef = useRef(false);
   const taskInitialSaveSkippedRef = useRef(false);
   const taskPersistPausedRef = useRef(false);
+  const runtimeTaskHydratedRef = useRef(false);
+  const runtimeSaveInFlightRef = useRef(false);
+  const lastServerFingerprintRef = useRef<Map<string, string>>(new Map());
 
   const selectedIdea = useMemo(() => {
     if (!research?.idea_cards?.length) return null;
@@ -1561,6 +1633,14 @@ const AgentWorkspace: React.FC = () => {
       || '';
     return String(formula || '').trim() || 'Si';
   }, [modelIntent, research?.handoff?.formula, selectedIdea]);
+  useEffect(() => {
+    const prompt = searchParams.get('prompt')?.trim();
+    if (!prompt) return;
+    setWorkspacePrompt(prompt);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('prompt');
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!compiledInputs) {
@@ -1716,8 +1796,10 @@ const AgentWorkspace: React.FC = () => {
   useEffect(() => {
     if (taskHydratedRef.current || typeof window === 'undefined') return;
     taskHydratedRef.current = true;
+    let cancelled = false;
 
     let records: AgentTaskRecord[] = [];
+    let hadStoredRecords = false;
     try {
       const parsed = JSON.parse(window.localStorage.getItem(TASK_STORAGE_KEY) || '[]');
       if (Array.isArray(parsed)) {
@@ -1725,19 +1807,15 @@ const AgentWorkspace: React.FC = () => {
           .filter((item) => item?.id && item?.snapshot?.version === 1)
           .map((item) => ({
             id: String(item.id),
+            runtimeSessionId: item.runtimeSessionId ? String(item.runtimeSessionId) : undefined,
+            snapshotRevision: Number(item.snapshotRevision || 0),
             title: String(item.title || deriveTaskTitle(item.snapshot)),
             createdAt: Number(item.createdAt || item.snapshot.savedAt || Date.now()),
             updatedAt: Number(item.updatedAt || item.snapshot.savedAt || Date.now()),
             archived: Boolean(item.archived),
-            snapshot: {
-              ...createEmptyWorkflowSnapshot(),
-              ...item.snapshot,
-              version: 1,
-              modelStructure: cloneWorkflowStructure(item.snapshot.modelStructure || null),
-              toolEvents: normalizeSnapshotToolEvents(item.snapshot.toolEvents || [], item.snapshot.phase || 'idle'),
-              chatSessionId: item.snapshot.chatSessionId || null,
-            },
+            snapshot: normalizeTaskSnapshot(item.snapshot),
           }));
+        hadStoredRecords = records.length > 0;
       }
     } catch {
       records = [];
@@ -1756,7 +1834,59 @@ const AgentWorkspace: React.FC = () => {
     setActiveTaskId(initialTask.id);
     activeTaskIdRef.current = initialTask.id;
     applyWorkflowSnapshot(initialTask.snapshot);
-  }, [applyWorkflowSnapshot]);
+
+    void (async () => {
+      try {
+        const serverTasks = await listRuntimeWorkspaceTasks<AgentWorkflowSnapshot>(runtimeIdentity);
+        if (cancelled) return;
+        const serverRecords = serverTasks.map(runtimeTaskToRecord);
+        const serverClientIds = new Set(serverRecords.map((task) => task.id));
+        const migrationCandidates = (hadStoredRecords || serverRecords.length === 0 ? records : [])
+          .filter((task) => !serverClientIds.has(task.id));
+        const migratedResults = await Promise.allSettled(
+          migrationCandidates.map((task) => createRuntimeWorkspaceTask(runtimeIdentity, task)),
+        );
+        if (cancelled) return;
+        const migratedRecords: AgentTaskRecord[] = [];
+        const localFallbackRecords: AgentTaskRecord[] = [];
+        migratedResults.forEach((result, index) => {
+          if (result.status === 'fulfilled') migratedRecords.push(runtimeTaskToRecord(result.value));
+          else localFallbackRecords.push(migrationCandidates[index]);
+        });
+        const merged = [...serverRecords, ...migratedRecords, ...localFallbackRecords]
+          .filter((task, index, all) => all.findIndex((candidate) => candidate.id === task.id) === index)
+          .sort((left, right) => right.updatedAt - left.updatedAt);
+        const nextRecords = merged.length ? merged : records;
+        for (const task of nextRecords) {
+          if (task.runtimeSessionId) lastServerFingerprintRef.current.set(task.id, taskServerFingerprint(task));
+        }
+        const preferredId = window.localStorage.getItem(ACTIVE_TASK_STORAGE_KEY);
+        const nextActive = nextRecords.find((task) => task.id === preferredId && !task.archived)
+          || nextRecords.find((task) => !task.archived)
+          || nextRecords[0];
+        taskPersistPausedRef.current = true;
+        setTasks(nextRecords);
+        setActiveTaskId(nextActive.id);
+        activeTaskIdRef.current = nextActive.id;
+        applyWorkflowSnapshot(nextActive.snapshot);
+        runtimeTaskHydratedRef.current = true;
+        setRuntimeSyncState(localFallbackRecords.length ? 'offline' : 'synced');
+        setRuntimeSyncError(localFallbackRecords.length ? '部分本地任务尚未写入 Runtime，将在下次修改时重试。' : null);
+      } catch (error) {
+        if (cancelled) return;
+        runtimeTaskHydratedRef.current = true;
+        setRuntimeSyncState('offline');
+        setRuntimeSyncError(error instanceof Error ? error.message : String(error));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (!runtimeTaskHydratedRef.current) {
+        taskHydratedRef.current = false;
+      }
+    };
+  }, [applyWorkflowSnapshot, runtimeIdentity]);
 
   useEffect(() => {
     if (!taskHydratedRef.current || typeof window === 'undefined') return;
@@ -1791,6 +1921,58 @@ const AgentWorkspace: React.FC = () => {
     }, 200);
     return () => window.clearTimeout(timer);
   }, [activeTaskId, buildCurrentSnapshot]);
+
+  useEffect(() => {
+    if (!runtimeTaskHydratedRef.current || !activeTaskId || runtimeSaveInFlightRef.current) return;
+    const task = tasks.find((item) => item.id === activeTaskId);
+    if (!task || task.archived) return;
+    const fingerprint = taskServerFingerprint(task);
+    if (lastServerFingerprintRef.current.get(task.id) === fingerprint) return;
+
+    const timer = window.setTimeout(() => {
+      runtimeSaveInFlightRef.current = true;
+      setRuntimeSyncState('saving');
+      setRuntimeSyncError(null);
+      const request = task.runtimeSessionId
+        ? saveRuntimeWorkspaceTask(runtimeIdentity, {
+            runtimeSessionId: task.runtimeSessionId,
+            title: task.title,
+            snapshot: task.snapshot,
+            snapshotRevision: Number(task.snapshotRevision || 0),
+          })
+        : createRuntimeWorkspaceTask(runtimeIdentity, task);
+
+      void request
+        .then((saved) => {
+          lastServerFingerprintRef.current.set(task.id, fingerprint);
+          setTasks((prev) => prev.map((item) => (
+            item.id === task.id
+              ? {
+                  ...item,
+                  runtimeSessionId: saved.runtimeSessionId,
+                  snapshotRevision: saved.snapshotRevision,
+                  updatedAt: taskServerFingerprint(item) === fingerprint ? saved.updatedAt : item.updatedAt,
+                }
+              : item
+          )));
+          setRuntimeSyncState('synced');
+          setRuntimeSyncError(null);
+        })
+        .catch((error) => {
+          setRuntimeSyncState('offline');
+          if (error instanceof RuntimeTaskRequestError && error.code === 'snapshot_conflict') {
+            setRuntimeSyncError('任务已在另一个窗口更新；当前本地修改未覆盖服务器版本。请刷新后重新应用修改。');
+          } else {
+            setRuntimeSyncError(error instanceof Error ? error.message : String(error));
+          }
+        })
+        .finally(() => {
+          runtimeSaveInFlightRef.current = false;
+        });
+    }, 1200);
+
+    return () => window.clearTimeout(timer);
+  }, [activeTaskId, runtimeIdentity, tasks]);
 
   useEffect(() => {
     if (workflowRestoreRef.current || typeof window === 'undefined') return;
@@ -1908,6 +2090,34 @@ const AgentWorkspace: React.FC = () => {
     )));
   }, [activeTaskId, buildCurrentSnapshot]);
 
+  const persistTaskArchiveState = useCallback((task: AgentTaskRecord, archived: boolean) => {
+    setRuntimeSyncState('saving');
+    const ensureSession = task.runtimeSessionId
+      ? Promise.resolve({ runtimeSessionId: task.runtimeSessionId } as RuntimeWorkspaceTask<AgentWorkflowSnapshot>)
+      : createRuntimeWorkspaceTask(runtimeIdentity, task);
+    void ensureSession
+      .then((stored) => setRuntimeWorkspaceTaskArchived<AgentWorkflowSnapshot>(runtimeIdentity, stored.runtimeSessionId, archived))
+      .then((saved) => {
+        setTasks((prev) => prev.map((item) => (
+          item.id === task.id
+            ? {
+                ...item,
+                runtimeSessionId: saved.runtimeSessionId,
+                snapshotRevision: saved.snapshotRevision,
+                archived: saved.archived,
+              }
+            : item
+        )));
+        lastServerFingerprintRef.current.set(task.id, taskServerFingerprint({ ...task, archived }));
+        setRuntimeSyncState('synced');
+        setRuntimeSyncError(null);
+      })
+      .catch((error) => {
+        setRuntimeSyncState('offline');
+        setRuntimeSyncError(error instanceof Error ? error.message : String(error));
+      });
+  }, [runtimeIdentity]);
+
   const openTask = useCallback((taskId: string) => {
     const task = tasks.find((item) => item.id === taskId);
     if (!task) return;
@@ -1928,6 +2138,8 @@ const AgentWorkspace: React.FC = () => {
   }, [applyWorkflowSnapshot, persistActiveTaskNow]);
 
   const archiveTask = useCallback((taskId: string) => {
+    const targetTask = tasks.find((task) => task.id === taskId);
+    if (targetTask) persistTaskArchiveState(targetTask, true);
     const currentSnapshot = buildCurrentSnapshot();
     const currentSavedAt = Date.now();
     const archivedAt = Date.now();
@@ -1966,7 +2178,7 @@ const AgentWorkspace: React.FC = () => {
     activeTaskIdRef.current = replacement.id;
     setShowArchivedTasks(false);
     applyWorkflowSnapshot(replacement.snapshot);
-  }, [activeTaskId, applyWorkflowSnapshot, buildCurrentSnapshot, tasks]);
+  }, [activeTaskId, applyWorkflowSnapshot, buildCurrentSnapshot, persistTaskArchiveState, tasks]);
 
   const deleteTask = useCallback((taskId: string) => {
     const task = tasks.find((item) => item.id === taskId);
@@ -1976,6 +2188,20 @@ const AgentWorkspace: React.FC = () => {
       ? true
       : window.confirm(`确定删除“${task.title}”？此操作不可恢复。`);
     if (!confirmed) return;
+
+    if (task.runtimeSessionId) {
+      setRuntimeSyncState('saving');
+      void deleteRuntimeWorkspaceTask(runtimeIdentity, task.runtimeSessionId)
+        .then(() => {
+          lastServerFingerprintRef.current.delete(task.id);
+          setRuntimeSyncState('synced');
+          setRuntimeSyncError(null);
+        })
+        .catch((error) => {
+          setRuntimeSyncState('offline');
+          setRuntimeSyncError(error instanceof Error ? error.message : String(error));
+        });
+    }
 
     const currentSnapshot = buildCurrentSnapshot();
     const currentSavedAt = Date.now();
@@ -2013,11 +2239,12 @@ const AgentWorkspace: React.FC = () => {
     activeTaskIdRef.current = replacement.id;
     setShowArchivedTasks(false);
     applyWorkflowSnapshot(replacement.snapshot);
-  }, [activeTaskId, applyWorkflowSnapshot, buildCurrentSnapshot, tasks]);
+  }, [activeTaskId, applyWorkflowSnapshot, buildCurrentSnapshot, runtimeIdentity, tasks]);
 
   const restoreTask = useCallback((taskId: string) => {
     const task = tasks.find((item) => item.id === taskId);
     if (!task) return;
+    persistTaskArchiveState(task, false);
     persistActiveTaskNow();
     const restored = { ...task, archived: false, updatedAt: Date.now() };
     setTasks((prev) => prev.map((item) => (item.id === taskId ? restored : item)));
@@ -2025,7 +2252,7 @@ const AgentWorkspace: React.FC = () => {
     setActiveTaskId(taskId);
     activeTaskIdRef.current = taskId;
     applyWorkflowSnapshot(restored.snapshot);
-  }, [applyWorkflowSnapshot, persistActiveTaskNow, tasks]);
+  }, [applyWorkflowSnapshot, persistActiveTaskNow, persistTaskArchiveState, tasks]);
 
   const getAuthHeaders = useCallback((extra?: Record<string, string>) => {
     const token = localStorage.getItem('vasp_token') || '';
@@ -2036,12 +2263,12 @@ const AgentWorkspace: React.FC = () => {
   }, []);
 
   const withUserPayload = useCallback((payload: Record<string, any> = {}) => {
-    const userId = user?.phone || localStorage.getItem('vasp_user_id') || '';
+    const userId = user?.phone || localStorage.getItem('vasp_user_id') || runtimeIdentity.ownerId;
     return {
       ...payload,
       ...(userId ? { userId, ownerId: userId } : {}),
     };
-  }, [user?.phone]);
+  }, [runtimeIdentity.ownerId, user?.phone]);
 
   const postJson = useCallback(async <T,>(
     path: string,
@@ -2113,8 +2340,30 @@ const AgentWorkspace: React.FC = () => {
     });
   }, []);
 
+  const ensureActiveRuntimeSession = useCallback(async () => {
+    const taskId = activeTaskIdRef.current;
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) throw new Error('Active workspace task is unavailable');
+    if (task.runtimeSessionId) return task.runtimeSessionId;
+    const snapshot = task.id === activeTaskId ? buildCurrentSnapshot() : task.snapshot;
+    const record = { ...task, title: deriveTaskTitle(snapshot), snapshot };
+    const saved = await createRuntimeWorkspaceTask(runtimeIdentity, record);
+    lastServerFingerprintRef.current.set(record.id, taskServerFingerprint(record));
+    setTasks((prev) => prev.map((item) => (
+      item.id === record.id
+        ? {
+            ...item,
+            runtimeSessionId: saved.runtimeSessionId,
+            snapshotRevision: saved.snapshotRevision,
+          }
+        : item
+    )));
+    return saved.runtimeSessionId;
+  }, [activeTaskId, buildCurrentSnapshot, runtimeIdentity, tasks]);
+
   const startHarnessSession = useCallback(async (prompt: string) => {
     try {
+      const runtimeSessionId = await ensureActiveRuntimeSession();
       const payload = await postJson<{
         success: boolean;
         sessionId: string;
@@ -2122,6 +2371,7 @@ const AgentWorkspace: React.FC = () => {
         planArtifactId?: string | null;
         harness?: string;
       }>('/agent/harness/sessions', {
+        sessionId: runtimeSessionId,
         prompt,
         projectId: 'workspace-agent',
       });
@@ -2146,13 +2396,13 @@ const AgentWorkspace: React.FC = () => {
       console.warn('[AgentWorkspace] Runtime harness session unavailable', error);
       addMessage({
         role: 'assistant',
-        title: '运行记录暂不可用',
-        content: '连续 agent 会继续执行；这次只是无法写入 runtime harness 记录，不影响检索、建模和计算输入生成。',
-        status: 'success',
+        title: 'Runtime 暂不可用',
+        content: '任务没有启动，因为生产流程要求先创建可恢复的 Runtime Session。请检查 MongoDB/Runtime 服务后重试，避免产生无法审计的孤立结果。',
+        status: 'error',
       });
       return null;
     }
-  }, [addMessage, postJson]);
+  }, [addMessage, ensureActiveRuntimeSession, postJson]);
 
   const recordHarnessCheckpoint = useCallback(async ({
     phase: checkpointPhase,
@@ -2553,16 +2803,18 @@ const AgentWorkspace: React.FC = () => {
     setResearchStack(null);
 
     const sessionId = await startHarnessSession(prompt);
-    if (sessionId) {
-      void recordHarnessCheckpoint({
-        phase: 'retrieving',
-        status: 'running',
-        agent: 'Orchestrator',
-        toolName: 'agent.retrieve',
-        summary: 'Started literature and database retrieval',
-        details: [prompt],
-      });
+    if (!sessionId) {
+      setPhase('error');
+      return;
     }
+    void recordHarnessCheckpoint({
+      phase: 'retrieving',
+      status: 'running',
+      agent: 'Orchestrator',
+      toolName: 'agent.retrieve',
+      summary: 'Started literature and database retrieval',
+      details: [prompt],
+    });
 
     addMessage({
       role: 'assistant',
@@ -3765,6 +4017,26 @@ const AgentWorkspace: React.FC = () => {
               <p className="truncate text-[11px] text-gray-400">检索 &gt; 模型确认 &gt; 输入文件检查 &gt; 提交计算 &gt; 结果汇报</p>
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <span
+                className={cx(
+                  'hidden h-9 items-center gap-2 rounded-[32px] border px-3 text-xs font-semibold sm:flex',
+                  runtimeSyncState === 'offline'
+                    ? 'border-red-200 bg-red-50 text-red-600'
+                    : 'border-gray-200 bg-gray-50 text-gray-700',
+                )}
+                title={runtimeSyncError || '任务由服务端 Runtime 持久化，本地存储仅作缓存'}
+              >
+                {runtimeSyncState === 'connecting' || runtimeSyncState === 'saving'
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <Server size={14} />}
+                {runtimeSyncState === 'connecting'
+                  ? 'Runtime 连接中'
+                  : runtimeSyncState === 'saving'
+                    ? 'Runtime 保存中'
+                    : runtimeSyncState === 'synced'
+                      ? 'Runtime 已同步'
+                      : 'Runtime 离线'}
+              </span>
               <span className="hidden h-9 items-center gap-2 rounded-[32px] border border-gray-200 bg-gray-50 px-3 text-xs font-semibold text-gray-700 sm:flex">
                 <ShieldCheck size={14} className="text-gray-500" />
                 来源校验
@@ -3789,29 +4061,37 @@ const AgentWorkspace: React.FC = () => {
 
           <div className="grid min-h-0 flex-1 grid-cols-1">
             <section className="flex min-h-0 flex-col overflow-hidden">
-              <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-3 md:px-6">
-                <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
-                  {agents.map((agent) => {
-                    const Icon = agent.icon;
+              {phase !== 'idle' && <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-3 md:px-6">
+                <div className="mx-auto flex max-w-5xl items-center overflow-x-auto pb-1 custom-scrollbar">
+                  {workflowStageItems.map((stage, index) => {
+                    const Icon = stage.icon;
+                    const activeIndex = workflowStageIndex[phase];
+                    const isDone = phase === 'done' || (activeIndex > index);
+                    const isActive = activeIndex === index;
                     return (
-                      <div key={agent.id} className="min-h-[78px] w-[168px] shrink-0 rounded-[16px] border border-gray-200 bg-white p-3 text-left">
-                        <div className="flex items-center gap-2">
-                          <span className={cx('flex h-8 w-8 items-center justify-center rounded-[16px]', agent.accent)}>
-                            <Icon size={16} />
+                      <React.Fragment key={stage.label}>
+                        {index > 0 && <span className={cx('mx-2 h-px min-w-5 flex-1', isDone || isActive ? 'bg-[#0A1128]' : 'bg-gray-200')} />}
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className={cx(
+                            'flex h-8 w-8 items-center justify-center rounded-[16px] border transition',
+                            isDone || isActive ? 'border-[#0A1128] bg-[#0A1128] text-white' : 'border-gray-200 bg-gray-50 text-gray-400',
+                          )}>
+                            {isDone ? <Check size={14} /> : isActive && ['retrieving', 'modeling', 'compiling', 'submitting', 'monitoring', 'ppt'].includes(phase) ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
                           </span>
-                          <StatusPill status={agent.status} />
+                          <div>
+                            <p className={cx('text-[10px] font-bold', isDone || isActive ? 'text-[#0A1128]' : 'text-gray-400')}>{stage.label}</p>
+                            <p className="text-[9px] text-gray-400">{isDone ? '已完成' : isActive ? phaseLabel[phase] : '待执行'}</p>
+                          </div>
                         </div>
-                        <p className="mt-2 truncate text-xs font-bold">{agent.name}</p>
-                        <p className="truncate text-[11px] text-gray-500">{agent.subtitle}</p>
-                      </div>
+                      </React.Fragment>
                     );
                   })}
                 </div>
-              </div>
+              </div>}
 
               <div className="min-h-0 flex-1 overflow-y-auto bg-[#F5F5F0] px-4 py-5 custom-scrollbar md:px-6">
                 <div className="mx-auto max-w-5xl space-y-4">
-                  <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
+                  {(phase !== 'idle' || research || researchStack || modelStructure || compiledInputs || jobStatus) && <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-[16px] bg-[#0A1128] text-white">
                         {phase === 'retrieving' || phase === 'modeling' || phase === 'compiling' || phase === 'submitting' || phase === 'monitoring' || phase === 'ppt'
@@ -3838,7 +4118,7 @@ const AgentWorkspace: React.FC = () => {
                         </a>
                       )}
                     </div>
-                  </div>
+                  </div>}
 
                   {messages.map((message) => (
                     <div

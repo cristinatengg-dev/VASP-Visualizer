@@ -22,7 +22,12 @@ const allowedArtifactKinds = new Set([
   'result_bundle',
   'report',
   'presentation',
+  'workspace_snapshot',
 ]);
+
+const WORKSPACE_TYPE = 'research-agent';
+const DEFAULT_WORKSPACE_PROJECT = 'workspace-agent';
+const MAX_WORKSPACE_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 
 function sanitizeStepId(value) {
   return String(value || '')
@@ -34,6 +39,59 @@ function sanitizeStepId(value) {
 function safeString(value, fallback = '') {
   const out = String(value || '').trim();
   return out || fallback;
+}
+
+function resolveOwnerId(req) {
+  if (req.agentAuthenticated) {
+    const authenticatedOwner = safeString(
+      req.agentUser?.phone || req.agentUser?.id || req.agentUser?._id,
+    );
+    if (authenticatedOwner) return authenticatedOwner;
+  }
+
+  const requestedOwner = safeString(
+    req.body?.ownerId || req.body?.userId || req.query?.ownerId || req.query?.userId,
+  );
+  if (/^local-[a-zA-Z0-9-]{12,160}$/.test(requestedOwner)) return requestedOwner;
+
+  const error = new Error('A valid login token or local Runtime owner is required');
+  error.statusCode = 401;
+  throw error;
+}
+
+function normalizeWorkspaceSnapshot(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    const error = new Error('snapshot must be a JSON object');
+    error.statusCode = 400;
+    throw error;
+  }
+  const serialized = JSON.stringify(value);
+  if (Buffer.byteLength(serialized, 'utf8') > MAX_WORKSPACE_SNAPSHOT_BYTES) {
+    const error = new Error('workspace snapshot exceeds the 8 MB limit');
+    error.statusCode = 413;
+    throw error;
+  }
+  return JSON.parse(serialized);
+}
+
+function snapshotPreview(snapshot, archived = false) {
+  return {
+    phase: safeString(snapshot?.phase, 'idle'),
+    messageCount: Array.isArray(snapshot?.messages) ? snapshot.messages.length : 0,
+    toolEventCount: Array.isArray(snapshot?.toolEvents) ? snapshot.toolEvents.length : 0,
+    hasStructure: Boolean(snapshot?.modelStructure),
+    hasCompiledInputs: Boolean(snapshot?.compiledInputs),
+    archived,
+  };
+}
+
+function isWorkspaceWriteConflict(error) {
+  const message = String(error?.message || '');
+  return error?.code === 11000
+    || error?.code === 112
+    || error?.code === 'snapshot_conflict'
+    || error?.hasErrorLabel?.('TransientTransactionError')
+    || /write conflict|temporarily unavailable/i.test(message);
 }
 
 function normalizeStatus(value) {
@@ -130,20 +188,316 @@ function createResearchOrchestratorHarnessRouter() {
   const runtimeCore = createRuntimeCore();
   let builtinSkillsReady = false;
 
-  async function prepareRuntime() {
-    await connectRuntimeDb();
-    if (!builtinSkillsReady) {
+  async function prepareRuntime({ ensureSkills = false } = {}) {
+    const connection = await connectRuntimeDb();
+    if (ensureSkills && !builtinSkillsReady) {
       await runtimeCore.skillService.ensureBuiltinSkills();
       builtinSkillsReady = true;
     }
+    return connection;
   }
+
+  async function readWorkspaceTask(session) {
+    if (!session?.latestSnapshotArtifactId) return null;
+    const artifact = await runtimeCore.artifactService.getArtifactById(session.latestSnapshotArtifactId);
+    if (!artifact) return null;
+    const stored = await runtimeCore.artifactStorage.readJsonPayload(artifact.payloadRef);
+    const snapshot = stored?.payload || stored;
+    return {
+      id: safeString(session.clientTaskId, session._id),
+      runtimeSessionId: session._id,
+      title: safeString(session.title, '新科研任务'),
+      createdAt: new Date(session.createdAt).getTime(),
+      updatedAt: new Date(session.updatedAt).getTime(),
+      archived: Boolean(session.archivedAt),
+      snapshotRevision: Number(session.snapshotRevision || 0),
+      snapshot,
+    };
+  }
+
+  async function createWorkspaceSnapshotArtifact({ session, snapshot, title, previousArtifact, tx }) {
+    const identity = previousArtifact
+      ? runtimeCore.artifactService.reserveArtifactIdentity({
+          lineageRootId: previousArtifact.lineageRootId,
+          version: previousArtifact.version + 1,
+        })
+      : runtimeCore.artifactService.reserveArtifactIdentity();
+    const materialized = await runtimeCore.artifactStorage.materializeJsonPayload({
+      artifactId: identity._id,
+      lineageRootId: identity.lineageRootId,
+      version: identity.version,
+      payload: snapshot,
+      fileName: `${identity._id}-workspace-snapshot.json`,
+    });
+    const artifactInput = {
+      ...identity,
+      kind: 'workspace_snapshot',
+      sessionId: session._id,
+      projectId: session.projectId,
+      producedBySkill: 'workspace_task_persistence',
+      status: 'ready',
+      lifecycleStage: 'validated',
+      riskLevel: 'low',
+      approvalStatus: 'none',
+      isConsumable: false,
+      payloadRef: materialized.payloadRef,
+      payloadType: materialized.payloadType,
+      mimeType: materialized.mimeType,
+      blobSizeBytes: materialized.blobSizeBytes,
+      contentHash: materialized.contentHash,
+      summary: `Workspace snapshot: ${title}`,
+      preview: snapshotPreview(snapshot, Boolean(session.archivedAt)),
+    };
+    if (previousArtifact) {
+      return runtimeCore.artifactService.supersedeArtifact({
+        artifactId: previousArtifact._id,
+        nextArtifact: artifactInput,
+        tx,
+      });
+    }
+    return runtimeCore.artifactService.createArtifact(artifactInput, tx);
+  }
+
+  router.get('/workspace/health', async (_req, res) => {
+    try {
+      const connection = await prepareRuntime();
+      const hello = await connection.db.admin().command({ hello: 1 });
+      const transactionCapable = Boolean(hello.setName || hello.msg === 'isdbgrid');
+      const transactionsDisabled = process.env.RUNTIME_DISABLE_TRANSACTIONS === '1';
+      const productionReady = transactionCapable && !transactionsDisabled;
+      return res.status(productionReady ? 200 : 503).json({
+        success: productionReady,
+        ok: productionReady,
+        runtime: productionReady ? 'ready' : 'degraded',
+        persistence: {
+          mongodb: 'ready',
+          transactions: transactionsDisabled
+            ? 'disabled'
+            : transactionCapable ? 'ready' : 'unavailable',
+          artifactStorage: 'persistent-filesystem-required',
+        },
+      });
+    } catch (err) {
+      return res.status(503).json({ success: false, ok: false, runtime: 'unavailable', error: err.message });
+    }
+  });
+
+  router.get('/workspace/tasks', async (req, res) => {
+    try {
+      await prepareRuntime();
+      const ownerId = resolveOwnerId(req);
+      const projectId = safeString(req.query.projectId, DEFAULT_WORKSPACE_PROJECT);
+      const sessions = await SessionModel.find({
+        ownerId,
+        projectId,
+        workspaceType: WORKSPACE_TYPE,
+        deletedAt: { $exists: false },
+      }).sort({ lastActivityAt: -1 }).limit(100).lean();
+      const tasks = (await Promise.all(sessions.map(readWorkspaceTask))).filter(Boolean);
+      return res.json({ success: true, ok: true, tasks });
+    } catch (err) {
+      return res.status(err.statusCode || 500).json({ success: false, ok: false, error: err.message });
+    }
+  });
+
+  router.post('/workspace/tasks', async (req, res) => {
+    try {
+      await prepareRuntime();
+      const ownerId = resolveOwnerId(req);
+      const projectId = safeString(req.body.projectId, DEFAULT_WORKSPACE_PROJECT);
+      const clientTaskId = safeString(req.body.clientTaskId).slice(0, 160);
+      const title = safeString(req.body.title, '新科研任务').slice(0, 160);
+      const snapshot = normalizeWorkspaceSnapshot(req.body.snapshot);
+      if (!clientTaskId) return res.status(400).json({ success: false, error: 'clientTaskId is required' });
+
+      const existing = await SessionModel.findOne({ ownerId, clientTaskId, deletedAt: { $exists: false } });
+      if (existing) {
+        return res.status(200).json({ success: true, ok: true, created: false, task: await readWorkspaceTask(existing) });
+      }
+
+      const updatedSession = await runtimeCore.withTransaction(async (tx) => {
+        const session = await runtimeCore.sessionService.createSession({
+          ownerId,
+          projectId,
+          status: 'active',
+          workspaceType: WORKSPACE_TYPE,
+          clientTaskId,
+          title,
+          snapshotRevision: 0,
+        }, tx);
+        const artifact = await createWorkspaceSnapshotArtifact({ session, snapshot, title, tx });
+        const updated = await runtimeCore.sessionService.updateWorkspaceSnapshot({
+          sessionId: session._id,
+          ownerId,
+          title,
+          latestSnapshotArtifactId: artifact._id,
+          expectedSnapshotRevision: 0,
+          tx,
+        });
+        await runtimeCore.eventService.emitEvent({
+          sessionId: session._id,
+          category: 'system',
+          type: 'workspace.task.created',
+          producerType: 'orchestrator',
+          streamPartition: 'workspace-task-persistence',
+          payload: { clientTaskId, title, snapshotArtifactId: artifact._id },
+        }, tx);
+        return updated;
+      });
+      return res.status(201).json({ success: true, ok: true, created: true, task: await readWorkspaceTask(updatedSession) });
+    } catch (err) {
+      if (err?.code === 11000) {
+        const ownerId = resolveOwnerId(req);
+        const existing = await SessionModel.findOne({
+          ownerId,
+          clientTaskId: safeString(req.body.clientTaskId),
+          deletedAt: { $exists: false },
+        });
+        if (existing) return res.json({ success: true, ok: true, created: false, task: await readWorkspaceTask(existing) });
+      }
+      return res.status(err.statusCode || 500).json({ success: false, ok: false, error: err.message });
+    }
+  });
+
+  router.put('/workspace/tasks/:sessionId', async (req, res) => {
+    try {
+      await prepareRuntime();
+      const ownerId = resolveOwnerId(req);
+      const sessionId = safeString(req.params.sessionId);
+      const title = safeString(req.body.title, '新科研任务').slice(0, 160);
+      const snapshot = normalizeWorkspaceSnapshot(req.body.snapshot);
+      const expectedRevision = Number(req.body.expectedRevision);
+      if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+        return res.status(400).json({ success: false, error: 'expectedRevision must be a positive integer' });
+      }
+      const session = await SessionModel.findOne({ _id: sessionId, ownerId, deletedAt: { $exists: false } });
+      if (!session) return res.status(404).json({ success: false, error: 'Workspace task not found' });
+      if (Number.isInteger(expectedRevision) && expectedRevision !== Number(session.snapshotRevision || 0)) {
+        return res.status(409).json({
+          success: false,
+          error: 'Workspace task changed on another client',
+          code: 'snapshot_conflict',
+          task: await readWorkspaceTask(session),
+        });
+      }
+
+      const updatedSession = await runtimeCore.withTransaction(async (tx) => {
+        const previousArtifact = session.latestSnapshotArtifactId
+          ? await runtimeCore.artifactService.getArtifactById(session.latestSnapshotArtifactId, tx)
+          : null;
+        const artifact = await createWorkspaceSnapshotArtifact({ session, snapshot, title, previousArtifact, tx });
+        const updated = await runtimeCore.sessionService.updateWorkspaceSnapshot({
+          sessionId,
+          ownerId,
+          title,
+          latestSnapshotArtifactId: artifact._id,
+          expectedSnapshotRevision: expectedRevision,
+          tx,
+        });
+        if (!updated) {
+          const conflict = new Error('Workspace task changed on another client');
+          conflict.statusCode = 409;
+          conflict.code = 'snapshot_conflict';
+          throw conflict;
+        }
+        await runtimeCore.eventService.emitEvent({
+          sessionId,
+          category: 'system',
+          type: 'workspace.task.snapshot_saved',
+          producerType: 'orchestrator',
+          streamPartition: 'workspace-task-persistence',
+          payload: {
+            title,
+            snapshotRevision: updated.snapshotRevision,
+            snapshotArtifactId: updated.latestSnapshotArtifactId,
+            phase: snapshot.phase || 'idle',
+          },
+        }, tx);
+        return updated;
+      });
+      return res.json({ success: true, ok: true, task: await readWorkspaceTask(updatedSession) });
+    } catch (err) {
+      if (isWorkspaceWriteConflict(err)) {
+        const ownerId = resolveOwnerId(req);
+        const session = await SessionModel.findOne({
+          _id: safeString(req.params.sessionId),
+          ownerId,
+          deletedAt: { $exists: false },
+        });
+        return res.status(409).json({
+          success: false,
+          ok: false,
+          code: 'snapshot_conflict',
+          error: 'Workspace task changed on another client',
+          task: session ? await readWorkspaceTask(session) : null,
+        });
+      }
+      return res.status(err.statusCode || 500).json({ success: false, ok: false, code: err.code, error: err.message });
+    }
+  });
+
+  router.patch('/workspace/tasks/:sessionId/archive', async (req, res) => {
+    try {
+      await prepareRuntime();
+      const ownerId = resolveOwnerId(req);
+      const sessionId = safeString(req.params.sessionId);
+      const archived = req.body.archived !== false;
+      const session = await runtimeCore.withTransaction(async (tx) => {
+        const updated = await runtimeCore.sessionService.setWorkspaceArchived({ sessionId, ownerId, archived, tx });
+        if (!updated) return null;
+        await runtimeCore.eventService.emitEvent({
+          sessionId,
+          category: 'system',
+          type: archived ? 'workspace.task.archived' : 'workspace.task.restored',
+          producerType: 'orchestrator',
+          streamPartition: 'workspace-task-persistence',
+          payload: { archived },
+        }, tx);
+        return updated;
+      });
+      if (!session) return res.status(404).json({ success: false, error: 'Workspace task not found' });
+      return res.json({ success: true, ok: true, task: await readWorkspaceTask(session) });
+    } catch (err) {
+      return res.status(err.statusCode || 500).json({ success: false, ok: false, error: err.message });
+    }
+  });
+
+  router.delete('/workspace/tasks/:sessionId', async (req, res) => {
+    try {
+      await prepareRuntime();
+      const ownerId = resolveOwnerId(req);
+      const sessionId = safeString(req.params.sessionId);
+      const session = await runtimeCore.withTransaction(async (tx) => {
+        const deleted = await runtimeCore.sessionService.softDeleteWorkspace({ sessionId, ownerId, tx });
+        if (!deleted) return null;
+        await runtimeCore.eventService.emitEvent({
+          sessionId,
+          category: 'system',
+          type: 'workspace.task.deleted',
+          producerType: 'orchestrator',
+          streamPartition: 'workspace-task-persistence',
+          payload: { softDeleted: true },
+        }, tx);
+        return deleted;
+      });
+      if (!session) return res.status(404).json({ success: false, error: 'Workspace task not found' });
+      return res.json({ success: true, ok: true, sessionId });
+    } catch (err) {
+      return res.status(err.statusCode || 500).json({ success: false, ok: false, error: err.message });
+    }
+  });
 
   router.post('/sessions', async (req, res) => {
     try {
-      await prepareRuntime();
-      const ownerId = safeString(req.body.ownerId || req.body.userId, 'anonymous-researcher');
+      await prepareRuntime({ ensureSkills: true });
+      const ownerId = resolveOwnerId(req);
       const projectId = safeString(req.body.projectId, 'workspace-agent');
       const prompt = safeString(req.body.prompt, 'New research agent task');
+      const requestedSessionId = safeString(req.body.sessionId);
+      if (requestedSessionId) {
+        const workspaceSession = await SessionModel.findOne({ _id: requestedSessionId, ownerId, deletedAt: { $exists: false } });
+        if (!workspaceSession) return res.status(404).json({ success: false, error: 'Workspace session not found' });
+      }
       const firstStep = {
         stepId: sanitizeStepId(req.body.firstStepId || 'orchestrator-intake'),
         skillId: 'research_orchestrator',
@@ -153,6 +507,7 @@ function createResearchOrchestratorHarnessRouter() {
       };
 
       const result = await runtimeCore.submitGoalAndCreatePlan({
+        sessionId: requestedSessionId || undefined,
         ownerId,
         projectId,
         goalArtifact: {
@@ -220,7 +575,7 @@ function createResearchOrchestratorHarnessRouter() {
         plan: buildResearchPlanPreview(prompt),
       });
     } catch (err) {
-      return res.status(500).json({ success: false, ok: false, error: err.message });
+      return res.status(err.statusCode || 500).json({ success: false, ok: false, error: err.message });
     }
   });
 
@@ -232,6 +587,9 @@ function createResearchOrchestratorHarnessRouter() {
 
       const session = await runtimeCore.sessionService.getSessionById(sessionId);
       if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
+      if (safeString(session.ownerId) !== resolveOwnerId(req)) {
+        return res.status(404).json({ success: false, error: 'Session not found' });
+      }
 
       const status = normalizeStatus(req.body.status);
       const phase = safeString(req.body.phase, 'workflow');
@@ -241,7 +599,7 @@ function createResearchOrchestratorHarnessRouter() {
       const details = Array.isArray(req.body.details) ? req.body.details.map(String).slice(-20) : [];
       const payload = req.body.payload && typeof req.body.payload === 'object' ? req.body.payload : {};
 
-      let artifact = null;
+      let artifactRecord = null;
       if (req.body.artifact && typeof req.body.artifact === 'object') {
         const artifactInput = req.body.artifact;
         const kind = normalizeArtifactKind(artifactInput.kind);
@@ -255,7 +613,7 @@ function createResearchOrchestratorHarnessRouter() {
           version: identity.version,
           payload: artifactPayload,
         });
-        artifact = await runtimeCore.artifactService.createArtifact({
+        artifactRecord = {
           ...identity,
           kind,
           sessionId,
@@ -273,39 +631,44 @@ function createResearchOrchestratorHarnessRouter() {
           contentHash: materialized.contentHash,
           summary: safeString(artifactInput.summary, summary),
           preview: buildArtifactPreview(kind, artifactPayload, artifactInput.preview || {}),
-        });
+        };
       }
 
-      const event = await runtimeCore.eventService.emitEvent({
-        sessionId,
-        category: 'domain',
-        type: eventType,
-        producerType: normalizeProducerType(req.body.producerType),
-        correlationId: req.body.correlationId ? String(req.body.correlationId) : undefined,
-        streamPartition: safeString(req.body.streamPartition, 'workspace-orchestrator'),
-        payload: {
-          phase,
-          status,
-          agent: safeString(req.body.agent, 'Orchestrator'),
-          toolName,
-          summary,
-          details,
-          artifactId: artifact?._id || null,
-          ...payload,
-        },
+      const persisted = await runtimeCore.withTransaction(async (tx) => {
+        const artifact = artifactRecord
+          ? await runtimeCore.artifactService.createArtifact(artifactRecord, tx)
+          : null;
+        const event = await runtimeCore.eventService.emitEvent({
+          sessionId,
+          category: 'domain',
+          type: eventType,
+          producerType: normalizeProducerType(req.body.producerType),
+          correlationId: req.body.correlationId ? String(req.body.correlationId) : undefined,
+          streamPartition: safeString(req.body.streamPartition, 'workspace-orchestrator'),
+          payload: {
+            ...payload,
+            phase,
+            status,
+            agent: safeString(req.body.agent, 'Orchestrator'),
+            toolName,
+            summary,
+            details,
+            artifactId: artifact?._id || null,
+          },
+        }, tx);
+        await runtimeCore.sessionService.touchSession(sessionId, tx);
+        return { artifact, event };
       });
-
-      await runtimeCore.sessionService.touchSession(sessionId);
 
       return res.status(201).json({
         success: true,
         ok: true,
-        eventId: event._id,
-        sequence: event.sequence,
-        artifactId: artifact?._id || null,
+        eventId: persisted.event._id,
+        sequence: persisted.event.sequence,
+        artifactId: persisted.artifact?._id || null,
       });
     } catch (err) {
-      return res.status(500).json({ success: false, ok: false, error: err.message });
+      return res.status(err.statusCode || 500).json({ success: false, ok: false, error: err.message });
     }
   });
 
@@ -313,7 +676,7 @@ function createResearchOrchestratorHarnessRouter() {
     try {
       await prepareRuntime();
       const sessionId = safeString(req.params.sessionId);
-      const session = await SessionModel.findById(sessionId).lean();
+      const session = await SessionModel.findOne({ _id: sessionId, ownerId: resolveOwnerId(req), deletedAt: { $exists: false } }).lean();
       if (!session) return res.status(404).json({ success: false, ok: false, error: 'Session not found' });
 
       const [artifacts, taskRuns, jobRuns, events] = await Promise.all([
@@ -339,7 +702,7 @@ function createResearchOrchestratorHarnessRouter() {
         events,
       });
     } catch (err) {
-      return res.status(500).json({ success: false, ok: false, error: err.message });
+      return res.status(err.statusCode || 500).json({ success: false, ok: false, error: err.message });
     }
   });
 
@@ -348,4 +711,7 @@ function createResearchOrchestratorHarnessRouter() {
 
 module.exports = {
   createResearchOrchestratorHarnessRouter,
+  normalizeWorkspaceSnapshot,
+  resolveOwnerId,
+  snapshotPreview,
 };

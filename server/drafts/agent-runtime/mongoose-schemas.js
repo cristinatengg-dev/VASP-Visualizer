@@ -6,8 +6,13 @@ const artifactKinds = [
   'goal',
   'plan',
   'research_bundle',
+  'synthesis_plan',
+  'feasibility_report',
+  'experiment_plan',
+  'materials_research_stack',
   'modeling_intent',
   'orchestration_checkpoint',
+  'workspace_snapshot',
   'structure',
   'compute_input_set',
   'result_bundle',
@@ -68,6 +73,13 @@ const SessionSchema = new Schema(
     projectId: { type: String, default: void 0 },
     ownerId: { type: String, required: true, index: true },
     status: { type: String, enum: sessionStatuses, required: true },
+    workspaceType: { type: String, default: void 0 },
+    clientTaskId: { type: String, default: void 0 },
+    title: { type: String, default: void 0 },
+    latestSnapshotArtifactId: { type: String, default: void 0 },
+    snapshotRevision: { type: Number, required: true, default: 0 },
+    archivedAt: { type: Date, default: void 0 },
+    deletedAt: { type: Date, default: void 0 },
     primaryGoalArtifactId: { type: String, default: void 0 },
     activePlanArtifactId: { type: String, default: void 0 },
     nextEventSequence: { type: Number, required: true, default: 1 },
@@ -84,6 +96,18 @@ applyCommonOptions(SessionSchema);
 SessionSchema.index({ ownerId: 1, status: 1, lastActivityAt: -1 });
 SessionSchema.index({ projectId: 1, status: 1, lastActivityAt: -1 }, { sparse: true });
 SessionSchema.index({ activePlanArtifactId: 1 }, { sparse: true });
+SessionSchema.index({ latestSnapshotArtifactId: 1 }, { sparse: true });
+SessionSchema.index(
+  { ownerId: 1, clientTaskId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      clientTaskId: { $type: 'string' },
+      deletedAt: { $exists: false },
+    },
+  }
+);
+SessionSchema.index({ ownerId: 1, projectId: 1, workspaceType: 1, deletedAt: 1, lastActivityAt: -1 });
 
 const ArtifactSchema = new Schema(
   {

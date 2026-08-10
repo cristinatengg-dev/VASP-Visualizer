@@ -10,7 +10,7 @@ const fs = require('fs');
 const { parseXDATCARStream } = require('./utils/parser');
 const ffmpeg = require('fluent-ffmpeg');
 const JSZip = require('jszip');
-const { randomUUID, createHash, createHmac, timingSafeEqual } = require('crypto');
+const { randomUUID, createHash } = require('crypto');
 const zlib = require('zlib');
 const os = require('os');
 const readline = require('readline');
@@ -55,7 +55,12 @@ const { submitComputeJob } = require('./src/compute/submit-job');
 const { querySlurmJobStatus, queryPbsJobStatus, queryLocalJobStatus } = require('./src/compute/query-job');
 const { testRemoteComputeChannel } = require('./src/compute/ssh-channel');
 const { buildResultMetrics, collectWarnings } = require('./src/compute/parse-results');
-const { requireAgentAccess, recordAgentUsage, handleAgentAccessCheck } = require('./src/auth/agent-access');
+const {
+    requireAgentAccess,
+    requireAgentIdentity,
+    recordAgentUsage,
+    handleAgentAccessCheck,
+} = require('./src/auth/agent-access');
 const { isAdminUser } = require('./src/auth/admin');
 const {
     generateVerificationCode,
@@ -63,6 +68,7 @@ const {
     normalizePhoneNumber,
 } = require('./src/auth/phone-auth');
 const { sendLoginCode } = require('./src/auth/sms-service');
+const { generateAuthToken, verifyAuthToken } = require('./src/auth/token-auth');
 
 // --- Fail-fast: required environment variables ---
 const REQUIRED_ENV = [
@@ -273,7 +279,7 @@ app.post('/api/agent/chat', async (req, res) => {
     }
 });
 
-app.use('/api/agent/harness', requireAgentAccess('retrieval'), createResearchOrchestratorHarnessRouter());
+app.use('/api/agent/harness', requireAgentIdentity(), createResearchOrchestratorHarnessRouter());
 
 const upload = multer({ 
     dest: 'uploads/',
@@ -290,39 +296,11 @@ const clearVolumetricCache = () => {
 
 // HMAC-SHA256 token generation and verification
 const generateToken = (phone) => {
-    const payload = Buffer.from(`${phone}:${Date.now()}`).toString('base64');
-    const sig = createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
-    return `${payload}.${sig}`;
+    return generateAuthToken(phone, TOKEN_SECRET);
 };
 
 const verifyToken = (userId, token) => {
-    if (!userId || !token) return false;
-    if (normalizePhoneNumber(userId) !== userId) return false;
-    let raw = String(token).trim();
-    if (raw.toLowerCase().startsWith('bearer ')) raw = raw.slice(7).trim();
-    try {
-        const dotIndex = raw.lastIndexOf('.');
-        if (dotIndex === -1) return false;
-        const payload = raw.slice(0, dotIndex);
-        const sig = raw.slice(dotIndex + 1);
-        const expectedSig = createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
-        const suppliedSignature = Buffer.from(sig, 'utf8');
-        const expectedSignature = Buffer.from(expectedSig, 'utf8');
-        if (suppliedSignature.length !== expectedSignature.length || !timingSafeEqual(suppliedSignature, expectedSignature)) {
-            return false;
-        }
-        const decoded = Buffer.from(payload, 'base64').toString('utf8');
-        const parts = decoded.split(':');
-        if (parts.length < 2) return false;
-        const phone = parts[0];
-        const ts = Number(parts[1]);
-        if (phone !== userId) return false;
-        if (!Number.isFinite(ts)) return false;
-        if (Date.now() - ts > 24 * 60 * 60 * 1000) return false;
-        return true;
-    } catch {
-        return false;
-    }
+    return verifyAuthToken(userId, token, TOKEN_SECRET);
 };
 
 // Auth middleware for privileged endpoints

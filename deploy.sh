@@ -83,7 +83,17 @@ for i in $(seq 1 20); do
 done
 
 if [[ "$HEALTH_OK" == true ]]; then
-  echo ""
+  echo "── Runtime checks..."
+  RUNTIME_CODE=$(ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+    "curl -sk -o /dev/null -w '%{http_code}' https://localhost/api/agent/harness/workspace/health 2>/dev/null || echo 000")
+  SKILLS_CODE=$(ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+    "curl -sk -o /dev/null -w '%{http_code}' 'https://localhost/api/runtime-demo/skills?domain=modeling' 2>/dev/null || echo 000")
+  echo "   workspace runtime: ${RUNTIME_CODE}"
+  echo "   modeling skills:   ${SKILLS_CODE}"
+  if [[ "$RUNTIME_CODE" != "200" || "$SKILLS_CODE" != "200" ]]; then
+    echo "Runtime verification failed."
+    exit 1
+  fi
   echo "Deploy successful."
 else
   echo ""

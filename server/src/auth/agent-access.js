@@ -1,6 +1,7 @@
 const { AGENT_ACCESS } = require('../../config');
 const { getUser, updateUser } = require('../../utils/db');
 const { isAdminUser } = require('./admin');
+const { readTokenIdentity } = require('./token-auth');
 
 function currentMonthKey() {
   const now = new Date();
@@ -14,27 +15,16 @@ function todayKey() {
 
 /**
  * Extract the authenticated user's phone identifier from the request.
- * Tries: req.body.userId → req.query.userId → Authorization header (HMAC token).
+ * Prefers a verified Authorization token, then falls back to an explicit user id
+ * for endpoints that still support local/demo access.
  */
 function extractUserId(req) {
+  const authHeader = String(req.headers?.authorization || '').trim();
+  const tokenIdentity = readTokenIdentity(authHeader, process.env.TOKEN_SECRET || '');
+  if (tokenIdentity.valid) return tokenIdentity.userId;
   if (req.body?.userId) return String(req.body.userId).trim();
   if (req.query?.userId) return String(req.query.userId).trim();
-
-  const authHeader = String(req.headers?.authorization || '').trim();
-  if (!authHeader) return '';
-
-  let raw = authHeader;
-  if (raw.toLowerCase().startsWith('bearer ')) raw = raw.slice(7).trim();
-  try {
-    const dotIndex = raw.lastIndexOf('.');
-    if (dotIndex === -1) return '';
-    const payload = raw.slice(0, dotIndex);
-    const decoded = Buffer.from(payload, 'base64').toString('utf8');
-    const parts = decoded.split(':');
-    return parts[0] || '';
-  } catch {
-    return '';
-  }
+  return '';
 }
 
 /**
@@ -198,12 +188,17 @@ async function recordAgentUsage(userId, agentName) {
  */
 function requireAgentAccess(agentName) {
   return async (req, res, next) => {
+    const tokenIdentity = readTokenIdentity(req.headers?.authorization, process.env.TOKEN_SECRET || '');
+    if (tokenIdentity.present && !tokenIdentity.valid) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
     const userId = extractUserId(req);
 
     // If no userId can be extracted, skip access control (fail-open).
     // Frontend AgentGate already enforces access checks with the auth token.
     if (!userId) {
       req.agentAccess = { allowed: true, skipped: true };
+      req.agentAuthenticated = false;
       req.agentName = agentName;
       return next();
     }
@@ -229,7 +224,28 @@ function requireAgentAccess(agentName) {
 
     req.agentAccess = result;
     req.agentUser = user;
+    req.agentAuthenticated = tokenIdentity.valid;
     req.agentName = agentName;
+    next();
+  };
+}
+
+/**
+ * Authenticate a request without applying an agent subscription/quota policy.
+ * Runtime persistence uses this so users can always save and inspect a task,
+ * even when a downstream agent action is blocked by quota.
+ */
+function requireAgentIdentity() {
+  return async (req, res, next) => {
+    const tokenIdentity = readTokenIdentity(req.headers?.authorization, process.env.TOKEN_SECRET || '');
+    if (tokenIdentity.present && !tokenIdentity.valid) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    req.agentAuthenticated = tokenIdentity.valid;
+    if (tokenIdentity.valid) {
+      req.agentUser = await getUser(tokenIdentity.userId)
+        || { id: tokenIdentity.userId, phone: tokenIdentity.userId, tier: 'personal' };
+    }
     next();
   };
 }
@@ -267,5 +283,6 @@ module.exports = {
   checkAgentAccess,
   recordAgentUsage,
   requireAgentAccess,
+  requireAgentIdentity,
   handleAgentAccessCheck,
 };

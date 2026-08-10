@@ -9,6 +9,13 @@ function createSessionService() {
       projectId: input.projectId,
       ownerId: input.ownerId,
       status: input.status || 'active',
+      workspaceType: input.workspaceType,
+      clientTaskId: input.clientTaskId,
+      title: input.title,
+      latestSnapshotArtifactId: input.latestSnapshotArtifactId,
+      snapshotRevision: input.snapshotRevision || 0,
+      archivedAt: input.archivedAt,
+      deletedAt: input.deletedAt,
       primaryGoalArtifactId: input.primaryGoalArtifactId,
       activePlanArtifactId: input.activePlanArtifactId,
       nextEventSequence: input.nextEventSequence || 1,
@@ -92,6 +99,70 @@ function createSessionService() {
     return updated.nextEventSequence - 1;
   }
 
+  async function updateWorkspaceSnapshot({
+    sessionId,
+    ownerId,
+    title,
+    latestSnapshotArtifactId,
+    expectedSnapshotRevision,
+    tx,
+  }) {
+    const query = { _id: sessionId, ownerId, deletedAt: { $exists: false } };
+    if (Number.isInteger(expectedSnapshotRevision)) {
+      query.snapshotRevision = expectedSnapshotRevision;
+    }
+    const updated = await SessionModel.findOneAndUpdate(
+      query,
+      {
+        $set: {
+          title,
+          latestSnapshotArtifactId,
+          updatedAt: new Date(),
+          lastActivityAt: new Date(),
+        },
+        $inc: { snapshotRevision: 1, revision: 1 },
+      },
+      { new: true, session: tx }
+    );
+    return updated;
+  }
+
+  async function setWorkspaceArchived({ sessionId, ownerId, archived, tx }) {
+    const now = new Date();
+    const update = {
+      $set: {
+        updatedAt: now,
+        lastActivityAt: now,
+      },
+      $inc: { revision: 1 },
+    };
+    if (archived) update.$set.archivedAt = now;
+    else update.$unset = { archivedAt: 1 };
+    return SessionModel.findOneAndUpdate(
+      { _id: sessionId, ownerId, deletedAt: { $exists: false } },
+      update,
+      { new: true, session: tx }
+    );
+  }
+
+  async function softDeleteWorkspace({ sessionId, ownerId, tx }) {
+    const now = new Date();
+    return SessionModel.findOneAndUpdate(
+      { _id: sessionId, ownerId, deletedAt: { $exists: false } },
+      {
+        $set: {
+          status: 'closed',
+          deletedAt: now,
+          closedAt: now,
+          updatedAt: now,
+          lastActivityAt: now,
+        },
+        $inc: { revision: 1 },
+      },
+      { new: true, session: tx }
+    );
+  }
+
   return {
     createSession,
     getSessionById,
@@ -100,6 +171,9 @@ function createSessionService() {
     bindGoalAndPlan,
     updateStatus,
     allocateNextEventSequence,
+    updateWorkspaceSnapshot,
+    setWorkspaceArchived,
+    softDeleteWorkspace,
   };
 }
 

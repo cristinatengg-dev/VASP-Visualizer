@@ -29,8 +29,8 @@ const libraryLabels: Record<string, { title: string; note: string }> = {
     note: '氧化还原分子、电解液与支撑材料。',
   },
   aerospace: {
-    title: '航天材料库',
-    note: '热防护陶瓷、固体润滑、放气与空间环境数据。',
+    title: '商业航天材料库',
+    note: '30+ 工程候选、任务工况、TRL、失效风险与资格验证路径。',
   },
 };
 

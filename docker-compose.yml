@@ -1,9 +1,8 @@
-version: '3.8'
-
 services:
   backend:
     image: vasp-visualizer-backend
     build: ./server
+    command: ["sh", "-c", "npm run runtime:indexes && exec npm start"]
     # Expose port only to other containers (via network), not to host public interface
     # unless you want direct access. Proxying via nginx is safer.
     # ports:
@@ -11,26 +10,42 @@ services:
     env_file:
       - ./server/.env
     environment:
-      - MONGO_URI=mongodb://mongo:27017/sci_visualizer
+      - MONGO_URI=mongodb://mongo:27017/sci_visualizer?replicaSet=rs0
+      - RUNTIME_MONGODB_URI=mongodb://mongo:27017/sci_visualizer?replicaSet=rs0
+      - RUNTIME_ARTIFACT_STORAGE_DIR=/app/runtime-storage/artifacts
+      - RUNTIME_JOB_STORAGE_DIR=/app/runtime-storage/jobs
       - USER_DB_PATH=/app/user-data/db.json
-      - TOKEN_SECRET=vasp_token_secret_2026_scivisualizer
-      - ADMIN_SECRET=vasp_admin_secret_2026_secure
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./server/.env:/app/.env:ro
       - ./server/user-data:/app/user-data
       - ./server/uploads:/app/uploads
+      - runtime-storage:/app/runtime-storage
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/agent/harness/workspace/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     restart: always
 
   mongo:
     image: mongo:latest
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
       - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}).ok }\" | grep 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
     restart: always
 
   frontend:
@@ -42,8 +57,10 @@ services:
     volumes:
       - ./ssl:/etc/nginx/ssl
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: always
 
 volumes:
   mongo-data:
+  runtime-storage:

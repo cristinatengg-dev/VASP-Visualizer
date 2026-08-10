@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { createHash } = require('crypto');
+const { createHash, randomUUID } = require('crypto');
 
 function ensureDirectory(dirPath) {
   return fs.promises.mkdir(dirPath, { recursive: true });
@@ -8,6 +8,17 @@ function ensureDirectory(dirPath) {
 
 function sha256(content) {
   return createHash('sha256').update(content).digest('hex');
+}
+
+async function writeFileAtomic(targetPath, content, encoding) {
+  const tempPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await fs.promises.writeFile(tempPath, content, encoding);
+    await fs.promises.rename(tempPath, targetPath);
+  } catch (error) {
+    await fs.promises.unlink(tempPath).catch(() => undefined);
+    throw error;
+  }
 }
 
 function guessExtensionFromMime(mimeType) {
@@ -40,9 +51,10 @@ function decodeDataUrl(dataUrl) {
   };
 }
 
-function createLocalArtifactStorage() {
+function createLocalArtifactStorage(options = {}) {
   const baseDir = path.resolve(
-    process.env.RUNTIME_ARTIFACT_STORAGE_DIR
+    options.baseDir
+      || process.env.RUNTIME_ARTIFACT_STORAGE_DIR
       || path.join(__dirname, '../../../runtime-storage/artifacts')
   );
 
@@ -66,7 +78,7 @@ function createLocalArtifactStorage() {
     );
 
     const targetPath = path.join(versionDir, fileName);
-    await fs.promises.writeFile(targetPath, json, 'utf8');
+    await writeFileAtomic(targetPath, json, 'utf8');
 
     return {
       payloadRef: targetPath,
@@ -122,7 +134,7 @@ function createLocalArtifactStorage() {
 
     const manifestJson = JSON.stringify(manifest, null, 2);
     const manifestPath = path.join(versionDir, 'manifest.json');
-    await fs.promises.writeFile(manifestPath, manifestJson, 'utf8');
+    await writeFileAtomic(manifestPath, manifestJson, 'utf8');
     totalBytes += Buffer.byteLength(manifestJson);
 
     return {
