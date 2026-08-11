@@ -35,26 +35,11 @@ const PRICING = {
     }
 };
 
-// Agent access policy
+// Agent access policy. Agent capabilities are currently public; payment and
+// export-credit policies remain separate from this switch.
 const AGENT_ACCESS = {
+    MODE: 'public',
     AGENTS: ['modeling', 'compute', 'rendering', 'cover', 'retrieval'],
-
-    // Daily free usage for non-subscribed personal/trial users
-    DAILY_FREE: {
-        modeling: 3,
-        compute: 0,     // locked — no free usage
-        rendering: 1,
-        cover: 0,       // locked — no free usage
-        retrieval: 1,
-    },
-
-    // Monthly quota for personal subscribers
-    MONTHLY_QUOTA: {
-        cover: 10,      // 10 covers per month for personal subscribers
-    },
-
-    // These tiers bypass all agent access checks
-    UNLIMITED_TIERS: ['academic', 'enterprise'],
 };
 
 const IP_LIMIT = 5;

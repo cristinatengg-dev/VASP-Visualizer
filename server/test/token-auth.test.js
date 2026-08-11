@@ -7,7 +7,13 @@ const {
   verifyAuthToken,
   readTokenIdentity,
 } = require('../src/auth/token-auth');
-const { requireAgentIdentity } = require('../src/auth/agent-access');
+const {
+  checkAgentAccess,
+  handleAgentAccessCheck,
+  recordAgentUsage,
+  requireAgentAccess,
+  requireAgentIdentity,
+} = require('../src/auth/agent-access');
 
 const PHONE = '+8613800012345';
 const SECRET = 'test-only-token-secret';
@@ -63,4 +69,65 @@ test('runtime identity middleware allows persistence without quota checks and re
   );
   assert.equal(statusCode, 401);
   assert.equal(responseBody.error, 'Unauthorized');
+});
+
+test('all agent capabilities are public without subscriptions or usage quotas', async () => {
+  for (const agent of ['modeling', 'compute', 'rendering', 'cover', 'retrieval']) {
+    const anonymous = await checkAgentAccess(null, agent);
+    const personal = await checkAgentAccess({
+      phone: PHONE,
+      tier: 'personal',
+      subscribed_agents: [],
+      subscription_expires_at: new Date(0),
+      agent_daily_usage: { [`${agent}:2026-08-11`]: 999 },
+    }, agent);
+    assert.equal(anonymous.allowed, true);
+    assert.equal(personal.allowed, true);
+    assert.equal(personal.public_access, true);
+  }
+
+  assert.deepEqual(await recordAgentUsage(PHONE, 'compute'), {
+    recorded: false,
+    public_access: true,
+  });
+});
+
+test('public agent middleware allows anonymous requests but still rejects invalid bearer tokens', async () => {
+  const middleware = requireAgentAccess('compute');
+  let anonymousNextCalled = false;
+  const anonymousRequest = { headers: {}, body: {} };
+  await middleware(anonymousRequest, {}, () => { anonymousNextCalled = true; });
+  assert.equal(anonymousNextCalled, true);
+  assert.deepEqual(anonymousRequest.agentAccess, {
+    allowed: true,
+    public_access: true,
+    agent: 'compute',
+  });
+
+  let statusCode = 0;
+  await middleware(
+    { headers: { authorization: 'Bearer invalid' }, body: {} },
+    {
+      status(code) {
+        statusCode = code;
+        return this;
+      },
+      json(body) {
+        return body;
+      },
+    },
+    () => assert.fail('invalid bearer token must not reach a public agent route'),
+  );
+  assert.equal(statusCode, 401);
+});
+
+test('agent access status reports public access for anonymous users', async () => {
+  let payload = null;
+  await handleAgentAccessCheck(
+    { headers: {}, query: { agent: 'compute' }, body: {} },
+    { json(body) { payload = body; return body; } },
+  );
+  assert.equal(payload.success, true);
+  assert.equal(payload.allowed, true);
+  assert.equal(payload.public_access, true);
 });

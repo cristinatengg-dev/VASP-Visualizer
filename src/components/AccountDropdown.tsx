@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
-import { User, LogOut, CreditCard, ChevronDown, User as UserIcon, Crown, Zap, LogIn } from 'lucide-react';
+import { User, LogOut, ChevronDown, User as UserIcon, Crown, Zap, LogIn } from 'lucide-react';
 import { clsx } from 'clsx';
-import { SubscriptionPanel } from './SubscriptionPanel';
 import { maskPhoneNumber } from '../utils/phone';
 import { PHONE_AUTH_ENABLED } from '../config';
 
@@ -217,7 +216,6 @@ export const AccountDropdown: React.FC = () => {
     const { user, logout } = useStore();
     const navigate = useNavigate();
     const [isOpen, setIsOpen] = useState(false);
-    const [showSubscription, setShowSubscription] = useState(false);
     const [showProfile, setShowProfile] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -299,13 +297,6 @@ export const AccountDropdown: React.FC = () => {
                             Personal Center
                         </button>
                         
-                        <button 
-                            onClick={() => { setShowSubscription(true); setIsOpen(false); }}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-[24px] transition-colors"
-                        >
-                            <CreditCard className="w-4 h-4 text-gray-400" />
-                            Subscription
-                        </button>
                     </div>
                     
                     <div className="h-px bg-gray-100 mx-2 my-2" />
@@ -322,7 +313,6 @@ export const AccountDropdown: React.FC = () => {
                 </div>
             )}
 
-            {showSubscription && <SubscriptionPanel onClose={() => setShowSubscription(false)} />}
             {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
         </div>
     );
