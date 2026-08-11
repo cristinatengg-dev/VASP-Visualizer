@@ -27,7 +27,7 @@ const { buildModelingProviderAvailability, normalizeModelingProviderPreferences 
 const { getModelingRuntimeDiagnostics } = require('./src/modeling/health');
 const { parseSciencePdfFile } = require('./src/rendering/parse-pdf');
 const { parseScienceText, geminiChat } = require('./src/rendering/parse-science');
-const { isTextChatConfigured, textChat } = require('./src/llm/text-chat');
+const { getTextChatConfig, isTextChatConfigured, textChat } = require('./src/llm/text-chat');
 const { validateRenderingImage } = require('./src/rendering/validate-image');
 const { editRenderingImage, generateRenderingImages } = require('./src/rendering/generate-image');
 const { profileFigureData } = require('./src/rendering/profile-figure-data');
@@ -192,6 +192,15 @@ async function loadChatSession(sessionId, ownerId) {
 // Agent access check endpoint
 app.get('/api/agent-access', handleAgentAccessCheck);
 
+app.get('/api/agent/chat/status', (_req, res) => {
+    const config = getTextChatConfig();
+    return res.json({
+        success: true,
+        configured: isTextChatConfigured(),
+        model: config.model || null,
+    });
+});
+
 app.post('/api/agent/chat', async (req, res) => {
     try {
         const ownerId = String(req.body.ownerId || req.body.userId || 'anonymous-researcher').trim() || 'anonymous-researcher';
@@ -222,9 +231,12 @@ app.post('/api/agent/chat', async (req, res) => {
         const refreshedMemories = await ChatMemory.find({ ownerId });
         const memoryLines = refreshedMemories.slice(-12).map((item) => `- ${item.text}`);
 
+        const textChatConfig = getTextChatConfig();
+        const llmConfigured = isTextChatConfigured();
         let reply;
         let llmError = null;
-        if (isTextChatConfigured()) {
+        let fallbackUsed = false;
+        if (llmConfigured) {
             try {
                 reply = await textChat([
                     {
@@ -245,6 +257,7 @@ app.post('/api/agent/chat', async (req, res) => {
         }
 
         if (!reply) {
+            fallbackUsed = true;
             reply = fallbackChatReply(message, refreshedMemories);
         }
 
@@ -271,8 +284,10 @@ app.post('/api/agent/chat', async (req, res) => {
             sessionId: String(session._id),
             reply,
             memories: refreshedMemories.slice(-12).map((item) => ({ id: item._id, text: item.text })),
-            llmConfigured: isTextChatConfigured(),
+            llmConfigured,
             llmError,
+            fallbackUsed,
+            model: textChatConfig.model || null,
         });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });

@@ -870,16 +870,21 @@ const formatTaskTime = (value: number) => {
 };
 
 const normalizeSnapshotToolEvents = (events: ToolEvent[] = [], phase: WorkflowPhase): ToolEvent[] => {
-  if (phase !== 'error') return events;
-  return events.map((event) => (
-    event.status === 'running'
-      ? {
-          ...event,
-          status: 'error',
-          details: [...event.details, '流程已进入错误状态，此步骤已停止。'],
-        }
-      : event
-  ));
+  return events.map((event) => {
+    const hasRecordedLlmError = event.name === 'agent.chat'
+      && event.details.some((detail) => detail.startsWith('LLM note:'));
+    if (hasRecordedLlmError && event.status !== 'error') {
+      return { ...event, status: 'error' };
+    }
+    if (phase === 'error' && event.status === 'running') {
+      return {
+        ...event,
+        status: 'error',
+        details: [...event.details, '流程已进入错误状态，此步骤已停止。'],
+      };
+    }
+    return event;
+  });
 };
 
 const StatusPill: React.FC<{ status: AgentStatus }> = ({ status }) => {
@@ -1580,6 +1585,7 @@ const AgentWorkspace: React.FC = () => {
   const [pptUrl, setPptUrl] = useState<string | null>(null);
   const [pptQa, setPptQa] = useState<string | null>(null);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const [textModelName, setTextModelName] = useState('文本模型');
   const [harnessSession, setHarnessSession] = useState<HarnessSessionState | null>(null);
   const [structureSources, setStructureSources] = useState<StructureSourceRegistry | null>(null);
   const [sourceProbe, setSourceProbe] = useState<SourceProbeState | null>(null);
@@ -1615,6 +1621,10 @@ const AgentWorkspace: React.FC = () => {
       .filter((task) => !taskSearchQuery || taskSearchText(task).includes(taskSearchQuery))
       .sort((left, right) => right.updatedAt - left.updatedAt);
   }, [activeTasks, archivedTasks, showArchivedTasks, taskSearchQuery]);
+  const visibleToolEvents = useMemo(
+    () => toolEvents.filter((event) => event.name !== 'agent.chat'),
+    [toolEvents],
+  );
   const configuredProfiles = profiles.filter((profile) => profile.configured);
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) || configuredProfiles[0] || profiles[0] || null;
   const compiledFileNames = useMemo(() => Object.keys(compiledInputs?.files || {}), [compiledInputs]);
@@ -1641,6 +1651,22 @@ const AgentWorkspace: React.FC = () => {
     nextParams.delete('prompt');
     setSearchParams(nextParams, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_BASE_URL}/agent/chat/status`)
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json() as Promise<{ model?: string | null }>;
+      })
+      .then((payload) => {
+        if (active && payload?.model) setTextModelName(payload.model);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!compiledInputs) {
@@ -3509,24 +3535,35 @@ const AgentWorkspace: React.FC = () => {
         memories?: Array<{ id: string; text: string }>;
         llmConfigured?: boolean;
         llmError?: string | null;
+        fallbackUsed?: boolean;
+        model?: string | null;
       }>('/agent/chat', {
         sessionId: chatSessionIdRef.current,
         message: content,
       });
 
       chatSessionIdRef.current = payload.sessionId;
+      if (payload.model) setTextModelName(payload.model);
+      const llmFailed = Boolean(payload.llmError);
       updateTool(toolId, {
-        status: 'success',
+        status: llmFailed ? 'error' : 'success',
         details: [
-          payload.llmConfigured ? 'LLM configured' : 'Fallback chat used',
+          llmFailed
+            ? 'LLM request failed; fallback reply used'
+            : payload.llmConfigured ? 'LLM configured' : 'Fallback chat used',
           `${payload.memories?.length || 0} memories available`,
           ...(payload.llmError ? [`LLM note: ${payload.llmError}`] : []),
         ],
       });
       addMessage({
         role: 'assistant',
-        title: payload.memories?.length ? `对话 · 已载入 ${payload.memories.length} 条记忆` : '对话',
-        content: payload.reply || '我在，但这次没有生成有效回复。',
+        title: llmFailed
+          ? '对话模型失败 · 已使用备用回复'
+          : payload.memories?.length ? `对话 · 已载入 ${payload.memories.length} 条记忆` : '对话',
+        content: llmFailed
+          ? `${payload.reply || '未生成有效回复。'}\n\n对话模型调用失败，以上内容为备用回复。`
+          : payload.reply || '我在，但这次没有生成有效回复。',
+        status: llmFailed ? 'error' : undefined,
       });
       if (payload.reply && shouldAutoPromoteChatToRetrieval(content, payload.reply)) {
         addMessage({
@@ -4047,12 +4084,12 @@ const AgentWorkspace: React.FC = () => {
                   onClick={() => setIsModelMenuOpen((value) => !value)}
                   className="h-9 rounded-[32px] border border-gray-200 px-3 text-xs font-semibold text-gray-600 hover:border-gray-300"
                 >
-                  deepseek-v4-pro
+                  {textModelName}
                 </button>
                 {isModelMenuOpen && (
                   <div className="absolute right-0 top-11 z-30 w-[260px] rounded-[16px] border border-gray-200 bg-white p-3 text-xs shadow-[0_4px_30px_rgba(0,0,0,0.08)]">
                     <p className="font-semibold text-[#0A1128]">文本规划模型</p>
-                    <p className="mt-1 leading-5 text-gray-500">对话规划使用 deepseek-v4-pro；检索、建模、计算和 PPT 由后端工具执行。</p>
+                    <p className="mt-1 leading-5 text-gray-500">对话规划使用 {textModelName}；检索、建模、计算和 PPT 由后端工具执行。</p>
                   </div>
                 )}
               </div>
@@ -4294,14 +4331,14 @@ const AgentWorkspace: React.FC = () => {
                     </div>
                   )}
 
-                  {toolEvents.length > 0 && (
+                  {visibleToolEvents.length > 0 && (
                     <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
                       <div className="mb-3 flex items-center gap-2">
                         <Play size={15} className="text-gray-500" />
                         <p className="text-xs font-bold uppercase tracking-[0.12em] text-gray-500">执行记录</p>
                       </div>
                       <div className="space-y-3">
-                        {toolEvents.map((event) => (
+                        {visibleToolEvents.map((event) => (
                           <div key={event.id} className="rounded-[16px] border border-gray-100 bg-gray-50 p-3">
                             <div className="flex items-center gap-2">
                               {event.status === 'running' ? <Loader2 size={14} className="animate-spin text-[#0A1128]" /> : event.status === 'success' ? <Check size={14} className="text-[#0A1128]" /> : <CircleDot size={14} className="text-red-600" />}
