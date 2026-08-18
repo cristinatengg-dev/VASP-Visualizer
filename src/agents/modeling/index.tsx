@@ -5,6 +5,7 @@ import CanvasPanel from './components/CanvasPanel';
 import { ModelingIntent } from './types/modeling';
 import { useStore } from '../../store/useStore';
 import type { MolecularStructure } from '../../types';
+import { Film } from 'lucide-react';
 
 const MODELING_RETURN_KEY = 'sci-agent-modeling-return-v1';
 
@@ -122,7 +123,18 @@ const ModelingAgent: React.FC = () => {
             <span className="w-2 h-2 rounded-full bg-[#0A1128]"></span>
             <h2 className="text-sm font-semibold text-[#0A1128]">MODELING AGENT</h2>
           </div>
-          <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest bg-gray-50 border border-gray-200 px-2 py-1 rounded-[16px]">MVP v1.0</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate('/agent/modeling/gromacs')}
+              className="flex items-center gap-1.5 rounded-[32px] border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 transition-colors hover:border-gray-300 hover:bg-white hover:text-[#0A1128]"
+              title="打开 GROMACS 轨迹查看器"
+            >
+              <Film size={12} />
+              GROMACS 轨迹
+            </button>
+            <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest bg-gray-50 border border-gray-200 px-2 py-1 rounded-[16px]">MVP v1.0</span>
+          </div>
         </div>
 
         <div className="flex-1 overflow-hidden">

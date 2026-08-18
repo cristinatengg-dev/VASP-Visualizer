@@ -25,11 +25,19 @@ import RuntimeInspector from './agents/runtime';
 import RetrievalAgent from './agents/retrieval';
 import VideoGenerator from './pages/VideoGenerator';
 import { useStore } from './store/useStore';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { API_BASE_URL, PHONE_AUTH_ENABLED } from './config';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AgentGate } from './components/AgentGate';
+
+const GromacsTrajectoryViewer = lazy(() => import('./pages/GromacsTrajectoryViewer'));
+
+const PageLoader: React.FC = () => (
+  <div className="flex h-screen w-screen items-center justify-center bg-[#F5F5F0]">
+    <Loader2 className="h-8 w-8 animate-spin text-[#0A1128]" />
+  </div>
+);
 
 // Protected route when phone authentication is enabled.
 const AppRoute: React.FC = () => {
@@ -159,6 +167,18 @@ function App() {
       <Route path="/agent/rendering" element={<AgentRoute><AgentGate agent="rendering" label="Rendering Agent"><RenderingAgent /></AgentGate></AgentRoute>} />
       <Route path="/agent/retrieval" element={<AgentRoute><AgentGate agent="retrieval" label="Idea Agent"><RetrievalAgent /></AgentGate></AgentRoute>} />
       <Route path="/agent/modeling" element={<AgentRoute><AgentGate agent="modeling" label="Modeling Agent"><ModelingAgent /></AgentGate></AgentRoute>} />
+      <Route
+        path="/agent/modeling/gromacs"
+        element={
+          <AgentRoute>
+            <AgentGate agent="modeling" label="Modeling Agent">
+              <Suspense fallback={<PageLoader />}>
+                <GromacsTrajectoryViewer />
+              </Suspense>
+            </AgentGate>
+          </AgentRoute>
+        }
+      />
       <Route path="/agent/compute" element={<AgentRoute><AgentGate agent="compute" label="Compute Agent"><ComputeAgent /></AgentGate></AgentRoute>} />
       <Route path="/agent/runtime" element={<AgentRoute><RuntimeInspector /></AgentRoute>} />
       {/* 旧路由兼容 */}

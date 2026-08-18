@@ -130,6 +130,20 @@ const Manual: React.FC = () => {
               当你在 Idea Agent 中点击 "Send to Modeling Agent" 后，Modeling Agent 会自动接收 handoff 参数（包括化学式、Materials Project ID、晶相信息和建模提示词），并预填充到对话框中，省去手动输入的步骤。
             </p>
           </div>
+
+          <div className="mb-6">
+            <h3 className="text-xl font-bold mb-2">3.4 GROMACS 轨迹查看器</h3>
+            <p className="mb-3 leading-relaxed">
+              点击 Modeling Agent 顶部的 “GROMACS 轨迹” 可进入独立的分子动力学可视化页面。
+            </p>
+            <ul className="list-disc pl-5 space-y-2 mb-4">
+              <li><strong>文件组合</strong>：必须上传初始结构 <code>.gro</code> 与轨迹 <code>.xtc</code>；可同时附带 <code>.tpr</code>、<code>.top</code> 作为任务信息。</li>
+              <li><strong>逐帧查看</strong>：使用时间轴、前后帧、首尾帧、FPS 和 Step 控件查看或播放整个模拟过程。</li>
+              <li><strong>显示方式</strong>：支持 NewCartoon、Ball &amp; Stick、Licorice、Spacefill、Lines，以及 protein、ligand 等原子选择。</li>
+              <li><strong>完整轨迹</strong>：选择 Protein Cα、Backbone、Ligand 或重原子后，可将整个时间范围的运动路径叠加到同一场景。</li>
+              <li><strong>周期边界</strong>：页面提供快速居中、分子修复与主链对齐；用于正式分析时仍建议优先上传经 <code>gmx trjconv</code> 校正的轨迹。</li>
+            </ul>
+          </div>
         </section>
 
         {/* 4. Compute Agent */}
