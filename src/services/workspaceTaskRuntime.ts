@@ -33,11 +33,12 @@ export class RuntimeTaskRequestError<TSnapshot = unknown> extends Error {
 }
 
 export const getRuntimeIdentity = (userId?: string | null): RuntimeIdentity => {
+  const token = localStorage.getItem('vasp_token') || '';
   const authenticatedOwner = String(userId || localStorage.getItem('vasp_user_id') || '').trim();
-  if (authenticatedOwner) {
+  if (authenticatedOwner && token) {
     return {
       ownerId: authenticatedOwner,
-      token: localStorage.getItem('vasp_token') || undefined,
+      token,
     };
   }
 

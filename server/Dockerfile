@@ -1,4 +1,4 @@
-FROM node:22-bullseye
+FROM node:22.22-bullseye
 
 RUN sed -i "s|http://deb.debian.org/debian|http://mirrors.tencent.com/debian|g; s|http://deb.debian.org/debian-security|http://mirrors.tencent.com/debian-security|g" /etc/apt/sources.list
 ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
@@ -31,7 +31,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --production
+RUN npm ci --omit=dev
 
 COPY . .
 

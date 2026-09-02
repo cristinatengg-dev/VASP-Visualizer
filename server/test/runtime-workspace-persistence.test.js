@@ -17,7 +17,7 @@ const {
   snapshotPreview,
 } = require('../src/agent-harness/research-orchestrator-router');
 
-test('workspace runtime schemas accept persisted sessions and snapshot artifacts', () => {
+test('workspace runtime schemas accept persisted sessions and snapshot artifacts', async () => {
   const session = new SessionModel({
     _id: 'sess_test',
     ownerId: 'owner_test',
@@ -28,7 +28,7 @@ test('workspace runtime schemas accept persisted sessions and snapshot artifacts
     title: 'Test task',
     snapshotRevision: 1,
   });
-  assert.equal(session.validateSync(), undefined);
+  await assert.doesNotReject(() => session.validate());
 
   for (const kind of ['workspace_snapshot', 'synthesis_plan', 'feasibility_report', 'experiment_plan', 'materials_research_stack']) {
     const artifact = new ArtifactModel({
@@ -45,7 +45,7 @@ test('workspace runtime schemas accept persisted sessions and snapshot artifacts
       payloadType: 'json',
       summary: kind,
     });
-    assert.equal(artifact.validateSync(), undefined, `${kind} should be a valid artifact kind`);
+    await assert.doesNotReject(() => artifact.validate(), `${kind} should be a valid artifact kind`);
   }
 });
 

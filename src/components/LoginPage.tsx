@@ -28,7 +28,7 @@ export const LoginPage: React.FC = () => {
     const handleSendCode = async () => {
         const normalizedPhone = normalizePhoneNumber(phone);
         if (!normalizedPhone) {
-            setError('请输入有效手机号');
+            setError('Please enter a valid phone number');
             return;
         }
         
@@ -51,12 +51,12 @@ export const LoginPage: React.FC = () => {
             
             if (data.success) {
                 setCountdown(60);
-                setSuccessMessage(data.message || '验证码已通过短信发送。');
+                setSuccessMessage(data.message || 'Verification code sent via SMS.');
             } else {
-                setError(data.error || '验证码发送失败');
+                setError(data.error || 'Failed to send verification code');
             }
         } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : '网络连接失败');
+            setError(e instanceof Error ? e.message : 'Network connection failed');
         } finally {
             setIsSending(false);
         }
@@ -66,7 +66,7 @@ export const LoginPage: React.FC = () => {
         e.preventDefault();
         const normalizedPhone = normalizePhoneNumber(phone);
         if (!normalizedPhone || !/^\d{6}$/.test(code)) {
-            setError('请输入有效手机号和 6 位验证码');
+            setError('Please enter a valid phone number and 6-digit verification code');
             return;
         }
         
@@ -77,7 +77,7 @@ export const LoginPage: React.FC = () => {
             // Login successful — return to the main landing page
             navigate('/', { replace: true });
         } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : '登录失败');
+            setError(e instanceof Error ? e.message : 'Login failed');
         } finally {
             setIsLoggingIn(false);
         }
@@ -91,13 +91,13 @@ export const LoginPage: React.FC = () => {
                         <ShieldCheck className="w-8 h-8 text-[#0A1128]" />
                     </div>
                     <h1 className="text-2xl font-bold text-[#0A1128] mb-1">SCI Visualizer</h1>
-                    <p className="text-gray-400 text-sm">手机号验证后即可使用</p>
+                    <p className="text-gray-400 text-sm">Available after phone number verification</p>
                 </div>
 
                 <div className="p-10">
                     <form onSubmit={handleLogin} className="space-y-6">
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">手机号</label>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">Phone Number</label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                     <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
@@ -121,7 +121,7 @@ export const LoginPage: React.FC = () => {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">短信验证码</label>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">SMS Verification Code</label>
                             <div className="flex gap-3">
                                 <div className="relative flex-1">
                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -134,7 +134,7 @@ export const LoginPage: React.FC = () => {
                                         inputMode="numeric"
                                         autoComplete="one-time-code"
                                         className="block w-full pl-14 pr-4 py-3.5 border border-gray-200 rounded-[24px] bg-gray-50 focus:ring-2 focus:ring-[#0A1128]/20 focus:border-[#0A1128] transition-all outline-none text-gray-800 placeholder-gray-400"
-                                        placeholder="6 位验证码"
+                                        placeholder="6-Digit Code"
                                         value={code}
                                         onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                         maxLength={6}
@@ -151,7 +151,7 @@ export const LoginPage: React.FC = () => {
                                         }`}
                                 >
                                     {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : 
-                                     countdown > 0 ? `${countdown}s` : '获取验证码'}
+                                     countdown > 0 ? `${countdown}s` : 'Get Code'}
                                 </button>
                             </div>
                         </div>
@@ -178,11 +178,11 @@ export const LoginPage: React.FC = () => {
                             {isLoggingIn ? (
                                 <>
                                     <Loader2 className="w-5 h-5 animate-spin" />
-                                    验证中...
+                                    Verifying...
                                 </>
                             ) : (
                                 <>
-                                    验证并登录
+                                    Verify &amp; Log In
                                     <ArrowRight className="w-5 h-5" />
                                 </>
                             )}
@@ -190,9 +190,9 @@ export const LoginPage: React.FC = () => {
                     </form>
                     
                     <p className="mt-8 text-center text-xs text-gray-400 leading-relaxed">
-                        中国大陆手机号可直接输入 11 位号码，其他地区请输入带国家/地区码的号码。<br/>
-                        每个账号最多绑定 3 个活跃设备。<br/>
-                        支持：<a href={SUPPORT_MAILTO} className="hover:text-gray-600 underline underline-offset-2">{SUPPORT_EMAIL}</a> <br/>
+                        Mainland China mobile numbers can be entered directly as 11 digits. For other regions, please include the country/region code.<br/>
+                        Each account can be bound to a maximum of 3 active devices.<br/>
+                        Supports:<a href={SUPPORT_MAILTO} className="hover:text-gray-600 underline underline-offset-2">{SUPPORT_EMAIL}</a> <br/>
                         {COMPANY_NAME} <br/>
                         &copy; {new Date().getFullYear()} SCI Visualizer. All rights reserved.
                     </p>

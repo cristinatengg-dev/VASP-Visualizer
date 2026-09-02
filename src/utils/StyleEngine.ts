@@ -16,7 +16,7 @@ export const getStyleForElement = (
   const baseColor = customColors[element] || defaultProps.color;
   const baseRadius = customRadii[element] || defaultProps.radius;
   // Default vdwRadius to 1.5x standard radius if not defined in data source
-  // @ts-ignore
+  // @ts-expect-error atom data may include an optional van der Waals radius
   const vdwRadius = defaultProps.vdwRadius || baseRadius * 1.5;
   
   let finalRadius = baseRadius;

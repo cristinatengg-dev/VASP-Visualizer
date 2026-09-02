@@ -128,10 +128,10 @@ const ModelingAgent: React.FC = () => {
               type="button"
               onClick={() => navigate('/agent/modeling/gromacs')}
               className="flex items-center gap-1.5 rounded-[32px] border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 transition-colors hover:border-gray-300 hover:bg-white hover:text-[#0A1128]"
-              title="打开 GROMACS 轨迹查看器"
+              title="Open GROMACS Trajectory Viewer"
             >
               <Film size={12} />
-              GROMACS 轨迹
+              GROMACS Trajectory
             </button>
             <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest bg-gray-50 border border-gray-200 px-2 py-1 rounded-[16px]">MVP v1.0</span>
           </div>

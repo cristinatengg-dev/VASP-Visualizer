@@ -978,6 +978,25 @@ const STRUCTURE_SEARCHERS = {
   omdb: searchOpenMaterialsDatabase,
 };
 
+const STRUCTURE_SOURCE_TIMEOUT_MS = 15000;
+
+async function searchStructureSourceWithDeadline(id, formula, limit) {
+  let timeoutId;
+  try {
+    return await Promise.race([
+      STRUCTURE_SEARCHERS[id](formula, limit),
+      new Promise((resolve) => {
+        timeoutId = setTimeout(() => resolve({
+          success: false,
+          error: `${STRUCTURE_SOURCE_REGISTRY.live.find((source) => source.id === id)?.label || id} search timed out`,
+        }), STRUCTURE_SOURCE_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 function listStructureSources() {
   return STRUCTURE_SOURCE_REGISTRY;
 }
@@ -987,7 +1006,7 @@ async function searchStructureDatabases(formula, limit = 6, sourceIds = null) {
     ? sourceIds.map((id) => String(id).toLowerCase()).filter((id) => STRUCTURE_SEARCHERS[id])
     : Object.keys(STRUCTURE_SEARCHERS);
   const settled = await Promise.allSettled(requested.map(async (id) => {
-    const result = await STRUCTURE_SEARCHERS[id](formula, limit);
+    const result = await searchStructureSourceWithDeadline(id, formula, limit);
     return { id, result };
   }));
   const results = {};

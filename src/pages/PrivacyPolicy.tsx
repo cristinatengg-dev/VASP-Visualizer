@@ -6,7 +6,7 @@ const EFFECTIVE_DATE = 'April 6, 2026';
 const PrivacyPolicy: React.FC = () => (
   <LegalDocumentLayout
     title="Privacy Policy"
-    subtitle="隐私政策"
+    subtitle="Privacy Policy"
     effectiveDate={EFFECTIVE_DATE}
     currentPath="/privacy-policy"
     summary={
@@ -32,7 +32,7 @@ const PrivacyPolicy: React.FC = () => (
 
     <LegalSection title="2. How We Use Your Information">
       <p>2.1. We use the information we collect for the following purposes:</p>
-      <p className="pl-8">(a) <strong>Service Operation:</strong> to authenticate users, process requests, execute agent workflows, generate outputs, and deliver core Service functionality;</p>
+      <p className="pl-8">(a) <strong>Service Operation:</strong> to authenticate users, process requests, execute agent Agent, generate outputs, and deliver core Service functionality;</p>
       <p className="pl-8">(b) <strong>Account Management:</strong> to manage your account, enforce access controls, track quota usage, and process subscriptions and payments;</p>
       <p className="pl-8">(c) <strong>Security and Integrity:</strong> to detect, prevent, and respond to fraud, abuse, security incidents, and technical issues;</p>
       <p className="pl-8">(d) <strong>Service Improvement:</strong> to monitor performance, diagnose errors, analyze usage patterns, and improve the quality, reliability, and functionality of the Service;</p>

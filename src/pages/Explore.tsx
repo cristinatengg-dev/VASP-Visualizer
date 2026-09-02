@@ -246,7 +246,7 @@ const Explore: React.FC = () => {
             </h1>
             <p className="text-gray-500 text-sm mt-2 leading-relaxed">
               Watch the demo to see all three agents in action, then dive into the documentation
-              to get started with your first workflow.
+              to get started with your first Agent.
             </p>
           </motion.div>
 

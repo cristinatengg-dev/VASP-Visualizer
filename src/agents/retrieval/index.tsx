@@ -383,7 +383,7 @@ const PaperCard: React.FC<{ paper: Paper }> = ({ paper }) => (
         {paper.ablesci_url && (
           <a href={paper.ablesci_url} target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded-full border border-gray-100 bg-gray-50 px-2 py-0.5 text-[9px] font-semibold text-gray-500 hover:border-indigo-100 hover:bg-indigo-50 hover:text-indigo-600">
-            科研通检索 <ExternalLink size={8} />
+            Literature Search <ExternalLink size={8} />
           </a>
         )}
       </div>
@@ -532,7 +532,7 @@ const IdeaAgent: React.FC = () => {
 
   const handleManualModeling = () => {
     const params = new URLSearchParams();
-    const prompt = result?.user_goal?.interpreted_goal || query || '请根据目标文献手动建立模型';
+    const prompt = result?.user_goal?.interpreted_goal || query || 'Please manually build the model based on target literature';
     params.set('prompt', prompt);
     navigate(`/agent/modeling?${params.toString()}`);
   };
@@ -581,9 +581,9 @@ const IdeaAgent: React.FC = () => {
               </p>
               <div className="flex flex-col gap-1.5 w-full mt-1">
                 {[
-                  'NaCoO2 理论计算，我做实验想补充计算内容',
-                  '研究掺杂改善 Na⁺ 正极倍率性能',
-                  'Li⁺ 扩散机制，NEB 计算怎么起步',
+                  'NaCoO2 theoretical compute; conducting experiments and wanting to supplement compute data',
+                  'Study doping to improve Na⁺ cathode rate capability',
+                  'Li⁺ diffusion mechanism: how to start NEB compute',
                 ].map((s) => (
                   <button key={s} onClick={() => setQuery(s)}
                     className="text-left text-[11px] text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-[12px] px-3 py-1.5 hover:bg-indigo-100 transition-colors">
@@ -614,7 +614,7 @@ const IdeaAgent: React.FC = () => {
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSearch(); } }}
               disabled={isStreaming}
               rows={3}
-              placeholder="描述你的研究目标..."
+              placeholder="Describe your research goal..."
               className="w-full resize-none bg-gray-50 border border-gray-200 rounded-2xl py-2.5 px-3 pr-10 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all disabled:opacity-50"
             />
             <button
@@ -627,7 +627,7 @@ const IdeaAgent: React.FC = () => {
               {isStreaming ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
             </button>
           </div>
-          <p className="mt-1 text-[10px] text-gray-400 text-center">Shift+Enter 换行 · Enter 提交</p>
+          <p className="mt-1 text-[10px] text-gray-400 text-center">Shift+Enter for new line · Enter to submit</p>
         </div>
       </div>
 
@@ -859,9 +859,9 @@ const IdeaAgent: React.FC = () => {
 
           {hasResult && result.idea_cards.length === 0 && (
             <div className="rounded-[24px] border border-gray-100 bg-gray-50 p-5">
-              <p className="text-sm font-bold text-[#0A1128]">暂无可推荐模型</p>
+              <p className="text-sm font-bold text-[#0A1128]">No recommended models available</p>
               <p className="mt-2 text-xs leading-5 text-gray-600">
-                {result.no_model_recommendation?.reason || '没有找到能和检索文献对应的结构数据库条目。'}
+                {result.no_model_recommendation?.reason || 'No structure database entry matching searched literature was found.'}
               </p>
               <button
                 type="button"
@@ -869,7 +869,7 @@ const IdeaAgent: React.FC = () => {
                 className="mt-4 inline-flex items-center gap-2 rounded-[32px] bg-[#0A1128] px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#162044]"
               >
                 <ArrowRight size={13} />
-                去 Modeling Agent 自建模型
+                Go to Modeling Agent to Build Model Manually
               </button>
             </div>
           )}
@@ -922,7 +922,7 @@ const IdeaAgent: React.FC = () => {
                 </p>
                 {result?.idea_cards.length === 0 && (
                   <p className="mt-2 text-[11px] leading-5 text-gray-400">
-                    需要先在 Modeling Agent 中按目标论文手动确定结构。
+                    Structure needs to be manually determined in Modeling Agent based on target paper first.
                   </p>
                 )}
               </div>

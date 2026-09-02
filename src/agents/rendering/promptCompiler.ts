@@ -344,7 +344,7 @@ const humanizeRenderingApiError = (message: string, fallback: string) => {
   }
 
   if (/(IMAGE_LLM_API_KEY|TEXT_LLM_API_KEY|GEMINI_API_KEY).*not configured/i.test(raw)) {
-    return '图像服务尚未配置，请联系管理员补充可用凭据。';
+    return 'Image service is not configured yet. Please contact administrator to add available credentials.';
   }
 
   if (
@@ -355,13 +355,13 @@ const humanizeRenderingApiError = (message: string, fallback: string) => {
     || /new_api_error/i.test(raw)
   ) {
     if (/No available channel|model_not_found/i.test(raw)) {
-      return '图像模型通道暂不可用，请在模型平台确认当前 API Key 的分组已开通 gpt-image-2。';
+      return 'Image model channel is temporarily unavailable. Please confirm on the model platform that current API Key\'s group has gpt-image-2 enabled.';
     }
-    return '图像分析网关鉴权失败，请联系管理员更新令牌或上游网关配置。';
+    return 'Image analysis gateway authentication failed. Please contact administrator to update token or upstream gateway configuration.';
   }
 
   if (/(Text LLM|Gemini) API error\s*429/i.test(raw) || /quota exceeded/i.test(raw) || /resource_exhausted/i.test(raw)) {
-    return '图像分析服务当前繁忙，请稍后再试。';
+    return 'Image analysis service is currently busy. Please try again later.';
   }
 
   return raw || fallback;
@@ -457,7 +457,7 @@ export const generateBaseImages = async (
     } catch (e) {
       console.error("Non-JSON response from server:", text.substring(0, 200));
       if (response.status === 524) {
-        throw new Error('图像生成等待时间过长，网关已超时。系统已改为后台任务模式，请重新提交。');
+        throw new Error('Image generation wait time too long; gateway timed out. System switched to background task mode. Please resubmit.');
       }
       throw new Error(`${fallback} (Status: ${response.status})`);
     }
@@ -535,7 +535,7 @@ export const generateBaseImages = async (
     }
   }
 
-  throw new Error('图像生成仍在处理中，但等待时间已超过 8 分钟。请稍后重试。');
+  throw new Error('Image generation is still processing, but wait time has exceeded 8 minutes. Please try again later.');
 };
 
 export const editBaseImage = async (
@@ -555,7 +555,7 @@ export const editBaseImage = async (
     } catch (e) {
       console.error('Non-JSON response from server:', text.substring(0, 200));
       if (response.status === 524) {
-        throw new Error('图像编辑等待时间过长，网关已超时。系统已改为后台任务模式，请重新提交。');
+        throw new Error('Image editing wait time too long; gateway timed out. System switched to background task mode. Please resubmit.');
       }
       throw new Error(`${fallback} (Status: ${response.status})`);
     }
@@ -625,7 +625,7 @@ export const editBaseImage = async (
     }
   }
 
-  throw new Error('图像编辑仍在处理中，但等待时间已超过 8 分钟。请稍后重试。');
+  throw new Error('Image editing is still processing, but wait time has exceeded 8 minutes. Please try again later.');
 };
 
 // ─── Real API: Phase 7 — HD Refinement (Doubao Seedream) ────────────────────
@@ -674,7 +674,7 @@ export const mockParseScience = (text: string): ParsedScience => {
     active_site: 'single-atom site',
     reactants: [
       {
-        name_cn: '一氧化碳', formula_en: 'CO', atoms: ['C', 'O'],
+        name_cn: 'Carbon monoxide', formula_en: 'CO', atoms: ['C', 'O'],
         bond_topology: 'C triple-bonded to O',
         color_rule: { C: CPK_COLORS['C'], O: CPK_COLORS['O'] },
         geometry_hint: 'linear', role: 'reactant', priority: 'high',
@@ -683,7 +683,7 @@ export const mockParseScience = (text: string): ParsedScience => {
     intermediates: [],
     products: [
       {
-        name_cn: '二氧化碳', formula_en: 'CO2', atoms: ['C', 'O', 'O'],
+        name_cn: 'Carbon dioxide', formula_en: 'CO2', atoms: ['C', 'O', 'O'],
         bond_topology: 'two C=O double bonds',
         color_rule: { C: CPK_COLORS['C'], O: CPK_COLORS['O'] },
         geometry_hint: 'linear', role: 'product', priority: 'high',

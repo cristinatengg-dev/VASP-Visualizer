@@ -27,5 +27,7 @@ export const getModifications = (fileId: string) => {
 export const clearModifications = (fileId: string) => {
     try {
         localStorage.removeItem(getModKey(fileId));
-    } catch (e) {}
+    } catch {
+        // Storage can be unavailable in private or restricted browser contexts.
+    }
 };

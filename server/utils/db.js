@@ -36,18 +36,19 @@ const updateUser = async (phone, updates) => {
 };
 
 const redeemCode = async (codeStr, userId) => {
-    const code = await InvitationCode.findOne({ code: codeStr, isUsed: false });
+    const user = await User.findOne({ phone: userId });
+    if (!user) throw new Error('User not found');
+
+    // Claim the code atomically so concurrent requests cannot redeem it twice.
+    const code = await InvitationCode.findOneAndUpdate(
+        { code: codeStr, isUsed: false },
+        { $set: { isUsed: true, usedBy: userId, usedAt: new Date() } },
+        { new: true }
+    );
     if (!code) throw new Error('Invalid or used code');
 
-    // Update Code
-    await InvitationCode.findOneAndUpdate({ code: codeStr }, { $set: { isUsed: true, usedBy: userId, usedAt: new Date() } });
-
-    // Update User
     const plan = code.planType || 'academic';
-    const updated = await User.findOneAndUpdate({ phone: userId }, { $set: { tier: plan } }, { new: true }) ||
-        await User.findOneAndUpdate({ id: userId }, { $set: { tier: plan } }, { new: true }) ||
-        await User.findOneAndUpdate({ _id: userId }, { $set: { tier: plan } }, { new: true });
-    if (!updated) throw new Error('User not found');
+    await User.findOneAndUpdate({ phone: userId }, { $set: { tier: plan } }, { new: true });
     
     return true;
 };
@@ -78,12 +79,12 @@ const verifyCode = async (phone, codeHash) => {
         .find(item => item.codeHash === codeHash);
     if (!record) return false;
 
-    await VerificationCode.findOneAndUpdate(
-        { _id: record._id },
+    const consumed = await VerificationCode.findOneAndUpdate(
+        { _id: record._id, consumedAt: null },
         { $set: { consumedAt: new Date() } },
         { new: true }
     );
-    return true;
+    return Boolean(consumed);
 };
 
 const getLastCodeTime = async (phone) => {

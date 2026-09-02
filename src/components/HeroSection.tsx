@@ -328,20 +328,11 @@ const EyebrowBadge: React.FC = () => (
 
 const Headline: React.FC = () => (
   <div className="space-y-2">
-    <h1 className="text-4xl md:text-5xl lg:text-[3.6rem] font-black text-[#0A1128] tracking-tighter leading-[1.08]">
-      Build. Compute. Visualize.
+    <h1 className="text-4xl md:text-5xl lg:text-[3.8rem] font-semibold text-[#1d1d1f] tracking-[-0.045em] leading-[1.05]">
+      Build. Compute. Understand.
     </h1>
-    <h2 className="text-3xl md:text-4xl lg:text-[3rem] font-black tracking-tighter leading-[1.08]">
-      The Super Automation{" "}
-      <span
-        className="bg-clip-text text-transparent"
-        style={{
-          backgroundImage:
-            "linear-gradient(125deg, #8E9AAF 0%, #4A6090 35%, #1A2A4E 60%, #2E4A8E 100%)",
-        }}
-      >
-        Foundation.
-      </span>
+    <h2 className="text-2xl md:text-3xl lg:text-[2.5rem] font-semibold tracking-[-0.035em] leading-[1.1] text-[#6e6e73]">
+      One clear Agent for materials research.
     </h2>
   </div>
 );
@@ -349,8 +340,8 @@ const Headline: React.FC = () => (
 // ─── 副标题 ───────────────────────────────────────────────────────────────────
 
 const Subheadline: React.FC = () => (
-  <p className="text-gray-500 text-base md:text-[1.05rem] leading-relaxed max-w-xl text-center">
-    Empowering global research and industrial R&D with an end-to-end, zero-code automation workflow—from natural language modeling and Green AI-optimized compute, to publication-ready visualization.
+  <p className="text-[#6e6e73] text-base md:text-[1.05rem] leading-relaxed max-w-2xl text-center">
+    From validated structures and auditable VASP inputs to real cluster computing and scientific visualization. Every step is clear, reproducible, and traceable.
   </p>
 );
 
@@ -359,20 +350,9 @@ const Subheadline: React.FC = () => (
 const CTAButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   <button
     onClick={onClick}
-    className="
-      group inline-flex items-center gap-2.5
-      px-9 py-4
-      bg-[#0A1128] text-white text-sm font-semibold
-      rounded-[32px]
-      shadow-[0_4px_20px_rgba(26,42,78,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]
-      hover:bg-[#162044]
-      hover:-translate-y-0.5
-      hover:shadow-[0_8px_28px_rgba(26,42,78,0.35)]
-      active:translate-y-0
-      transition-all duration-200
-    "
+    className="apple-button-primary group px-8"
   >
-    Explore Platform
+    Start Research Agent
     <ArrowRight
       size={14}
       strokeWidth={2.5}
@@ -393,13 +373,12 @@ const AgentCardItem: React.FC<{ card: AgentCard; onClick: () => void }> = ({
       group relative text-left
       flex flex-col gap-3
       p-4
-      backdrop-blur-md
       border
       rounded-[24px]
       transition-all duration-200
       ${card.preview
-        ? "bg-white/50 border-gray-200/40 cursor-default opacity-75 hover:opacity-85"
-        : "bg-white/75 border-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_4px_24px_rgba(0,0,0,0.06)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_32px_rgba(26,42,78,0.11)] hover:-translate-y-1 hover:bg-white/85 active:translate-y-0 cursor-pointer"
+        ? "bg-white/55 border-black/5 cursor-default opacity-65"
+        : "bg-white border-black/5 shadow-[0_8px_24px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_30px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
       }
     `}
     aria-label={card.preview ? `${card.label} — Preview` : `Open ${card.label}`}
@@ -413,7 +392,7 @@ const AgentCardItem: React.FC<{ card: AgentCard; onClick: () => void }> = ({
           flex items-center justify-center
           ${card.preview
             ? "bg-gray-400/60 shadow-none"
-            : "bg-[#0A1128]/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_2px_8px_rgba(10,17,40,0.2)]"
+            : "bg-[#0A1128] shadow-[0_3px_10px_rgba(26,42,78,0.2)]"
           }
         `}
       >
@@ -565,20 +544,11 @@ const HeroSection: React.FC = () => {
         )}
       </div>
 
-      {/* 层 1：静态背景（六边形晶格 + 弥散光晕） */}
-      <BackgroundLayer />
-
-      {/* 层 2：动态代码瀑布 Canvas */}
-      <CodeRainCanvas />
-
-      {/* 层 3：主内容卡片（白底 z-10，覆盖代码雨） */}
+      {/* 主内容：减少装饰，让科研任务成为唯一视觉焦点。 */}
       <div
         className="
           relative z-10 w-full max-w-6xl
-          bg-white/92 backdrop-blur-sm
-          border border-gray-100/80
-          rounded-[24px]
-          shadow-[0_4px_40px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,1)]
+          bg-transparent
           px-8 md:px-14 py-12 md:py-16
         "
       >
@@ -611,7 +581,7 @@ const HeroSection: React.FC = () => {
           {/* ⑤ Agent 卡片（横向一行，不溢出） */}
           <motion.div
             variants={itemVariants}
-            className="w-full grid grid-cols-5 gap-3 mt-2"
+            className="mt-2 grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
           >
             {AGENTS.map((card) => (
               <AgentCardItem
@@ -631,7 +601,7 @@ const HeroSection: React.FC = () => {
                   <button
                     key={card.id}
                     onClick={() => navigate(card.route)}
-                    className="h-full w-full text-left group rounded-[20px] border border-gray-100 bg-white/80 p-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)] transition-all hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-[0_4px_20px_rgba(26,42,78,0.08)] active:translate-y-0"
+                    className="h-full w-full text-left group rounded-[20px] border border-black/5 bg-white p-4 shadow-[0_6px_20px_rgba(0,0,0,0.045)] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(0,0,0,0.07)] active:translate-y-0"
                   >
                     <div className="flex h-full items-start gap-4">
                       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br ${card.iconGradient}`}>
@@ -660,8 +630,7 @@ const HeroSection: React.FC = () => {
       <div
         className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none z-20"
         style={{
-          background:
-            "linear-gradient(to top, rgba(255,255,255,0.4) 0%, transparent 100%)",
+          background: "linear-gradient(to top, #ffffff 0%, transparent 100%)",
         }}
         aria-hidden="true"
       />

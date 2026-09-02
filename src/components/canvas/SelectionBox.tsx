@@ -5,9 +5,9 @@ import * as THREE from 'three';
 import { Atom } from '../../types';
 
 // --- 1. 性能节流函数 (防止鼠标移动触发频率过高卡死浏览器) ---
-const throttle = (func: Function, limit: number) => {
+const throttle = <TArgs extends unknown[]>(func: (...args: TArgs) => void, limit: number) => {
   let inThrottle: boolean;
-  return function(this: any, ...args: any[]) {
+  return function(this: unknown, ...args: TArgs) {
     if (!inThrottle) {
       func.apply(this, args);
       inThrottle = true;

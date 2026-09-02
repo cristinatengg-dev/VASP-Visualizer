@@ -76,7 +76,7 @@ class ChunkedFileReader {
 
   async view(offset: number, byteLength: number): Promise<DataView> {
     if (offset < 0 || byteLength < 0 || offset + byteLength > this.file.size) {
-      throw new Error('XTC 文件在读取时提前结束，文件可能不完整。');
+      throw new Error('The XTC file ended unexpectedly while reading; the file may be incomplete.');
     }
 
     if (offset < this.cacheStart || offset + byteLength > this.cacheEnd) {
@@ -225,14 +225,14 @@ async function buildFrameIndex(file: File, sessionId: number) {
     const header = await reader.view(offset, headerLength);
     const magic = header.getInt32(0);
     if (magic !== XTC_MAGIC) {
-      throw new Error(`第 ${entries.length + 1} 帧的 XTC 标识无效（偏移 ${offset}）。`);
+      throw new Error(`Frame ${entries.length + 1} invalid XTC magic number (offset ${offset}）。`);
     }
 
     const atomCount = header.getInt32(4);
-    if (atomCount <= 0) throw new Error('XTC 中的原子数无效。');
+    if (atomCount <= 0) throw new Error('Invalid atom count in XTC.');
     if (expectedAtomCount < 0) expectedAtomCount = atomCount;
     if (atomCount !== expectedAtomCount) {
-      throw new Error(`XTC 各帧原子数不一致：期望 ${expectedAtomCount}，检测到 ${atomCount}。`);
+      throw new Error(`Inconsistent atom count across XTC frames: expected ${expectedAtomCount}, detected ${atomCount}。`);
     }
 
     const time = header.getFloat32(12);
@@ -240,16 +240,16 @@ async function buildFrameIndex(file: File, sessionId: number) {
     if (atomCount <= 9) {
       byteLength = 56 + atomCount * 3 * 4;
     } else {
-      if (headerLength < INDEX_READ_BYTES) throw new Error('XTC 最后一帧不完整。');
+      if (headerLength < INDEX_READ_BYTES) throw new Error('The last XTC frame is incomplete.');
       const storedAtomCount = header.getInt32(52);
       const compressedBytes = header.getInt32(88);
       if (storedAtomCount !== atomCount || compressedBytes < 0) {
-        throw new Error(`第 ${entries.length + 1} 帧的压缩坐标块无效。`);
+        throw new Error(`Frame ${entries.length + 1} compressed coordinate block invalid.`);
       }
       byteLength = INDEX_READ_BYTES + Math.ceil(compressedBytes / 4) * 4;
     }
 
-    if (offset + byteLength > file.size) throw new Error('XTC 最后一帧坐标数据不完整。');
+    if (offset + byteLength > file.size) throw new Error('Incomplete coordinate data in the last XTC frame.');
     entries.push({ offset, byteLength, atomCount, time });
     offset += byteLength;
 
@@ -260,19 +260,19 @@ async function buildFrameIndex(file: File, sessionId: number) {
     }
   }
 
-  if (entries.length === 0) throw new Error('XTC 中没有找到可读取的轨迹帧。');
+  if (entries.length === 0) throw new Error('No readable trajectory frames found in XTC.');
   if (offset !== file.size) {
     const trailingBytes = file.size - offset;
-    if (trailingBytes > 3) throw new Error(`XTC 末尾存在 ${trailingBytes} 字节无法识别的数据。`);
+    if (trailingBytes > 3) throw new Error(`At the end of XTC, there are ${trailingBytes} bytes of unrecognized data.`);
   }
 
   return { entries, reader, atomCount: expectedAtomCount };
 }
 
 async function decodeFrame(frameNumber: number): Promise<DecodedFrame> {
-  if (!fileReader || !activeFile) throw new Error('请先载入 XTC 文件。');
+  if (!fileReader || !activeFile) throw new Error('Please load an XTC file first.');
   const entry = frameIndex[frameNumber];
-  if (!entry) throw new Error(`轨迹帧 ${frameNumber + 1} 超出范围。`);
+  if (!entry) throw new Error(`Trajectory Frame ${frameNumber + 1} Out of range.`);
 
   const view = await fileReader.view(entry.offset, entry.byteLength);
   const atomCount = view.getInt32(4);
@@ -289,7 +289,7 @@ async function decodeFrame(frameNumber: number): Promise<DecodedFrame> {
   if (atomCount <= 9) {
     const storedAtomCount = view.getInt32(offset);
     offset += 4;
-    if (storedAtomCount !== atomCount) throw new Error('XTC 未压缩坐标块的原子数不匹配。');
+    if (storedAtomCount !== atomCount) throw new Error('Atom count mismatch in uncompressed XTC coordinate block.');
     for (let i = 0; i < atomCount3; i += 1) {
       coordinates[i] = view.getFloat32(offset) * 10;
       offset += 4;
@@ -299,11 +299,11 @@ async function decodeFrame(frameNumber: number): Promise<DecodedFrame> {
 
   const storedAtomCount = view.getInt32(offset);
   offset += 4;
-  if (storedAtomCount !== atomCount) throw new Error('XTC 压缩坐标块的原子数不匹配。');
+  if (storedAtomCount !== atomCount) throw new Error('Atom count mismatch in compressed XTC coordinate block.');
 
   const precision = view.getFloat32(offset);
   offset += 4;
-  if (!Number.isFinite(precision) || precision === 0) throw new Error('XTC 坐标精度无效。');
+  if (!Number.isFinite(precision) || precision === 0) throw new Error('Invalid XTC coordinate precision.');
 
   const minMaxInt = new Int32Array(6);
   const sizeInt = new Int32Array(3);
@@ -334,7 +334,7 @@ async function decodeFrame(frameNumber: number): Promise<DecodedFrame> {
   const compressedByteLength = view.getInt32(offset);
   offset += 4;
   if (smallIndex < FIRST_MAGIC_INDEX || smallIndex >= MagicInts.length) {
-    throw new Error('XTC 小整数压缩索引无效。');
+    throw new Error('Invalid XTC small integer compression index.');
   }
 
   const smallerIndex = Math.max(FIRST_MAGIC_INDEX, smallIndex - 1);
@@ -423,7 +423,7 @@ async function decodeFrame(frameNumber: number): Promise<DecodedFrame> {
 
     smallIndex += isSmaller;
     if (smallIndex < FIRST_MAGIC_INDEX || smallIndex >= MagicInts.length) {
-      throw new Error('XTC 解压过程中遇到无效的小整数索引。');
+      throw new Error('Invalid small integer index encountered during XTC decompression.');
     }
     if (isSmaller < 0) {
       smallNumber = smaller;
@@ -436,7 +436,7 @@ async function decodeFrame(frameNumber: number): Promise<DecodedFrame> {
   }
 
   if (outputOffset !== atomCount3) {
-    throw new Error(`XTC 帧解压不完整：期望 ${atomCount3} 个坐标值，得到 ${outputOffset}。`);
+    throw new Error(`Incomplete XTC frame decompression: expected ${atomCount3} coordinate values, got ${outputOffset}。`);
   }
   return { coordinates, box, time };
 }
@@ -455,7 +455,7 @@ function makeSampledFrameList(frameCount: number, maxSamples: number) {
 
 async function buildTrail(request: TrailRequest) {
   const atomIndices = request.atomIndices;
-  if (atomIndices.length === 0) throw new Error('轨迹选择中没有原子。');
+  if (atomIndices.length === 0) throw new Error('No atoms in trajectory selection.');
   const frames = makeSampledFrameList(frameIndex.length, request.maxSamples);
   const segmentCount = Math.max(0, frames.length - 1) * atomIndices.length;
   const position1 = new Float32Array(segmentCount * 3);

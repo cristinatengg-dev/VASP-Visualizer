@@ -5,32 +5,32 @@ import { MATERIAL_EXPLORER_CARDS } from '../data/materialExplorerRegistry';
 
 const libraryLabels: Record<string, { title: string; note: string }> = {
   battery: {
-    title: '电池材料库',
-    note: '正极、负极、固态电解质和常用结构候选。',
+    title: 'Battery Materials Library',
+    note: 'Cathodes, anodes, solid electrolytes, and common structure candidates.',
   },
   nuclear: {
-    title: '核材料库',
-    note: '燃料、包壳、辐照与核数据相关材料入口。',
+    title: 'Nuclear Materials Library',
+    note: 'Fuels, cladding, irradiation, and nuclear data-related materials portal.',
   },
   supercapacitor: {
-    title: '超级电容材料库',
-    note: '多孔碳、氧化物、MXene 与赝电容材料。',
+    title: 'Supercapacitor Materials Library',
+    note: 'Porous carbon, oxides, MXenes, and pseudocapacitive materials.',
   },
   'hydrogen-storage': {
-    title: '储氢材料库',
-    note: '金属氢化物、合金、MOF 和吸附材料。',
+    title: 'Hydrogen Storage Materials Library',
+    note: 'Metal hydrides, alloys, MOFs, and adsorbent materials.',
   },
   'thermal-storage': {
-    title: '热储能材料库',
-    note: '熔盐、相变材料、热物性和陶瓷候选。',
+    title: 'Thermal Energy Storage Materials Library',
+    note: 'Molten salts, phase change materials, thermophysical properties, and ceramic candidates.',
   },
   'flow-battery': {
-    title: '液流电池材料库',
-    note: '氧化还原分子、电解液与支撑材料。',
+    title: 'Flow Battery Materials Library',
+    note: 'Redox active molecules, electrolytes, and support materials.',
   },
   aerospace: {
-    title: '商业航天材料库',
-    note: '30+ 工程候选、任务工况、TRL、失效风险与资格验证路径。',
+    title: 'Commercial Space Materials Library',
+    note: '30+ engineering candidates, task operating conditions, TRL, failure risks, and qualification pathways.',
   },
 };
 
@@ -46,13 +46,13 @@ const MaterialsLibrary: React.FC = () => {
               type="button"
               onClick={() => navigate('/workspace')}
               className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50"
-              title="返回工作台"
+              title="Return to Agent Workspace"
             >
               <ArrowLeft size={17} />
             </button>
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400">Materials Library</p>
-              <h1 className="mt-1 text-xl font-bold text-[#0A1128]">资料库</h1>
+              <h1 className="mt-1 text-xl font-bold text-[#0A1128]">Library</h1>
             </div>
           </div>
           <button
@@ -61,16 +61,16 @@ const MaterialsLibrary: React.FC = () => {
             className="flex h-10 items-center gap-2 rounded-[32px] border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
           >
             <Search size={16} />
-            回到 Agent
+            Back to Agent
           </button>
         </div>
 
         <div className="mb-6 rounded-[24px] border border-gray-100 bg-white p-5 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-bold text-[#0A1128]">七个资料库都在这里</p>
+              <p className="text-sm font-bold text-[#0A1128]">All seven libraries are here</p>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
-                每个资料库进入后都使用同一套后台结构检索源，并保留各自领域的常用公式、建模提示和结果转 Modeling Agent 的路径。
+                Once inside, each library uses the same backend source retrieval structure while retaining field-specific formulas, modeling prompts, and paths to send results to the Modeling Agent.
               </p>
             </div>
             <div className="rounded-[16px] border border-gray-200 bg-gray-50 px-3 py-2">

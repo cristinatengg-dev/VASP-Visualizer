@@ -96,14 +96,15 @@ function mapPbsStateToRuntimeStatus(rawState, exitStatus = null) {
 }
 
 async function querySlurmJobStatus(externalJobId) {
-  if (!externalJobId) {
+  const safeJobId = String(externalJobId || '').trim();
+  if (!/^\d+(?:_[0-9]+)?$/.test(safeJobId)) {
     return { ok: false, reason: 'missing_external_job_id' };
   }
 
   const sshConfig = getHpcSshConfigFromEnv();
   const squeue = sshConfig.configured
-    ? await runRemoteShellCommand(sshConfig, `squeue -h -j ${String(externalJobId)} -o %T`)
-    : await runCommand('squeue', ['-h', '-j', String(externalJobId), '-o', '%T']);
+    ? await runRemoteShellCommand(sshConfig, `squeue -h -j ${safeJobId} -o %T`)
+    : await runCommand('squeue', ['-h', '-j', safeJobId, '-o', '%T']);
   if (squeue.ok) {
     const state = String(squeue.stdout || '').trim().split('\n').find(Boolean) || '';
     const mapped = mapSlurmStateToRuntimeStatus(state);
@@ -118,8 +119,8 @@ async function querySlurmJobStatus(externalJobId) {
   }
 
   const sacct = sshConfig.configured
-    ? await runRemoteShellCommand(sshConfig, `sacct -n -j ${String(externalJobId)} --format=State`)
-    : await runCommand('sacct', ['-n', '-j', String(externalJobId), '--format=State']);
+    ? await runRemoteShellCommand(sshConfig, `sacct -n -j ${safeJobId} --format=State`)
+    : await runCommand('sacct', ['-n', '-j', safeJobId, '--format=State']);
   if (sacct.ok) {
     const state = String(sacct.stdout || '')
       .split('\n')
@@ -153,14 +154,15 @@ async function querySlurmJobStatus(externalJobId) {
 }
 
 async function queryPbsJobStatus(externalJobId) {
-  if (!externalJobId) {
+  const safeJobId = String(externalJobId || '').trim();
+  if (!/^\d+(?:\.[A-Za-z0-9._-]+)?$/.test(safeJobId)) {
     return { ok: false, reason: 'missing_external_job_id' };
   }
 
   const sshConfig = getHpcSshConfigFromEnv();
   const qstat = sshConfig.configured
-    ? await runRemoteShellCommand(sshConfig, `qstat -xf ${String(externalJobId)} 2>/dev/null || qstat -f ${String(externalJobId)} 2>/dev/null`)
-    : await runCommand('bash', ['-lc', `qstat -xf ${String(externalJobId)} 2>/dev/null || qstat -f ${String(externalJobId)} 2>/dev/null`]);
+    ? await runRemoteShellCommand(sshConfig, `qstat -xf ${safeJobId} 2>/dev/null || qstat -f ${safeJobId} 2>/dev/null`)
+    : await runCommand('bash', ['-lc', `qstat -xf ${safeJobId} 2>/dev/null || qstat -f ${safeJobId} 2>/dev/null`]);
 
   if (!qstat.ok) {
     return {

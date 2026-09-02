@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const ICP_RECORD_NUMBER = '浙ICP备2026000780号';
+export const ICP_RECORD_NUMBER = 'Zhejiang ICP Record No. 2026000780';
 export const ICP_RECORD_URL = 'https://beian.miit.gov.cn/';
 
 interface ComplianceFooterProps {

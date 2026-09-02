@@ -9,6 +9,8 @@ function extractLastNumericMatch(text, pattern, groupIndex = 1) {
   return Number.isFinite(value) ? value : null;
 }
 
+const NUMBER_PATTERN = '([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[Ee][-+]?\\d+)?)';
+
 function countMatches(text, pattern) {
   const source = String(text || '');
   return [...source.matchAll(pattern)].length;
@@ -16,11 +18,38 @@ function countMatches(text, pattern) {
 
 function parseTotalEnergyEv({ oszicarTail, outcarTail, vaspOutTail }) {
   return (
-    extractLastNumericMatch(oszicarTail, /F=\s*([-\d.]+)/g)
-    ?? extractLastNumericMatch(oszicarTail, /E0=\s*([-\d.]+)/g)
-    ?? extractLastNumericMatch(outcarTail, /free\s+energy\s+TOTEN\s*=\s*([-\d.]+)/gi)
-    ?? extractLastNumericMatch(vaspOutTail, /free\s+energy\s+TOTEN\s*=\s*([-\d.]+)/gi)
+    extractLastNumericMatch(oszicarTail, new RegExp(`F=\\s*${NUMBER_PATTERN}`, 'g'))
+    ?? extractLastNumericMatch(oszicarTail, new RegExp(`E0=\\s*${NUMBER_PATTERN}`, 'g'))
+    ?? extractLastNumericMatch(outcarTail, new RegExp(`free\\s+energy\\s+TOTEN\\s*=\\s*${NUMBER_PATTERN}`, 'gi'))
+    ?? extractLastNumericMatch(vaspOutTail, new RegExp(`free\\s+energy\\s+TOTEN\\s*=\\s*${NUMBER_PATTERN}`, 'gi'))
   );
+}
+
+function parseEnergyBreakdown({ outcarTail, vaspOutTail }) {
+  const source = [outcarTail, vaspOutTail].filter(Boolean).join('\n');
+  return {
+    freeEnergyEv: extractLastNumericMatch(source, new RegExp(`free\\s+energy\\s+TOTEN\\s*=\\s*${NUMBER_PATTERN}`, 'gi')),
+    energyWithoutEntropyEv: extractLastNumericMatch(source, new RegExp(`energy\\s+without\\s+entropy\\s*=\\s*${NUMBER_PATTERN}`, 'gi')),
+    sigmaToZeroEnergyEv: extractLastNumericMatch(source, new RegExp(`energy\\(sigma->0\\)\\s*=\\s*${NUMBER_PATTERN}`, 'gi')),
+  };
+}
+
+function parseElectronicMetrics({ outcarTail, vaspOutTail }) {
+  const source = [outcarTail, vaspOutTail].filter(Boolean).join('\n');
+  return {
+    fermiEnergyEv: extractLastNumericMatch(source, new RegExp(`E-fermi\\s*:\\s*${NUMBER_PATTERN}`, 'gi')),
+    totalMagnetizationMuB: extractLastNumericMatch(source, new RegExp(`number of electron\\s+${NUMBER_PATTERN}\\s+magnetization\\s+${NUMBER_PATTERN}`, 'gi'), 2),
+  };
+}
+
+function parseStressKbar({ outcarTail, vaspOutTail }) {
+  const source = [outcarTail, vaspOutTail].filter(Boolean).join('\n');
+  const matches = [...source.matchAll(/in kB\s+([-+\d.Ee]+)\s+([-+\d.Ee]+)\s+([-+\d.Ee]+)\s+([-+\d.Ee]+)\s+([-+\d.Ee]+)\s+([-+\d.Ee]+)/gi)];
+  if (!matches.length) return null;
+  const values = matches[matches.length - 1].slice(1, 7).map(Number);
+  return values.every(Number.isFinite) ? {
+    xx: values[0], yy: values[1], zz: values[2], xy: values[3], yz: values[4], zx: values[5],
+  } : null;
 }
 
 function parseForceMetrics({ outcarTail, vaspOutTail }) {
@@ -40,18 +69,21 @@ function parseIonicStepCount({ oszicarTail }) {
 }
 
 function parseElectronicStepHints({ oszicarTail }) {
-  const count = countMatches(oszicarTail, /DAV:\s*\d+/g);
+  const count = countMatches(oszicarTail, /(?:DAV|RMM):\s*\d+/g);
   return count > 0 ? count : null;
 }
 
-function parseConvergence({ oszicarTail, outcarTail, vaspOutTail, runtimeStatus }) {
+function parseConvergence({ oszicarTail, outcarTail, vaspOutTail, runtimeStatus, workflow }) {
   const combined = [oszicarTail, outcarTail, vaspOutTail].filter(Boolean).join('\n');
-  const converged = /reached required accuracy|aborting loop because EDIFF|accuracy reached/i.test(combined);
+  const electronicConverged = /aborting loop because EDIFF is reached|EDIFF is reached|accuracy reached/i.test(combined);
+  const ionicConverged = /reached required accuracy\s*-\s*stopping structural energy minimisation/i.test(combined);
   const hasNonZeroExit = Number.isFinite(runtimeStatus?.exitCode) && Number(runtimeStatus.exitCode) !== 0;
-  if (hasNonZeroExit) {
-    return false;
-  }
-  return converged;
+  const requiresIonicConvergence = ['relax', 'adsorption', 'neb'].includes(String(workflow || '').toLowerCase());
+  return {
+    electronicConverged: !hasNonZeroExit && electronicConverged,
+    ionicConverged: requiresIonicConvergence ? (!hasNonZeroExit && ionicConverged) : null,
+    converged: !hasNonZeroExit && electronicConverged && (!requiresIonicConvergence || ionicConverged),
+  };
 }
 
 function collectWarnings({ jobStdoutTail, jobStderrTail, outcarTail, vaspOutTail, runtimeStatus }) {
@@ -61,6 +93,11 @@ function collectWarnings({ jobStdoutTail, jobStderrTail, outcarTail, vaspOutTail
     { pattern: /VERY BAD NEWS/i, message: 'VASP reported VERY BAD NEWS in output' },
     { pattern: /segmentation fault/i, message: 'Execution log contains segmentation fault' },
     { pattern: /ZBRENT: fatal error/i, message: 'Output contains ZBRENT fatal error' },
+    { pattern: /BRMIX:\s*very serious problems/i, message: 'Charge mixing failed (BRMIX); review structure, smearing, and mixing settings' },
+    { pattern: /ZHEGV.*failed/i, message: 'Electronic diagonalization failed (ZHEGV)' },
+    { pattern: /EDDDAV:\s*Call to ZHEGV failed/i, message: 'Electronic minimization failed (EDDDAV)' },
+    { pattern: /Sub-Space-Matrix is not hermitian/i, message: 'Sub-space matrix is not Hermitian; restart files or geometry may be unstable' },
+    { pattern: /please rerun with smaller EDIFF/i, message: 'VASP recommends a tighter EDIFF setting' },
     { pattern: /internal error/i, message: 'Output contains internal error' },
     { pattern: /error/i, message: 'Output contains generic error markers' },
   ];
@@ -87,16 +124,23 @@ function buildResultMetrics({
   vaspOutTail,
   runtimeStatus,
   jobRun,
+  workflow,
 }) {
   const forceMetrics = parseForceMetrics({ outcarTail, vaspOutTail });
+  const convergence = parseConvergence({ oszicarTail, outcarTail, vaspOutTail, runtimeStatus, workflow });
+  const energyBreakdown = parseEnergyBreakdown({ outcarTail, vaspOutTail });
+  const electronicMetrics = parseElectronicMetrics({ outcarTail, vaspOutTail });
 
   return {
     totalEnergyEv: parseTotalEnergyEv({ oszicarTail, outcarTail, vaspOutTail }),
-    converged: parseConvergence({ oszicarTail, outcarTail, vaspOutTail, runtimeStatus }),
+    ...energyBreakdown,
+    ...electronicMetrics,
+    ...convergence,
     ionicStepCount: parseIonicStepCount({ oszicarTail }),
     electronicStepHints: parseElectronicStepHints({ oszicarTail }),
     maxForceEvPerA: forceMetrics.maxForceEvPerA,
     rmsForceEvPerA: forceMetrics.rmsForceEvPerA,
+    stressKbar: parseStressKbar({ outcarTail, vaspOutTail }),
     exitCode: runtimeStatus?.exitCode ?? null,
     elapsedSeconds: Math.max(
       1,

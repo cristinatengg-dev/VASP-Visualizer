@@ -63,6 +63,8 @@ const generateJobScript = (request) => {
     const stdoutFile = engine === 'vasp' ? 'vasp.out' : `${engine}.out`;
     const stderrFile = engine === 'vasp' ? 'vasp.err' : `${engine}.err`;
     const runCommand = buildEngineRunCommand(engine, hpc.executable);
+    const pbsVaspCommand = `mpirun -np $NP -machinefile $PBS_NODEFILE ${runCommand}`;
+    const slurmVaspCommand = `srun ${runCommand}`;
     
     // HPC Profile specific configurations (can be extended to a profile library)
     const defaultModuleLoad = defaultModuleForEngine(engine, hpc);
@@ -85,8 +87,10 @@ ${prelude}
 if [ "${request.runtime_policy.use_custodian}" = "true" ]; then
     python3 run_custodian.py
 else
-    if [ "${engine}" = "vasp" ] || [ "${isLammps ? 'true' : 'false'}" = "true" ]; then
-        mpirun -np $NP -machinefile $PBS_NODEFILE ${runCommand} >> ${stdoutFile} 2>&1
+    if [ "${engine}" = "vasp" ] && [ -f run_vasp_workflow.sh ]; then
+        VASP_COMMAND="${pbsVaspCommand}" bash run_vasp_workflow.sh >> ${stdoutFile} 2>&1
+    elif [ "${engine}" = "vasp" ] || [ "${isLammps ? 'true' : 'false'}" = "true" ]; then
+        ${pbsVaspCommand} >> ${stdoutFile} 2>&1
     else
         ${runCommand} >> ${stdoutFile} 2>&1
     fi
@@ -109,8 +113,10 @@ ${prelude}
 if [ "${request.runtime_policy.use_custodian}" = "true" ]; then
     python3 run_custodian.py
 else
-    if [ "${engine}" = "vasp" ] || [ "${isLammps ? 'true' : 'false'}" = "true" ]; then
-        srun ${runCommand} > ${stdoutFile}
+    if [ "${engine}" = "vasp" ] && [ -f run_vasp_workflow.sh ]; then
+        VASP_COMMAND="${slurmVaspCommand}" bash run_vasp_workflow.sh > ${stdoutFile} 2> ${stderrFile}
+    elif [ "${engine}" = "vasp" ] || [ "${isLammps ? 'true' : 'false'}" = "true" ]; then
+        ${slurmVaspCommand} > ${stdoutFile}
     else
         ${runCommand} > ${stdoutFile} 2> ${stderrFile}
     fi

@@ -6,6 +6,7 @@ import { StyleWidget } from '../widgets/StyleWidget';
 import { PlayerWidget } from '../widgets/PlayerWidget';
 import { ExportWidget } from '../widgets/ExportWidget';
 import { Scene3D } from '../../components/Scene3D'; // Assuming relative path
+import { VisualizationErrorBoundary } from '../VisualizationErrorBoundary';
 import { AccountDropdown } from '../../components/AccountDropdown'; // We are replacing this but keeping import for reference if needed? No.
 
 export const DashboardLayout: React.FC = () => {
@@ -24,7 +25,9 @@ export const DashboardLayout: React.FC = () => {
           
           {/* 3D Scene */}
           <div className="absolute inset-4 rounded-2xl overflow-hidden bg-gradient-to-b from-gray-50 to-gray-100">
-             <Scene3D />
+             <VisualizationErrorBoundary>
+               <Scene3D />
+             </VisualizationErrorBoundary>
           </div>
 
           {/* Label Tag */}

@@ -788,7 +788,7 @@ const RuntimeInspector: React.FC = () => {
   async function loadSession(targetSessionId?: string) {
     const sessionId = String(targetSessionId || sessionIdInput).trim();
     if (!sessionId) {
-      setSessionError('请输入一个 sessionId');
+      setSessionError('Please enter a sessionId');
       return;
     }
 
@@ -869,11 +869,11 @@ const RuntimeInspector: React.FC = () => {
     const ownerId = ownerIdInput.trim();
 
     if (!ownerId) {
-      setActionError('请先填写 ownerId');
+      setActionError('Please enter ownerId first');
       return;
     }
     if (!goalPrompt) {
-      setActionError('请先填写 goalPrompt');
+      setActionError('Please enter goalPrompt first');
       return;
     }
 
@@ -895,7 +895,7 @@ const RuntimeInspector: React.FC = () => {
   async function handleParseScience() {
     const text = parseScienceTextInput.trim();
     if (text.length < 10) {
-      setActionError('科学文本至少需要 10 个字符');
+      setActionError('Scientific text must contain at least 10 characters');
       return;
     }
 
@@ -922,7 +922,7 @@ const RuntimeInspector: React.FC = () => {
   async function handleBuildModelingStructure() {
     const prompt = modelingPromptInput.trim();
     if (!prompt) {
-      setActionError('请先填写 modeling prompt');
+      setActionError('Please enter modeling prompt first');
       return;
     }
 
@@ -958,12 +958,12 @@ const RuntimeInspector: React.FC = () => {
 
   async function handleReplanSession() {
     if (!sessionData?.session?._id) {
-      setActionError('请先选择一个 session');
+      setActionError('Please select a session first');
       return;
     }
     const goalPrompt = replanPromptInput.trim();
     if (!goalPrompt) {
-      setActionError('请先填写新的 replan goal');
+      setActionError('Please enter a new replan goal first');
       return;
     }
 
@@ -983,7 +983,7 @@ const RuntimeInspector: React.FC = () => {
 
   async function handleCompileComputeInputSet() {
     if (!sessionData?.session?._id) {
-      setActionError('请先选择一个 session');
+      setActionError('Please select a session first');
       return;
     }
 
@@ -996,7 +996,7 @@ const RuntimeInspector: React.FC = () => {
     const targetStructure = selectedStructure || latestStructure;
 
     if (!targetStructure?.artifact?._id) {
-      setActionError('当前 session 里没有可用的 structure artifact');
+      setActionError('No available structure artifact in current session');
       return;
     }
 
@@ -1026,7 +1026,7 @@ const RuntimeInspector: React.FC = () => {
 
   async function handleSubmitComputeJob() {
     if (!sessionData?.session?._id) {
-      setActionError('请先选择一个 session');
+      setActionError('Please select a session first');
       return;
     }
 
@@ -1039,7 +1039,7 @@ const RuntimeInspector: React.FC = () => {
     const targetComputeInput = selectedComputeInput || latestComputeInput;
 
     if (!targetComputeInput?.artifact?._id) {
-      setActionError('当前 session 里没有可用的 compute_input_set artifact');
+      setActionError('No available compute_input_set artifact in current session');
       return;
     }
 
@@ -1062,7 +1062,7 @@ const RuntimeInspector: React.FC = () => {
   async function handleRunServerLocalSmoke() {
     const ownerId = ownerIdInput.trim();
     if (!sessionData?.session?._id && !ownerId) {
-      setActionError('请先填写 ownerId，或先选择一个 session');
+      setActionError('Please enter ownerId first, or select a session first');
       return;
     }
 
@@ -1109,7 +1109,7 @@ const RuntimeInspector: React.FC = () => {
 
   async function handleCompilePrompt() {
     if (!sessionData?.session?._id) {
-      setActionError('请先选择一个 session');
+      setActionError('Please select a session first');
       return;
     }
 
@@ -1129,7 +1129,7 @@ const RuntimeInspector: React.FC = () => {
 
   async function handleGenerateImage() {
     if (!sessionData?.session?._id) {
-      setActionError('请先选择一个 session');
+      setActionError('Please select a session first');
       return;
     }
 
@@ -1152,7 +1152,7 @@ const RuntimeInspector: React.FC = () => {
 
   async function handleSubmitMockJob() {
     if (!sessionData?.session?._id) {
-      setActionError('请先选择一个 session');
+      setActionError('Please select a session first');
       return;
     }
 
@@ -1448,7 +1448,7 @@ const RuntimeInspector: React.FC = () => {
               <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#6274A2]">Runtime Cockpit</p>
               <h1 className="mt-1 text-3xl font-black text-[#0A1128]">Agent Runtime Inspector</h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">
-                直接查看 runtime demo 的 session、artifact、approval、job 和 event，不再只靠后端日志确认产物链。
+                View runtime demo session, artifact, approval, job, and event directly, without relying solely on backend logs to verify artifact chain.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1512,7 +1512,7 @@ const RuntimeInspector: React.FC = () => {
             </div>
           ) : (
             <div className="rounded-[22px] border border-[#D9E6FF] bg-[#F4F8FF] px-4 py-3 text-xs text-[#395B9A]">
-              需要后端启用 `ENABLE_AGENT_RUNTIME_DEMO=1`，并配置可用的 Mongo 与 Gemini 环境，才能真正看到 session 与产物沉淀。
+              Requires backend `ENABLE_AGENT_RUNTIME_DEMO=1` and available Mongo and Gemini environments to view session and artifact persistence.
             </div>
           )}
         </div>
@@ -1538,7 +1538,7 @@ const RuntimeInspector: React.FC = () => {
           ) : loadingRecentSessions && recentSessions.length === 0 ? (
             <div className="flex items-center gap-3 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
               <Loader2 size={16} className="animate-spin" />
-              正在加载最近 session...
+              Loading recent sessions...
             </div>
           ) : recentSessions.length > 0 ? (
             <div className="grid gap-3 xl:grid-cols-3">
@@ -1580,7 +1580,7 @@ const RuntimeInspector: React.FC = () => {
             </div>
           ) : (
             <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-              还没有可浏览的 runtime sessions。先从 demo route 提交一个 goal，或者跑一次 rendering parse / compile / generate。
+              No browsable runtime sessions yet. Submit a goal from demo route first, or run rendering parse / compile / generate.
             </div>
           )}
         </Panel>
@@ -1606,7 +1606,7 @@ const RuntimeInspector: React.FC = () => {
           ) : loadingModelingSkills && modelingSkills.length === 0 ? (
             <div className="flex items-center gap-3 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
               <Loader2 size={16} className="animate-spin" />
-              正在加载 modeling skill catalog...
+              Loading modeling skill catalog...
             </div>
           ) : modelingSkills.length > 0 ? (
             <div className="grid gap-3 xl:grid-cols-2">
@@ -1677,7 +1677,7 @@ const RuntimeInspector: React.FC = () => {
             </div>
           ) : (
             <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-              当前还没有可展示的 modeling skill definitions。
+              No modeling skill definitions available to display.
             </div>
           )}
         </Panel>
@@ -1738,7 +1738,7 @@ const RuntimeInspector: React.FC = () => {
                   <h3 className="text-sm font-bold text-slate-900">Parse Science Into Runtime</h3>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  如果已经选中了 session，会往当前 session 里继续追加；否则会用上面的 ownerId / projectId 新建 session。
+                  If a session is selected, it will append to the current session; otherwise a new session will be created using ownerId / projectId above.
                 </p>
                 <div className="mt-4 space-y-3">
                   <textarea
@@ -1765,7 +1765,7 @@ const RuntimeInspector: React.FC = () => {
                   <h3 className="text-sm font-bold text-slate-900">Build Modeling Structure</h3>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  这条链会先解析自然语言建模意图，再用 provider registry 按顺序搜索结构数据库，最终沉淀一个 `structure artifact`。
+                  This chain parses natural language modeling intent first, uses provider registry to search structure databases sequentially, and finally persists a `structure artifact`.
                 </p>
                 <div className="mt-4 space-y-3">
                   <textarea
@@ -1800,7 +1800,7 @@ const RuntimeInspector: React.FC = () => {
                   <h3 className="text-sm font-bold text-slate-900">Active Session Actions</h3>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  当前 session: {sessionData?.session?._id ? shortId(sessionData.session._id) : 'none selected'}
+                  Current session: {sessionData?.session?._id ? shortId(sessionData.session._id) : 'none selected'}
                 </p>
                 <div className="mt-4 space-y-3">
                   <textarea
@@ -1818,9 +1818,9 @@ const RuntimeInspector: React.FC = () => {
                       disabled={!sessionData?.session?._id}
                       className="rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#224A91] disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      <option value="relax">workflow: relax</option>
-                      <option value="static">workflow: static</option>
-                      <option value="irradiation_creep">workflow: irradiation creep</option>
+                      <option value="relax">Agent: relax</option>
+                      <option value="static">Agent: static</option>
+                      <option value="irradiation_creep">Agent: irradiation creep</option>
                     </select>
                     <select
                       value={computeQualityInput}
@@ -1928,7 +1928,7 @@ const RuntimeInspector: React.FC = () => {
                     </button>
                   </div>
                   <p className="mt-2 text-xs text-slate-500">
-                    这里会直接显示部署服务器上本地计算、POTCAR、Mongo、workers 以及远端调度器（Slurm / PBS）的就绪状态。
+                    Ready status of local compute, POTCAR, Mongo, workers, and remote schedulers (Slurm / PBS) on the deployment server is displayed directly here.
                   </p>
                   {computeDiagnosticsError ? (
                     <p className="mt-3 rounded-[16px] border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -2048,7 +2048,7 @@ const RuntimeInspector: React.FC = () => {
                     <h3 className="text-sm font-bold text-slate-900">Maintenance Actions</h3>
                   </div>
                   <p className="mt-2 text-xs text-slate-500">
-                    手动触发后台维护链，验证 approval 过期处理和 completed-but-not-materialized 的 lagging 检查。
+                    Manually trigger background maintenance chain to verify approval expiration handling and completed-but-not-materialized lagging checks.
                   </p>
                   <div className="mt-4 grid gap-3">
                     <button
@@ -2081,17 +2081,17 @@ const RuntimeInspector: React.FC = () => {
                 <div className="rounded-[24px] border border-dashed border-[#C9D7F2] bg-[#F6F9FF] p-4">
                   <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#6274A2]">Usage Note</p>
                   <div className="mt-3 space-y-2 text-sm text-slate-600">
-                    <p>1. 先 `Create Session` 或直接 `Parse Science`。</p>
-                    <p>2. 有 structured report 后点 `Compile Prompt`。</p>
-                    <p>3. 点 `Generate Image` 会先触发 approval-gated runtime flow。</p>
-                    <p>4. Pending approval 可以在下方直接 `Approve & Run` 或 `Reject`。</p>
-                    <p>5. 建模现在可以直接走 provider 顺序：Materials Project / Atomly / CSD / ICSD / OPTIMADE / fallback。</p>
-                    <p>6. 选中一个 `structure artifact` 后点 `Compile Input Set`，会直接生成 `compute_input_set artifact`。</p>
-                    <p>7. `Run Server-Local Smoke` 会自动串起 modeling build、compile input set 和 server_local submit。</p>
-                    <p>8. 选中一个 `compute_input_set artifact` 后点 `Submit Compute Job`，会走 approval-aware submit。</p>
-                    <p>9. approval 通过后再跑 `Run Job Monitor`，会自动推进到 `result_bundle` materialization。</p>
-                    <p>10. 也可以保留 `Submit Mock Job` 作为最轻量的异步链验证。</p>
-                    <p>11. Maintenance actions 可手动验证后台 sweeper / monitor 的 runtime 行为。</p>
+                    <p>1. `Create Session` first or `Parse Science` directly.</p>
+                    <p>2. Click `Compile Prompt` after getting a structured report.</p>
+                    <p>3. Clicking `Generate Image` first triggers an approval-gated runtime flow.</p>
+                    <p>4. Pending approval can be directly actioned via `Approve &amp; Run` or `Reject` below.</p>
+                    <p>5. Modeling can now directly follow the provider sequence: Materials Project / Atomly / CSD / ICSD / OPTIMADE / fallback.</p>
+                    <p>6. Selecting a `structure artifact` and clicking `Compile Input Set` will directly generate a `compute_input_set artifact`.</p>
+                    <p>7. `Run Server-Local Smoke` automatically chains modeling build, compile input set, and server_local submit.</p>
+                    <p>8. Selecting a `compute_input_set artifact` and clicking `Submit Compute Job` will initiate approval-aware submit.</p>
+                    <p>9. Running `Run Job Monitor` after approval will automatically advance to `result_bundle` materialization.</p>
+                    <p>10. `Submit Mock Job` can also be retained for lightweight async chain verification.</p>
+                    <p>11. Maintenance actions allow manual verification of backend sweeper / monitor runtime behavior.</p>
                   </div>
                 </div>
               </div>
@@ -2469,12 +2469,12 @@ const RuntimeInspector: React.FC = () => {
                 >
                   {!selectedArtifactId ? (
                     <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-                      先从左侧 artifact timeline 里选择一个产物。
+                      Select an artifact from the artifact timeline on the left first.
                     </div>
                   ) : loadingArtifact ? (
                     <div className="flex items-center gap-3 rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
                       <Loader2 size={16} className="animate-spin" />
-                      正在加载 artifact inspector...
+                      Loading artifact inspector...
                     </div>
                   ) : artifactError ? (
                     <div className="rounded-[22px] border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
@@ -2560,7 +2560,7 @@ const RuntimeInspector: React.FC = () => {
                             <div>
                               <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Compute Result Summary</p>
                               <p className="mt-1 text-sm text-slate-500">
-                                从 harvested `result_bundle` 提取的关键计算指标与输出可用性。
+                                Key compute metrics and output usability harvested from `result_bundle`.
                               </p>
                             </div>
                             <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${badgeClass(resultBundleSummary.metrics?.converged ? 'ready' : (resultBundleSummary.warningCount > 0 ? 'partial' : 'queued'))}`}>
@@ -2748,7 +2748,7 @@ const RuntimeInspector: React.FC = () => {
                           <div className="flex items-center justify-between gap-3">
                             <div>
                               <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Visual Asset Preview</p>
-                              <p className="mt-1 text-sm text-slate-500">从 runtime demo artifact file route 直接回放已 materialize 的图片。</p>
+                              <p className="mt-1 text-sm text-slate-500">Replay materialized images directly from the runtime demo artifact file route.</p>
                             </div>
                             <ImageIcon size={18} className="text-slate-400" />
                           </div>
@@ -2813,7 +2813,7 @@ const RuntimeInspector: React.FC = () => {
                             </div>
                           ) : (
                             <div className="mt-3 rounded-[18px] bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                              这个 artifact 目前没有 producer task run 信息。
+                              This artifact currently has no producer task run information.
                             </div>
                           )}
                         </div>

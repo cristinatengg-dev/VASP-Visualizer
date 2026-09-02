@@ -13,6 +13,7 @@ const {
   recordAgentUsage,
   requireAgentAccess,
   requireAgentIdentity,
+  resolveAgentOwnerId,
 } = require('../src/auth/agent-access');
 
 const PHONE = '+8613800012345';
@@ -130,4 +131,25 @@ test('agent access status reports public access for anonymous users', async () =
   assert.equal(payload.success, true);
   assert.equal(payload.allowed, true);
   assert.equal(payload.public_access, true);
+});
+
+test('storage owners cannot impersonate a phone without a verified token', () => {
+  assert.equal(resolveAgentOwnerId({
+    agentAuthenticated: true,
+    agentUser: { phone: PHONE },
+    body: { ownerId: '+8613900099999' },
+  }), PHONE);
+
+  assert.equal(resolveAgentOwnerId({
+    agentAuthenticated: false,
+    body: { ownerId: 'local-9fe51c63-bf25-4c3a-a6f8-c21bededbd45' },
+  }), 'local-9fe51c63-bf25-4c3a-a6f8-c21bededbd45');
+
+  assert.throws(
+    () => resolveAgentOwnerId({
+      agentAuthenticated: false,
+      body: { ownerId: PHONE },
+    }),
+    /valid login token or local owner id/,
+  );
 });

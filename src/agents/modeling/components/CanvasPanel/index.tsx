@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Trash2 } from 'lucide-react';
 import { ModelingIntent } from '../../types/modeling';
 import { Scene3D } from '../../../../components/Scene3D';
+import { VisualizationErrorBoundary } from '../../../../components/VisualizationErrorBoundary';
 import { useStore } from '../../../../store/useStore';
 import { saveAs } from 'file-saver';
 import { exportToPOSCAR } from '../../../../utils/poscarExporter';
@@ -89,14 +90,16 @@ const CanvasPanel: React.FC<CanvasPanelProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
               </svg>
             </div>
-            <h3 className="text-xl font-medium text-white/80">等待建模指令</h3>
+            <h3 className="text-xl font-medium text-white/80">Awaiting Modeling Instructions</h3>
             <p className="text-sm text-white/40 leading-relaxed">
-              在左侧输入您想要构建的分子、晶体或表面体系。AI 将自动为您生成初步的 3D 模型结构。
+              Enter the molecule, crystal, or surface system you wish to build on the left. AI will automatically generate an initial 3D model structure for you.
             </p>
           </div>
         ) : (
           <div className="w-full h-full">
-             <Scene3D />
+             <VisualizationErrorBoundary>
+               <Scene3D />
+             </VisualizationErrorBoundary>
           </div>
         )}
       </div>
@@ -131,10 +134,10 @@ const CanvasPanel: React.FC<CanvasPanelProps> = ({
               className="px-4 py-3 bg-green-600 text-white rounded-[32px] hover:bg-green-700 transition-colors shadow-sm font-medium text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
               onClick={onConfirmWorkflow}
               disabled={!molecularData}
-              title="确认当前结构并返回 Agent 工作流"
+              title="Confirm Current Structure and Return to Agent Workspace Agent"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              确认模型并回到 Agent
+              Confirm Model and Return to Agent Workspace
             </button>
           ) : (
             <button
@@ -157,7 +160,7 @@ const CanvasPanel: React.FC<CanvasPanelProps> = ({
             <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            导出 POSCAR
+            Export POSCAR
           </button>
         </div>
       </div>
@@ -172,7 +175,7 @@ const CanvasPanel: React.FC<CanvasPanelProps> = ({
 
       {workflowReturnActive && (
         <div className="absolute bottom-4 left-4 max-w-sm rounded-[16px] border border-white/10 bg-white/95 p-3 text-xs leading-5 text-[#0A1128] shadow-[0_4px_20px_rgba(0,0,0,0.08)]">
-          当前处于 Agent 工作流修改模式。完成结构调整后点击“确认模型并回到 Agent”，后续输入文件会基于这版结构重新生成。
+          Currently in Agent Workspace Agent modification mode. After adjusting the structure, click "Confirm Model and Return to Agent Workspace", and subsequent input files will be regenerated based on this structure version.
         </div>
       )}
     </div>

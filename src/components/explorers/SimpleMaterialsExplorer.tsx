@@ -177,7 +177,10 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
       params.set('formula', searchFormula);
       params.set('library', config.id);
       const res = await fetch(`${API_BASE_URL}/materials/search?${params.toString()}`);
-      const data = await res.json();
+      const raw = await res.text();
+      if (!raw.trim()) throw new Error('The materials search service is unavailable. Please retry in a moment.');
+      const data = JSON.parse(raw);
+      if (!res.ok) throw new Error(data.error || `Materials search failed (${res.status})`);
       if (data.success) {
         setResults(data.results);
         setLibraryProfile(data.library || null);
@@ -215,8 +218,8 @@ const SimpleMaterialsExplorer: React.FC<{ config: SimpleExplorerConfig }> = ({ c
           <button
             onClick={() => navigate('/materials')}
             className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-white"
-            title="返回资料库"
-            aria-label="返回资料库"
+            title="Back to Library"
+            aria-label="Back to Library"
           >
             <ArrowLeft size={16} />
           </button>

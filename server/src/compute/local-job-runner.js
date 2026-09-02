@@ -16,7 +16,7 @@ async function main() {
   }
 
   const spec = JSON.parse(await fs.promises.readFile(specPath, 'utf8'));
-  const command = String(spec?.profile?.local?.command || '').trim();
+  const command = String(spec?.profile?.local?.command || spec?.command || '').trim();
   const shell = String(spec?.profile?.local?.shell || '/bin/zsh').trim() || '/bin/zsh';
   const workDir = String(spec?.inputDir || spec?.workDir || '').trim();
 
@@ -42,9 +42,15 @@ async function main() {
     startedAt: new Date().toISOString(),
   });
 
-  const child = spawn(shell, ['-lc', command], {
+  const workflowScriptPath = path.join(workDir, 'run_vasp_workflow.sh');
+  const usesVaspWorkflow = spec?.engine === 'vasp' && fs.existsSync(workflowScriptPath);
+  const effectiveCommand = usesVaspWorkflow ? 'bash run_vasp_workflow.sh' : command;
+  const child = spawn(shell, ['-lc', effectiveCommand], {
     cwd: workDir,
-    env: { ...process.env },
+    env: {
+      ...process.env,
+      ...(usesVaspWorkflow ? { VASP_COMMAND: command } : {}),
+    },
     stdio: ['ignore', stdoutFd, stderrFd],
   });
 
@@ -53,7 +59,8 @@ async function main() {
     status: 'running',
     runnerPid: process.pid,
     childPid: child.pid,
-    command,
+    command: effectiveCommand,
+    vaspCommand: usesVaspWorkflow ? command : null,
     shell,
     workDir,
     stdoutPath,
@@ -68,7 +75,8 @@ async function main() {
         status: code === 0 ? 'completed' : 'failed',
         runnerPid: process.pid,
         childPid: child.pid,
-        command,
+        command: effectiveCommand,
+        vaspCommand: usesVaspWorkflow ? command : null,
         shell,
         workDir,
         stdoutPath,
@@ -89,7 +97,8 @@ async function main() {
         status: 'failed',
         runnerPid: process.pid,
         childPid: child.pid || null,
-        command,
+        command: effectiveCommand,
+        vaspCommand: usesVaspWorkflow ? command : null,
         shell,
         workDir,
         stdoutPath,

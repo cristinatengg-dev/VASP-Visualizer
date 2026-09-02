@@ -2,6 +2,7 @@ import React, { useMemo, Suspense, useState, useRef, useEffect } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { ArcballControls, Environment, Center, OrthographicCamera, PerspectiveCamera, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
+import { saveAs } from 'file-saver';
 import { InstancedAtoms } from './canvas/InstancedAtoms';
 import { InstancedBonds } from './canvas/InstancedBonds';
 import { UnitCell } from './canvas/UnitCell';
@@ -268,7 +269,6 @@ const ExportHandler = () => {
              
              setBatchProgress('Zipping...');
              const content = await zip.generateAsync({ type: "blob" });
-             const { saveAs } = await import('file-saver');
              saveAs(content, `SCI_Batch_Square_${Date.now()}.zip`);
              
              setIsBatchExporting(false);
@@ -362,7 +362,6 @@ const ExportHandler = () => {
                        const { buffer } = muxer.target;
                        const blob = new Blob([buffer], { type: 'video/mp4' });
                        
-                       const { saveAs } = await import('file-saver');
                        saveAs(blob, `VASP_Trajectory_${Date.now()}.mp4`);
                    } else {
                        // Cloud Export Logic
@@ -400,7 +399,6 @@ const ExportHandler = () => {
 
                        if (response.ok) {
                            const videoBlob = await response.blob();
-                           const { saveAs } = await import('file-saver');
                            saveAs(videoBlob, `VASP_Trajectory_Cloud_${Date.now()}.mp4`);
                        } else {
                            const errorData = await response.json();
@@ -807,7 +805,13 @@ const InteractiveScene = () => {
               }
               resetTempAtomPositions();
               const canvasEl = gl.domElement;
-              if (canvasEl && canvasEl.releasePointerCapture) { try { canvasEl.releasePointerCapture(e.pointerId); } catch (err) {} }
+              if (canvasEl && canvasEl.releasePointerCapture) {
+                  try {
+                      canvasEl.releasePointerCapture(e.pointerId);
+                  } catch {
+                      // The browser may already have released pointer capture.
+                  }
+              }
               if (dragState.startMouse) {
                   const dist = dragState.startMouse.distanceTo(new THREE.Vector2(e.clientX, e.clientY));
                   if (dist < 3) {

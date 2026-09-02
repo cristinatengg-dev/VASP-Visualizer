@@ -28,7 +28,7 @@
                       │ HTTPS :443 / HTTP :80
 ┌─────────────────────▼───────────────────────────┐
 │         Docker: vasp-visualizer-frontend-1      │
-│              Nginx (nginx:alpine)               │
+│              Nginx (nginx:1.31.4-alpine3.24)    │
 │  • 静态文件: /usr/share/nginx/html (dist/)      │
 │  • /api/* → 反向代理 → backend:3000             │
 │  • 端口: 80, 443 (SSL证书: ssl/)                │
@@ -43,7 +43,7 @@
                       │
 ┌─────────────────────▼───────────────────────────┐
 │         Docker: vasp-visualizer-mongo-1         │
-│              MongoDB (mongo:latest)             │
+│              MongoDB (mongo:8.2.11)             │
 │  • 端口: 27017                                  │
 │  • 数据持久化: docker volume mongo-data         │
 └─────────────────────────────────────────────────┘
@@ -64,6 +64,7 @@
 ```
 VITE_API_URL=http://localhost:3000
 TOKEN_SECRET=<随机长密钥>
+ADMIN_SECRET=<独立随机长密钥>
 TENCENTCLOUD_SECRET_ID=<腾讯云 SecretId>
 TENCENTCLOUD_SECRET_KEY=<腾讯云 SecretKey>
 TENCENT_SMS_SDK_APP_ID=<短信应用 SDK AppId>
@@ -77,6 +78,7 @@ ADMIN_PHONES=+8613800000000
 ```
 VITE_API_URL=/api
 TOKEN_SECRET=<随机长密钥>
+ADMIN_SECRET=<独立随机长密钥>
 TENCENTCLOUD_SECRET_ID=<腾讯云 SecretId>
 TENCENTCLOUD_SECRET_KEY=<腾讯云 SecretKey>
 TENCENT_SMS_SDK_APP_ID=<短信应用 SDK AppId>

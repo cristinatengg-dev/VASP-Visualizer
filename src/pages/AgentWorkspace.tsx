@@ -473,106 +473,106 @@ interface AgentTaskRecord {
 type AgentEvent = StageEvent | { type: 'error'; content: string } | { type: 'complete'; data: CompleteData };
 
 const navItems = [
-  { id: 'home', label: '首页', icon: Home },
-  { id: 'agent', label: '科研流程', icon: Bot },
-  { id: 'experts', label: '专家库', icon: BriefcaseBusiness },
-  { id: 'skills', label: '技能', icon: WandSparkles },
-  { id: 'explore', label: '数据探索', icon: Search },
-  { id: 'connectors', label: '连接器', icon: Link2 },
-  { id: 'library', label: '资料库', icon: Library },
-  { id: 'automation', label: '自动化', icon: Activity },
+  { id: 'home', label: 'Home', icon: Home },
+  { id: 'agent', label: 'Research Agent', icon: Bot },
+  { id: 'experts', label: 'Expert Library', icon: BriefcaseBusiness },
+  { id: 'skills', label: 'Skills', icon: WandSparkles },
+  { id: 'explore', label: 'Data Exploration', icon: Search },
+  { id: 'connectors', label: 'Connectors', icon: Link2 },
+  { id: 'library', label: 'Library', icon: Library },
+  { id: 'automation', label: 'Automation', icon: Activity },
 ];
 
 const agents: WorkspaceAgent[] = [
   {
     id: 'orchestrator',
-    name: '总控流程',
-    subtitle: '单轮连续执行',
+    name: 'Master Agent',
+    subtitle: 'Single-run continuous execution',
     status: 'active',
     accent: 'bg-[#0A1128] text-white',
     icon: BrainCircuit,
     tools: ['plan', 'retrieve', 'model', 'compute', 'ppt'],
-    output: '连续编排检索、建模、计算、结果与汇报输出。',
+    output: 'Continuously orchestrates search, modeling, compute, results, and report output.',
   },
   {
     id: 'retrieval',
-    name: '文献证据',
-    subtitle: '真实来源',
+    name: 'Literature Evidence',
+    subtitle: 'Ground Truth Sources',
     status: 'ready',
     accent: 'bg-gray-200 text-gray-400',
     icon: FileText,
     tools: ['CrossRef', 'OpenAlex', 'arXiv', 'PubMed'],
-    output: '从论文和数据库证据生成可建模候选。',
+    output: 'Generate modelable candidates from literature and database evidence.',
   },
   {
     id: 'database',
-    name: '结构数据库',
-    subtitle: '八个结构源',
+    name: 'Structure Database',
+    subtitle: 'Eight Structure Sources',
     status: 'active',
     accent: 'bg-[#0A1128] text-white',
     icon: Database,
     tools: ['MP', 'OQMD', 'AFLOW', 'JARVIS', 'Alexandria', 'NOMAD', 'MC3D', 'OMDB'],
-    output: '统一呈现实时结构源和大规模训练/评测数据集。',
+    output: 'Unified view of real-time structure sources and large-scale training/benchmark datasets.',
   },
   {
     id: 'synthesis',
-    name: '合成路线',
-    subtitle: '路线与前驱体',
+    name: 'Synthetic Route',
+    subtitle: 'Routes and Precursors',
     status: 'ready',
     accent: 'bg-gray-200 text-gray-400',
     icon: FlaskConical,
     tools: ['ChemDataExtractor2', 'Ceder data', 'rxn_network'],
-    output: '从文献和合成数据先验评估路线、条件、风险和替代方案。',
+    output: 'Evaluate routes, conditions, risks, and alternatives prior from literature and synthetic data.',
   },
   {
     id: 'feasibility',
-    name: '可行性评分',
-    subtitle: '七项证据评分',
+    name: 'Feasibility Score',
+    subtitle: 'Seven Evidence Scores',
     status: 'ready',
     accent: 'bg-gray-200 text-gray-400',
     icon: Gauge,
     tools: ['evidence', 'stability', 'precursor', 'risk'],
-    output: '用文献证据、结构命中、相稳定性和实验复杂度给候选材料打分。',
+    output: 'Score candidate materials using literature evidence, structure hits, phase stability, and experimental complexity.',
   },
   {
     id: 'experiment',
-    name: '实验方案',
-    subtitle: 'DoE 与下一轮',
+    name: 'Experimental Protocol',
+    subtitle: 'DoE & Next Round',
     status: 'ready',
     accent: 'bg-gray-200 text-gray-400',
     icon: Activity,
     tools: ['BayBE', 'BoFire', 'constraints'],
-    output: '生成变量范围、约束、第一批实验矩阵和下一轮优化策略。',
+    output: 'Generate variable ranges, constraints, initial experiment matrix, and next-round optimization strategies.',
   },
   {
     id: 'modeling',
-    name: '确定性建模',
-    subtitle: '结构可视化',
+    name: 'Deterministic Modeling',
+    subtitle: 'Structure Visualization',
     status: 'ready',
     accent: 'bg-gray-200 text-gray-400',
     icon: AtomIcon,
     tools: ['bulk', 'slab', 'molecule', 'adsorbate'],
-    output: '把候选体系落成可计算原子结构。',
+    output: 'Convert candidate systems into computable atomic structures.',
   },
   {
     id: 'compute',
-    name: '计算输入',
-    subtitle: '文件可编辑',
+    name: 'Compute Input',
+    subtitle: 'Editable Files',
     status: 'handoff',
     accent: 'bg-gray-200 text-gray-500',
     icon: Cpu,
     tools: ['VASP', 'CP2K', 'QE', 'Slurm/PBS'],
-    output: '生成输入文件并提交到选定计算位置。',
+    output: 'Generate input files and submit to the selected compute location.',
   },
   {
     id: 'export',
-    name: '结果汇报',
-    subtitle: '可下载 PPTX',
+    name: 'Results Reporting',
+    subtitle: 'Downloadable PPTX',
     status: 'ready',
     accent: 'bg-gray-200 text-gray-400',
     icon: Archive,
     tools: ['pptx', 'QA', 'download'],
-    output: '生成可下载中文汇报 PPT。',
+    output: 'Generate downloadable Chinese presentation PPT.',
   },
 ];
 
@@ -609,7 +609,7 @@ const databaseAgents: DatabaseAgent[] = [
     name: 'Matbench Discovery',
     shortName: 'MBD',
     status: 'ready',
-    scope: 'Benchmark and discovery registry for stability prediction workflows.',
+    scope: 'Benchmark and discovery registry for stability prediction Agent.',
     agentRole: 'Benchmark registry',
     sources: ['benchmark', 'leaderboard', 'discovery'],
   },
@@ -661,11 +661,11 @@ const databaseAgents: DatabaseAgent[] = [
 ];
 
 const engineOptions: Array<{ id: EngineType; label: string; summary: string }> = [
-  { id: 'vasp', label: 'VASP', summary: '周期性 DFT；默认推荐用于表面/吸附体系' },
-  { id: 'quantum_espresso', label: 'Quantum ESPRESSO', summary: '开源平面波 DFT' },
-  { id: 'cp2k', label: 'CP2K', summary: '混合 Gaussian/平面波；适合大体系' },
-  { id: 'lammps', label: 'LAMMPS', summary: '经典分子动力学' },
-  { id: 'orca', label: 'ORCA', summary: '分子量化计算' },
+  { id: 'vasp', label: 'VASP', summary: 'Periodic DFT; recommended by default for surface/adsorption systems' },
+  { id: 'quantum_espresso', label: 'Quantum ESPRESSO', summary: 'Open-source plane-wave DFT' },
+  { id: 'cp2k', label: 'CP2K', summary: 'Hybrid Gaussian/plane-wave; suitable for large systems' },
+  { id: 'lammps', label: 'LAMMPS', summary: 'Classical molecular dynamics' },
+  { id: 'orca', label: 'ORCA', summary: 'Molecular quantum compute' },
 ];
 
 const defaultComputeIntent: ComputeIntent = {
@@ -685,33 +685,33 @@ const TASK_STORAGE_KEY = 'sci-agent-tasks-v1';
 const ACTIVE_TASK_STORAGE_KEY = 'sci-agent-active-task-v1';
 
 const recentTasks = [
-  '检索 CO2 加氢催化剂文章',
-  '构建 Cu(111)+CO2+H2 吸附模型',
-  '生成 VASP relaxation 输入并提交 local demo',
+  'Search CO2 hydrogenation catalyst articles',
+  'Build Cu(111)+CO2+H2 adsorption model',
+  'Generate VASP relaxation input and submit to local demo',
 ];
 
 const statusMeta: Record<AgentStatus, { label: string; className: string }> = {
-  active: { label: '运行中', className: 'bg-white text-[#0A1128] border-gray-200 shadow-sm ring-1 ring-black/5' },
-  ready: { label: '就绪', className: 'bg-gray-50 text-gray-500 border-gray-200' },
-  handoff: { label: '待确认', className: 'bg-[#F5F5F0] text-gray-700 border-gray-200' },
-  gated: { label: '需授权', className: 'bg-red-50 text-red-600 border-red-200' },
+  active: { label: 'Running', className: 'bg-white text-[#0A1128] border-gray-200 shadow-sm ring-1 ring-black/5' },
+  ready: { label: 'Ready', className: 'bg-gray-50 text-gray-500 border-gray-200' },
+  handoff: { label: 'Pending Confirmation', className: 'bg-[#F5F5F0] text-gray-700 border-gray-200' },
+  gated: { label: 'Authorization Required', className: 'bg-red-50 text-red-600 border-red-200' },
 };
 
 const phaseLabel: Record<WorkflowPhase, string> = {
-  idle: '待开始',
-  retrieving: '检索文献与数据库',
-  await_model: '确认模型',
-  modeling: '生成结构',
-  await_software: '选择计算软件',
-  compiling: '生成输入文件',
-  await_input: '检查输入文件',
-  await_submit: '选择提交位置',
-  submitting: '提交作业',
-  monitoring: '等待计算',
-  await_ppt: '确认汇报输出',
-  ppt: '生成 PPT',
-  done: '已完成',
-  error: '需要处理',
+  idle: 'Pending Start',
+  retrieving: 'Search Literature & Databases',
+  await_model: 'Confirm Model',
+  modeling: 'Generate Structure',
+  await_software: 'Select Compute Software',
+  compiling: 'Generate Input Files',
+  await_input: 'Inspect Input Files',
+  await_submit: 'Select Submission Target',
+  submitting: 'Submit Job',
+  monitoring: 'Awaiting Compute',
+  await_ppt: 'Confirm Report Output',
+  ppt: 'Generate PPT',
+  done: 'Completed',
+  error: 'Action Required',
 };
 
 const workflowStageIndex: Record<WorkflowPhase, number> = {
@@ -732,11 +732,11 @@ const workflowStageIndex: Record<WorkflowPhase, number> = {
 };
 
 const workflowStageItems = [
-  { label: '证据检索', icon: Search },
-  { label: '模型确认', icon: AtomIcon },
-  { label: '输入编译', icon: FileText },
-  { label: '受控计算', icon: Cpu },
-  { label: '结果汇报', icon: Archive },
+  { label: 'Evidence Search', icon: Search },
+  { label: 'Model Confirmation', icon: AtomIcon },
+  { label: 'Input Compilation', icon: FileText },
+  { label: 'Controlled Compute', icon: Cpu },
+  { label: 'Results Reporting', icon: Archive },
 ];
 
 const isWorkflowPrompt = (content: string, hasFiles = false) => {
@@ -759,15 +759,24 @@ const shouldAutoPromoteChatToRetrieval = (prompt: string, reply: string) => {
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-const createWelcomeMessages = (content = '可以像普通助手一样直接聊天；当你明确要求检索、建模、计算、提交作业或生成 PPT 时，我会切换到连续科研流程。'): ChatMessage[] => [
+const createWelcomeMessages = (content = 'Chat directly like a standard assistant. When you explicitly request search, modeling, compute, job submission, or PPT generation, I will switch to the continuous research Agent.'): ChatMessage[] => [
   {
     id: 'welcome',
     role: 'assistant',
-    title: '流程已就绪',
+    title: 'Agent Ready',
     content,
     createdAt: Date.now(),
   },
 ];
+
+const migrateLegacyInterfaceMessages = (messages: ChatMessage[] = []): ChatMessage[] => messages.map((message) => {
+  if (message.id !== 'welcome') return message;
+  return {
+    ...message,
+    title: 'Agent Ready',
+    content: 'Chat directly like a standard assistant. When you explicitly request search, modeling, compute, job submission, or PPT generation, I will switch to the continuous research Agent.',
+  };
+});
 
 const createEmptyWorkflowSnapshot = (): AgentWorkflowSnapshot => ({
   version: 1,
@@ -804,7 +813,7 @@ const deriveTaskTitle = (snapshot: AgentWorkflowSnapshot) => {
     || snapshot.research?.user_goal?.interpreted_goal
     || snapshot.research?.summary
     || snapshot.modelStructure?.filename
-    || '新科研任务';
+    || 'New Research Task';
   return truncateTaskTitle(title);
 };
 
@@ -828,6 +837,7 @@ const normalizeTaskSnapshot = (snapshot: Partial<AgentWorkflowSnapshot> | null |
     ...(snapshot || {}),
     version: 1,
     savedAt: Number(snapshot?.savedAt || Date.now()),
+    messages: migrateLegacyInterfaceMessages(snapshot?.messages || base.messages),
     modelStructure: cloneWorkflowStructure(snapshot?.modelStructure || null),
     toolEvents: normalizeSnapshotToolEvents(snapshot?.toolEvents || [], phase),
     chatSessionId: snapshot?.chatSessionId || null,
@@ -880,7 +890,7 @@ const normalizeSnapshotToolEvents = (events: ToolEvent[] = [], phase: WorkflowPh
       return {
         ...event,
         status: 'error',
-        details: [...event.details, '流程已进入错误状态，此步骤已停止。'],
+        details: [...event.details, 'Agent has entered an error state; this step has stopped.'],
       };
     }
     return event;
@@ -994,12 +1004,16 @@ const buildMolecularStructure = (result: any, taskType: string): MolecularStruct
 
 const structurePayloadFromModel = (structure: MolecularStructure, intent: ComputeIntent) => ({
   data: {
-    atoms: structure.atoms.map((atom) => ({ element: atom.element, position: atom.position })),
+    atoms: structure.atoms.map((atom) => ({ id: atom.id, element: atom.element, position: atom.position })),
     latticeVectors: structure.latticeVectors,
   },
   meta: {
     formula: structure.filename,
-    system: structure.latticeVectors ? 'periodic' : 'molecule',
+    system: (() => {
+      if (!structure.latticeVectors || structure.latticeVectors.length !== 3) return 'molecule';
+      const lengths = structure.latticeVectors.map((vector) => Math.hypot(...vector));
+      return lengths[2] > Math.max(lengths[0], lengths[1]) * 1.6 && lengths[2] > 12 ? 'slab' : 'bulk';
+    })(),
     taskType: intent.workflow,
   },
 });
@@ -1094,7 +1108,7 @@ const parseXyzStructure = async (file: File): Promise<MolecularStructure> => {
     };
   }).filter((atom) => atom.element && Number.isFinite(atom.position.x) && Number.isFinite(atom.position.y) && Number.isFinite(atom.position.z));
 
-  if (!atoms.length) throw new Error('XYZ 文件没有可解析的原子坐标');
+  if (!atoms.length) throw new Error('XYZ file contains no parsable atomic coordinates');
   return {
     id: `xyz-${Date.now()}`,
     filename: file.name,
@@ -1126,7 +1140,7 @@ const StructurePreview: React.FC<{ structure: MolecularStructure; onOpenModeling
     <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-bold text-[#0A1128]">结构预览</p>
+          <p className="text-sm font-bold text-[#0A1128]">Structure Preview</p>
           <p className="mt-1 text-xs text-gray-500">{structure.filename} · {atoms.length} atoms · {bonds.length} bonds</p>
         </div>
         <button
@@ -1134,7 +1148,7 @@ const StructurePreview: React.FC<{ structure: MolecularStructure; onOpenModeling
           onClick={onOpenModeling}
           className="rounded-[32px] border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
         >
-          打开完整建模页
+          Open Full Modeling Page
         </button>
       </div>
       <div className="overflow-hidden rounded-[16px] border border-gray-100 bg-[#0A1128]">
@@ -1183,7 +1197,7 @@ const StructurePreview: React.FC<{ structure: MolecularStructure; onOpenModeling
         </svg>
       </div>
       <p className="mt-3 text-xs leading-5 text-gray-500">
-        这是确定性构建器返回结构的投影预览，计算输入和完整三维画布使用同一份原子坐标。
+        This is a projection preview of the structure returned by the deterministic builder. Compute inputs and the full 3D canvas use the same set of atomic coordinates.
       </p>
     </div>
   );
@@ -1200,15 +1214,15 @@ const scoreTone = (score: number) => {
 };
 
 const levelLabel: Record<ResearchStackReport['feasibility']['level'], string> = {
-  high: '高',
-  medium: '中',
-  low: '低',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
 };
 
 const adapterStatusLabel: Record<string, string> = {
-  active: '已接入',
-  fallback: '降级',
-  missing: '缺失',
+  active: 'Connected',
+  fallback: 'Degraded',
+  missing: 'Missing',
 };
 
 const adapterStatusTone = (status: string) => {
@@ -1228,15 +1242,15 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
     <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-bold text-[#0A1128]">材料学家分析</p>
+          <p className="text-sm font-bold text-[#0A1128]">Materials Scientist Analysis</p>
           <p className="mt-1 text-xs leading-5 text-gray-500">
-            文献证据、合成路线、可行性评分和实验矩阵已经串入同一个工作流。
+            Literature evidence, synthetic routes, feasibility scores, and experiment matrices have been chained into the same Agent.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="rounded-[16px] border border-gray-200 bg-[#F5F5F0] px-3 py-2 text-right">
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">Ceder Index</p>
-            <p className="text-sm font-bold text-[#0A1128]">{hasRecipeHit ? `命中 ${recipeMatches.length}` : '无命中'} · {recipeIndexTotal || '-'}</p>
+            <p className="text-sm font-bold text-[#0A1128]">{hasRecipeHit ? `Hit ${recipeMatches.length}` : 'No Hits'} · {recipeIndexTotal || '-'}</p>
           </div>
           <div className="rounded-[16px] border border-gray-200 bg-[#F5F5F0] px-3 py-2 text-right">
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">Feasibility</p>
@@ -1249,7 +1263,7 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
         <div className="rounded-[16px] border border-gray-200 bg-gray-50 p-3">
           <div className="mb-2 flex items-center gap-2">
             <FlaskConical size={15} className="text-gray-500" />
-            <p className="text-xs font-bold text-[#0A1128]">合成路线</p>
+            <p className="text-xs font-bold text-[#0A1128]">Synthetic Route</p>
           </div>
           <p className="text-xs leading-5 text-gray-600">{report.synthesis.summary}</p>
           {firstRoute && (
@@ -1265,7 +1279,7 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
                     ? 'border-[#0A1128] bg-[#0A1128] text-white'
                     : 'border-gray-200 bg-[#F5F5F0] text-gray-500',
                 )}>
-                  {firstRoute.dataset_hit ? 'Ceder 命中' : '规则草案'}
+                  {firstRoute.dataset_hit ? 'Ceder Hit' : 'Draft Rules'}
                 </span>
               </div>
               {firstRoute.source && (
@@ -1289,27 +1303,27 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
                       target="_blank"
                       rel="noreferrer"
                     >
-                      数据集 <ExternalLink size={12} />
+                      Dataset <ExternalLink size={12} />
                     </a>
                   )}
                 </div>
               )}
               <div className="mt-2 grid gap-2 text-[11px] text-gray-600 md:grid-cols-3">
                 <div>
-                  <span className="font-semibold text-gray-800">前驱体</span>
+                  <span className="font-semibold text-gray-800">Precursor</span>
                   <p className="mt-1 leading-5">{firstRoute.precursors.join('、')}</p>
                 </div>
                 <div>
-                  <span className="font-semibold text-gray-800">条件</span>
+                  <span className="font-semibold text-gray-800">Conditions</span>
                   <p className="mt-1 leading-5">{firstRoute.conditions.temperature}；{firstRoute.conditions.time}；{firstRoute.conditions.atmosphere}</p>
                 </div>
                 <div>
-                  <span className="font-semibold text-gray-800">风险</span>
+                  <span className="font-semibold text-gray-800">Risk</span>
                   <p className="mt-1 leading-5">{firstRoute.risk}</p>
                 </div>
               </div>
               {firstRoute.alternatives.length > 0 && (
-                <p className="mt-2 text-[11px] leading-5 text-gray-500">替代路线：{firstRoute.alternatives.join('、')}</p>
+                <p className="mt-2 text-[11px] leading-5 text-gray-500">Alternative routes:{firstRoute.alternatives.join('、')}</p>
               )}
               {firstRoute.reaction_string && (
                 <p className="mt-2 rounded-[10px] bg-[#F5F5F0] px-2 py-1.5 font-mono text-[10px] leading-4 text-gray-600">
@@ -1341,7 +1355,7 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
         <div className="rounded-[16px] border border-gray-200 bg-gray-50 p-3">
           <div className="mb-2 flex items-center gap-2">
             <Gauge size={15} className="text-gray-500" />
-            <p className="text-xs font-bold text-[#0A1128]">可行性评分</p>
+            <p className="text-xs font-bold text-[#0A1128]">Feasibility Score</p>
           </div>
           <p className="text-xs leading-5 text-gray-600">{report.feasibility.decision}</p>
           <div className="mt-3 space-y-2">
@@ -1363,7 +1377,7 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
       <div className="mt-3 rounded-[16px] border border-gray-200 bg-gray-50 p-3">
         <div className="mb-2 flex items-center gap-2">
           <Activity size={15} className="text-gray-500" />
-          <p className="text-xs font-bold text-[#0A1128]">第一轮实验矩阵</p>
+          <p className="text-xs font-bold text-[#0A1128]">Initial Experiment Matrix</p>
           <span className="rounded-[32px] border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500">{report.experiment.engine}</span>
         </div>
         <p className="mb-3 text-xs leading-5 text-gray-600">{report.experiment.objective}</p>
@@ -1387,20 +1401,20 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
             </tbody>
           </table>
         </div>
-        <p className="mt-3 text-[11px] leading-5 text-gray-500">下一轮策略：{report.experiment.next_round_policy}</p>
+        <p className="mt-3 text-[11px] leading-5 text-gray-500">Next strategy:{report.experiment.next_round_policy}</p>
       </div>
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div className="rounded-[16px] border border-gray-200 bg-gray-50 p-3">
           <div className="mb-2 flex items-center gap-2">
             <Cpu size={15} className="text-gray-500" />
-            <p className="text-xs font-bold text-[#0A1128]">计算桥接</p>
+            <p className="text-xs font-bold text-[#0A1128]">Compute bridge</p>
           </div>
           <p className="text-xs leading-5 text-gray-600">{report.compute.structure_status}</p>
-          <p className="mt-2 text-[11px] leading-5 text-gray-500">建议 workflow：{report.compute.recommended_workflows.join('、')}</p>
+          <p className="mt-2 text-[11px] leading-5 text-gray-500">Suggested Agent:{report.compute.recommended_workflows.join('、')}</p>
         </div>
         <div className="rounded-[16px] border border-gray-200 bg-gray-50 p-3">
-          <p className="text-xs font-bold text-[#0A1128]">开源能力接入</p>
+          <p className="text-xs font-bold text-[#0A1128]">Open-source capabilities integration</p>
           <div className="mt-2 grid gap-2">
             {report.adapters.slice(0, 8).map((adapter) => (
               <div
@@ -1436,13 +1450,13 @@ const ResearchStackPanel: React.FC<{ report: ResearchStackReport }> = ({ report 
 const normalizeFormulaToken = (value: string | null | undefined) => String(value || '').replace(/[^A-Za-z0-9]/g, '').toLowerCase();
 
 const structureQueryReasonLabel = (reason: string | null | undefined) => ({
-  alias: '别名解析',
-  user_formula: '用户指定',
-  intent_formula: '意图识别',
-  literature_formula: '文献抽取',
-  material_family_seed: '材料族检索',
-  domain_fallback: '领域回退',
-}[String(reason || '')] || '结构检索');
+  alias: 'Alias resolution',
+  user_formula: 'User-specified',
+  intent_formula: 'Intent recognition',
+  literature_formula: 'Literature extraction',
+  material_family_seed: 'Material family search',
+  domain_fallback: 'Domain fallback',
+}[String(reason || '')] || 'Structure search');
 
 const isFormulaInStructurePlan = (data: CompleteData, formula: string | null | undefined) => {
   const token = normalizeFormulaToken(formula);
@@ -1462,7 +1476,7 @@ const topStructureLines = (structures: StructureCandidate[] = [], limit = 6) => 
       ? `E_hull=${structure.energy_above_hull}`
       : (structure.formation_energy ? `ΔHf=${structure.formation_energy}` : 'energy=N/A');
     const query = structure.queried_formula
-      ? `；查询 ${structure.queried_formula}（${structureQueryReasonLabel(structure.query_reason)}）`
+      ? `; query ${structure.queried_formula}（${structureQueryReasonLabel(structure.query_reason)}）`
       : '';
     return `${index + 1}. ${structure.formula} · ${structure.material_id || 'no id'} · ${source} · ${structure.space_group || structure.crystal_system || 'structure'} · ${energy}${query}`;
   })
@@ -1523,7 +1537,7 @@ const applyEvidenceBackedRecommendation = (prompt: string, data: CompleteData): 
   ));
 
   if (!safeIdeas.length) {
-    const reason = '本轮没有找到能和检索文献对应的结构数据库条目；不会使用 LiCoO2 或其他无关材料作为推荐模型。';
+    const reason = 'No structure database entries matching the retrieved literature were found in this round; LiCoO2 or other irrelevant materials will not be used as recommended models.';
     return {
       ...data,
       summary: `${data.summary || ''}\n${reason}`.trim(),
@@ -1585,7 +1599,7 @@ const AgentWorkspace: React.FC = () => {
   const [pptUrl, setPptUrl] = useState<string | null>(null);
   const [pptQa, setPptQa] = useState<string | null>(null);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
-  const [textModelName, setTextModelName] = useState('文本模型');
+  const [textModelName, setTextModelName] = useState('Text model');
   const [harnessSession, setHarnessSession] = useState<HarnessSessionState | null>(null);
   const [structureSources, setStructureSources] = useState<StructureSourceRegistry | null>(null);
   const [sourceProbe, setSourceProbe] = useState<SourceProbeState | null>(null);
@@ -1625,7 +1639,7 @@ const AgentWorkspace: React.FC = () => {
     () => toolEvents.filter((event) => event.name !== 'agent.chat'),
     [toolEvents],
   );
-  const configuredProfiles = profiles.filter((profile) => profile.configured);
+  const configuredProfiles = profiles.filter((profile) => (profile.ready ?? profile.configured) && profile.directSubmitSupported !== false);
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) || configuredProfiles[0] || profiles[0] || null;
   const compiledFileNames = useMemo(() => Object.keys(compiledInputs?.files || {}), [compiledInputs]);
   const selectedInputContent = selectedInputFileName && compiledInputs?.files[selectedInputFileName]
@@ -1703,19 +1717,6 @@ const AgentWorkspace: React.FC = () => {
 
   const updateTool = useCallback((id: string, patch: Partial<ToolEvent>) => {
     setToolEvents((prev) => prev.map((event) => (event.id === id ? { ...event, ...patch } : event)));
-  }, []);
-
-  const updateCompiledInputFile = useCallback((fileName: string, content: string) => {
-    setCompiledInputs((prev) => {
-      if (!prev || !prev.files[fileName]) return prev;
-      return {
-        ...prev,
-        files: {
-          ...prev.files,
-          [fileName]: content,
-        },
-      };
-    });
   }, []);
 
   const applyWorkflowSnapshot = useCallback((snapshot: AgentWorkflowSnapshot) => {
@@ -1897,7 +1898,7 @@ const AgentWorkspace: React.FC = () => {
         applyWorkflowSnapshot(nextActive.snapshot);
         runtimeTaskHydratedRef.current = true;
         setRuntimeSyncState(localFallbackRecords.length ? 'offline' : 'synced');
-        setRuntimeSyncError(localFallbackRecords.length ? '部分本地任务尚未写入 Runtime，将在下次修改时重试。' : null);
+        setRuntimeSyncError(localFallbackRecords.length ? 'Some local tasks have not been written to Runtime yet; will retry upon next modification.' : null);
       } catch (error) {
         if (cancelled) return;
         runtimeTaskHydratedRef.current = true;
@@ -1987,7 +1988,7 @@ const AgentWorkspace: React.FC = () => {
         .catch((error) => {
           setRuntimeSyncState('offline');
           if (error instanceof RuntimeTaskRequestError && error.code === 'snapshot_conflict') {
-            setRuntimeSyncError('任务已在另一个窗口更新；当前本地修改未覆盖服务器版本。请刷新后重新应用修改。');
+            setRuntimeSyncError('Task updated in another window; current local modifications did not overwrite the server version. Please refresh and reapply changes.');
           } else {
             setRuntimeSyncError(error instanceof Error ? error.message : String(error));
           }
@@ -2053,11 +2054,11 @@ const AgentWorkspace: React.FC = () => {
         {
           id: newId('msg'),
           role: 'assistant',
-          title: '模型修改已确认',
+          title: 'Model modification confirmed',
           content: [
-            `已从 Modeling Agent 接收修改后的结构：${structure.filename}。`,
-            `当前结构包含 ${structure.atoms.length} 个原子、${structure.bonds.length} 条键。`,
-            '下一步继续选择计算软件；我会基于这版结构重新生成输入文件。',
+            `Received modified structure from Modeling Agent:${structure.filename}。`,
+            `Current structure contains ${structure.atoms.length} atoms,${structure.bonds.length} bonds.`,
+            'Next, proceed to select compute software; I will regenerate input files based on this structure version.',
           ].join('\n'),
           createdAt: Date.now(),
           status: 'success',
@@ -2070,7 +2071,7 @@ const AgentWorkspace: React.FC = () => {
           name: 'modeling.confirm-return',
           agent: 'Modeling',
           status: 'success',
-          summary: '从 Modeling Agent 确认返回连续科研流程',
+          summary: 'Confirmed return to continuous research Agent from Modeling Agent',
           details: [`${structure.atoms.length} atoms`, `${structure.bonds.length} bonds`, structure.filename],
         },
       ],
@@ -2212,7 +2213,7 @@ const AgentWorkspace: React.FC = () => {
 
     const confirmed = typeof window === 'undefined'
       ? true
-      : window.confirm(`确定删除“${task.title}”？此操作不可恢复。`);
+      : window.confirm(`Are you sure you want to delete "${task.title}"? This action cannot be undone.`);
     if (!confirmed) return;
 
     if (task.runtimeSessionId) {
@@ -2289,7 +2290,11 @@ const AgentWorkspace: React.FC = () => {
   }, []);
 
   const withUserPayload = useCallback((payload: Record<string, any> = {}) => {
-    const userId = user?.phone || localStorage.getItem('vasp_user_id') || runtimeIdentity.ownerId;
+    const token = localStorage.getItem('vasp_token') || '';
+    const authenticatedOwner = token
+      ? user?.phone || localStorage.getItem('vasp_user_id') || ''
+      : '';
+    const userId = authenticatedOwner || runtimeIdentity.ownerId;
     return {
       ...payload,
       ...(userId ? { userId, ownerId: userId } : {}),
@@ -2320,7 +2325,7 @@ const AgentWorkspace: React.FC = () => {
       return data as T;
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new Error(`请求超时：${path} 在 ${Math.round(timeoutMs / 1000)} 秒内没有返回`);
+        throw new Error(`Request timed out:${path} Within ${Math.round(timeoutMs / 1000)} seconds, did not return`);
       }
       throw error;
     } finally {
@@ -2412,7 +2417,7 @@ const AgentWorkspace: React.FC = () => {
           id: newId('harness'),
           phase: 'system',
           status: 'success',
-          summary: '运行记录已创建',
+          summary: 'Run record created',
         }],
       });
       return payload.sessionId;
@@ -2422,8 +2427,8 @@ const AgentWorkspace: React.FC = () => {
       console.warn('[AgentWorkspace] Runtime harness session unavailable', error);
       addMessage({
         role: 'assistant',
-        title: 'Runtime 暂不可用',
-        content: '任务没有启动，因为生产流程要求先创建可恢复的 Runtime Session。请检查 MongoDB/Runtime 服务后重试，避免产生无法审计的孤立结果。',
+        title: 'Runtime currently unavailable',
+        content: 'Task did not start because the production Agent requires creating a recoverable Runtime Session first. Please check MongoDB/Runtime services and retry to avoid creating non-auditable isolated results.',
         status: 'error',
       });
       return null;
@@ -2498,7 +2503,7 @@ const AgentWorkspace: React.FC = () => {
         id: newId('harness-error'),
         phase: checkpointPhase,
         status: 'info',
-        summary: 'Runtime harness checkpoint was skipped; workflow continued.',
+        summary: 'Runtime harness checkpoint was skipped; Agent continued.',
       });
     }
   }, [appendHarnessCheckpoint, postJson]);
@@ -2508,7 +2513,7 @@ const AgentWorkspace: React.FC = () => {
       name: 'compute.profiles',
       agent: 'Compute',
       status: 'running',
-      summary: '读取可提交的本地/集群 profile',
+      summary: 'Reading submit-ready local/cluster profiles',
       details: [],
     }) : null;
     try {
@@ -2517,10 +2522,13 @@ const AgentWorkspace: React.FC = () => {
       if (!response.ok || !payload?.success) throw new Error(payload?.error || 'Failed to load compute profiles');
       const nextProfiles: ServerComputeProfile[] = Array.isArray(payload.profiles) ? payload.profiles : [];
       setProfiles(nextProfiles);
-      const firstConfigured = nextProfiles.find((profile) => profile.configured);
+      const firstConfigured = nextProfiles.find((profile) => (profile.ready ?? profile.configured) && profile.directSubmitSupported !== false && profile.mode !== 'local_demo')
+        || nextProfiles.find((profile) => (profile.ready ?? profile.configured) && profile.directSubmitSupported !== false);
       if (firstConfigured) {
         setSelectedProfileId((prev) => (
-          prev && nextProfiles.some((profile) => profile.id === prev) ? prev : firstConfigured.id
+          prev && prev !== 'local_demo' && nextProfiles.some((profile) => profile.id === prev)
+            ? prev
+            : firstConfigured.id
         ));
       }
       if (toolId) updateTool(toolId, {
@@ -2548,7 +2556,7 @@ const AgentWorkspace: React.FC = () => {
       name: 'workspace.attachments',
       agent: 'Orchestrator',
       status: 'running',
-      summary: '解析上传文件并写入当前科研任务上下文',
+      summary: 'Parsing uploaded file and writing to current research task context',
       details: files.map((file) => `${file.name} (${Math.round(file.size / 1024)} KB)`),
     });
     const digests: AttachedFileDigest[] = [];
@@ -2606,27 +2614,27 @@ const AgentWorkspace: React.FC = () => {
         digests.push({
           name: file.name,
           kind: 'unsupported',
-          summary: '文件已附加，但当前工作台不会假装读取该格式；请改传 PDF、POSCAR/CONTCAR/CIF/VASP/XYZ 或文本文件。',
+          summary: 'File attached, but the current workspace will not pretend to read this format. Please upload PDF, POSCAR/CONTCAR/CIF/VASP/XYZ, or text files instead.',
         });
       } catch (error) {
         digests.push({
           name: file.name,
           kind: 'unsupported',
-          summary: `解析失败：${error instanceof Error ? error.message : String(error)}`,
+          summary: `Parsing failed:${error instanceof Error ? error.message : String(error)}`,
         });
       }
     }
 
     updateTool(toolId, {
-      status: digests.some((digest) => digest.summary.startsWith('解析失败')) ? 'error' : 'success',
+      status: digests.some((digest) => digest.summary.startsWith('Parsing failed')) ? 'error' : 'success',
       details: digests.map((digest) => `${digest.name}: ${digest.summary}`),
     });
 
     addMessage({
       role: 'tool',
-      title: '附件解析',
+      title: 'Attachment parsing',
       content: digests.map((digest) => `${digest.name}：${digest.summary}`).join('\n'),
-      status: digests.some((digest) => digest.summary.startsWith('解析失败')) ? 'error' : 'success',
+      status: digests.some((digest) => digest.summary.startsWith('Parsing failed')) ? 'error' : 'success',
     });
 
     return digests;
@@ -2638,7 +2646,7 @@ const AgentWorkspace: React.FC = () => {
     const formula = activeSourceFormula;
 
     if (registryEntry && !registryEntry.liveSearch) {
-      const summary = registryEntry.notes || `${registryEntry.label} 是后台登记的数据集来源，不伪装成实时结构搜索。`;
+      const summary = registryEntry.notes || `${registryEntry.label} is a backend-registered dataset source and is not disguised as a real-time structure search.`;
       setSourceProbe({
         sourceId: registryId,
         label: registryEntry.label,
@@ -2650,8 +2658,9 @@ const AgentWorkspace: React.FC = () => {
       });
       addMessage({
         role: 'assistant',
-        title: `${registryEntry.label} 数据源`,
-        content: `${summary}\n主页：${registryEntry.homepage || 'N/A'}`,
+        title: `${registryEntry.label} Data source`,
+        content: `${summary}
+Homepage:${registryEntry.homepage || 'N/A'}`,
       });
       return;
     }
@@ -2661,7 +2670,7 @@ const AgentWorkspace: React.FC = () => {
       label: registryEntry?.label || db.name,
       formula,
       status: 'running',
-      summary: `正在用 ${registryEntry?.label || db.name} 查询 ${formula}`,
+      summary: `Querying with ${registryEntry?.label || db.name} query ${formula}`,
       results: [],
       registryEntry,
     });
@@ -2669,7 +2678,7 @@ const AgentWorkspace: React.FC = () => {
       name: `structures.${registryId}`,
       agent: 'Database',
       status: 'running',
-      summary: `查询 ${registryEntry?.label || db.name} 结构源`,
+      summary: `query ${registryEntry?.label || db.name} Structure source`,
       details: [`formula=${formula}`],
     });
 
@@ -2685,8 +2694,8 @@ const AgentWorkspace: React.FC = () => {
       if (!response.ok || !payload?.success) throw new Error(payload?.error || `HTTP ${response.status}`);
       const results: StructureCandidate[] = payload.results?.[registryId] || [];
       const summary = results.length
-        ? `返回 ${results.length} 个 ${formula} 结构候选`
-        : `${registryEntry?.label || db.name} 没有返回 ${formula} 的可用结构`;
+        ? `Returned ${results.length} items ${formula} structure candidates`
+        : `${registryEntry?.label || db.name} No ${formula} available structures returned`;
       setSourceProbe({
         sourceId: registryId,
         label: registryEntry?.label || db.name,
@@ -2726,7 +2735,7 @@ const AgentWorkspace: React.FC = () => {
       name: 'research-stack.analyze',
       agent: 'Synthesis + Feasibility + Experiment',
       status: 'running',
-      summary: '评估合成路线、材料可行性和第一轮实验矩阵',
+      summary: 'Evaluating synthetic routes, material feasibility, and first-round experimental matrix',
       details: [
         `${getVerifiedPapers(data.papers || []).length} verified papers`,
         `${data.structures?.length || 0} structures`,
@@ -2762,21 +2771,21 @@ const AgentWorkspace: React.FC = () => {
       });
       addMessage({
         role: 'assistant',
-        title: '合成可行性与实验方案',
+        title: 'Synthesis feasibility and experimental design',
         content: [
-          `合成判断：${report.synthesis.summary}`,
-          `可行性评分：${report.feasibility.score}/100（${report.feasibility.level}）`,
-          `决策：${report.feasibility.decision}`,
+          `Synthesis evaluation:${report.synthesis.summary}`,
+          `Feasibility score:${report.feasibility.score}/100（${report.feasibility.level}）`,
+          `Decision:${report.feasibility.decision}`,
           report.recipe_index
-            ? `Ceder recipe index：${recipeHitCount ? `命中 ${recipeHitCount} 条` : '无命中'}（本地 ${recipeIndexTotal || 0} 条）`
-            : 'Ceder recipe index：未启用',
+            ? `Ceder recipe index：${recipeHitCount ? `Hit ${recipeHitCount} items` : 'No Hits'}(Local ${recipeIndexTotal || 0} items)`
+            : 'Ceder recipe index: Disabled',
           '',
-          '首选路线：',
+          'Preferred route:',
           ...(report.synthesis.routes.slice(0, 2).map((route, index) => `${index + 1}. ${route.title} · ${route.method} · ${route.conditions.temperature}, ${route.conditions.atmosphere}${route.doi ? ` · DOI ${route.doi}` : ''}`)),
           '',
-          `实验设计：${report.experiment.engine}`,
-          `第一批实验：${report.experiment.first_batch.length} 组；优化目标：${report.experiment.objective}`,
-          report.feasibility.blockers.length ? `需要注意：${report.feasibility.blockers.slice(0, 2).join('；')}` : '当前没有低分阻塞项；仍需人工确认实验安全和材料来源。',
+          `Experimental design:${report.experiment.engine}`,
+          `First batch of experiments:${report.experiment.first_batch.length} groups; Optimization target:${report.experiment.objective}`,
+          report.feasibility.blockers.length ? `Note:${report.feasibility.blockers.slice(0, 2).join('；')}` : 'Currently no low-score blockers; manual verification of experimental safety and material sources is still required.',
         ].join('\n'),
       });
       void recordHarnessCheckpoint({
@@ -2805,8 +2814,8 @@ const AgentWorkspace: React.FC = () => {
       updateTool(toolId, { status: 'error', details: [message] });
       addMessage({
         role: 'assistant',
-        title: '合成可行性分析未完成',
-        content: `文献和建模流程仍可继续；合成/实验设计这一步失败：${message}`,
+        title: 'Synthesis feasibility analysis incomplete',
+        content: `Literature and modeling Agent can still continue; synthesis/experimental design step failed:${message}`,
         status: 'error',
       });
       return null;
@@ -2844,11 +2853,11 @@ const AgentWorkspace: React.FC = () => {
 
     addMessage({
       role: 'assistant',
-      title: '可见思路',
+      title: 'Visible reasoning',
       content: [
-        '1. 先把目标识别为文献检索和候选模型推荐任务。',
-        '2. 同步检索论文源和材料结构源，避免只凭生成模型猜体系。',
-        '3. 用论文证据、结构可得性和可计算性给出 starter model，再等你确认。',
+        '1. First identify the objective as a literature search and candidate model recommendation task.',
+        '2. Simultaneously search paper sources and material structure sources to avoid relying solely on generative models to guess systems.',
+        '3. Provide a starter model using paper evidence, structure availability, and computability, then wait for your confirmation.',
       ].join('\n'),
     });
 
@@ -2856,7 +2865,7 @@ const AgentWorkspace: React.FC = () => {
       name: 'agent.retrieve',
       agent: 'Literature + Databases',
       status: 'running',
-      summary: '检索论文、材料数据库和建模候选',
+      summary: 'Searching papers, materials databases, and modeling candidates',
       details: ['Connecting to retrieval stream...'],
     });
 
@@ -2899,38 +2908,38 @@ const AgentWorkspace: React.FC = () => {
             const data = applyEvidenceBackedRecommendation(prompt, event.data);
             const verifiedPapers = getVerifiedPapers(data.papers || []);
             const recommendedIdea = getRecommendedIdea(data);
-            const noRecommendationReason = data.no_model_recommendation?.reason || '本轮没有找到能和检索文献对应的结构数据库条目。';
+            const noRecommendationReason = data.no_model_recommendation?.reason || 'No structure database entries matching the retrieved literature were found in this round.';
             setResearch(data);
             setSelectedIdeaId(recommendedIdea?.id || null);
             updateTool(toolId, {
               status: 'success',
               details: [
-                `${verifiedPapers.length} 篇可核验文献`,
+                `${verifiedPapers.length} verifiable literature references`,
                 `${data.structures?.length || 0} structures collected`,
                 recommendedIdea ? `recommended: ${recommendedIdea.title}` : 'recommended: none; manual modeling required',
               ],
             });
             addMessage({
               role: 'assistant',
-              title: '检索结果和模型建议',
+              title: 'Search results and model recommendations',
               content: [
-                `目标理解：${data.user_goal?.interpreted_goal || prompt}`,
+                `Target understanding:${data.user_goal?.interpreted_goal || prompt}`,
                 '',
-                '可核验文献：',
-                ...(topPaperLines(data.papers || [], 6).length ? topPaperLines(data.papers || [], 6) : ['没有返回带 DOI 或来源链接的文献。本轮不会把不可追溯条目当作证据。']),
+                'Verifiable literature:',
+                ...(topPaperLines(data.papers || [], 6).length ? topPaperLines(data.papers || [], 6) : ['No literature with DOI or source links returned. Untraceable entries will not be used as evidence in this round.']),
                 '',
-                '候选结构（真实数据库）：',
-                ...(topStructureLines(data.structures || [], 6).length ? topStructureLines(data.structures || [], 6) : ['没有从已连接结构数据库返回候选结构。本轮不会强行推荐模型。']),
+                'Candidate structures (real databases):',
+                ...(topStructureLines(data.structures || [], 6).length ? topStructureLines(data.structures || [], 6) : ['No candidate structures returned from connected structure databases. Models will not be forcibly recommended in this round.']),
                 data.structure_query_plan?.sources?.length
-                  ? `结构查询：${data.structure_query_plan.sources.slice(0, 6).map((item) => `${item.formula}（${structureQueryReasonLabel(item.reason)}）`).join('、')}`
-                  : '结构查询：暂无可查公式，等待你在 Modeling Agent 中指定材料或晶面。',
+                  ? `Structure query:${data.structure_query_plan.sources.slice(0, 6).map((item) => `${item.formula}（${structureQueryReasonLabel(item.reason)}）`).join('、')}`
+                  : 'Structure query: No queryable formula currently available; waiting for you to specify material or crystal facet in Modeling Agent.',
                 '',
-                recommendedIdea ? `推荐模型：${recommendedIdea.title}` : '推荐模型：暂无推荐',
-                recommendedIdea ? `推荐原因：${recommendedIdea.fit_reason}` : `原因：${noRecommendationReason}`,
+                recommendedIdea ? `Recommended model:${recommendedIdea.title}` : 'Recommended model: None',
+                recommendedIdea ? `Recommendation reason:${recommendedIdea.fit_reason}` : `Reason:${noRecommendationReason}`,
                 '',
                 recommendedIdea
-                  ? '是否使用这个推荐模型？也可以直接在输入框写你想改成的模型、晶面、吸附物或材料。'
-                  : '下一步需要你自己建模：可以点击“去 Modeling Agent 自建模型”，然后按目标论文确定材料、晶面、熔盐组分、吸附物或缺陷。'
+                  ? 'Use this recommended model? You can also directly enter your desired model, crystal facet, adsorbate, or material in the input box.'
+                  : 'Next step requires custom modeling: click "Go to Modeling Agent to Build Model", then specify material, crystal facet, molten salt components, adsorbates, or defects based on target papers.'
               ].join('\n'),
             });
             void recordHarnessCheckpoint({
@@ -2940,9 +2949,9 @@ const AgentWorkspace: React.FC = () => {
               toolName: 'agent.retrieve',
               summary: 'Research bundle ready; waiting for model choice',
               details: [
-                `${verifiedPapers.length} 篇可核验文献`,
+                `${verifiedPapers.length} verifiable literature references`,
                 `${data.structures?.length || 0} structures`,
-                `${data.idea_cards?.length || 0} 个模型建议`,
+                `${data.idea_cards?.length || 0} model recommendations`,
               ],
               artifact: {
                 kind: 'research_bundle',
@@ -2960,7 +2969,7 @@ const AgentWorkspace: React.FC = () => {
       updateTool(toolId, { status: 'error', details: [error instanceof Error ? error.message : String(error)] });
       addMessage({
         role: 'assistant',
-        title: '检索失败',
+        title: 'Search failed',
         content: error instanceof Error ? error.message : String(error),
         status: 'error',
       });
@@ -2976,7 +2985,7 @@ const AgentWorkspace: React.FC = () => {
       || research?.handoff?.formula
       || '';
     if (!prompt) {
-      addMessage({ role: 'assistant', title: '需要模型描述', content: '请告诉我材料、分子、晶面或吸附物，例如：Cu(111) slab with CO2 and H2.' });
+      addMessage({ role: 'assistant', title: 'Model description required', content: 'Please specify material, molecule, crystal facet, or adsorbate, e.g., Cu(111) slab with CO2 and H2.' });
       return;
     }
 
@@ -2985,7 +2994,7 @@ const AgentWorkspace: React.FC = () => {
       name: 'modeling.parse-intent',
       agent: 'Modeling',
       status: 'running',
-      summary: '把推荐或自定义模型转换成结构化建模意图',
+      summary: 'Converting recommended or custom model into structured modeling intent',
       details: [prompt],
     });
     let currentToolId = parseToolId;
@@ -3034,7 +3043,7 @@ const AgentWorkspace: React.FC = () => {
         name: 'modeling.build',
         agent: 'Modeling',
         status: 'running',
-        summary: '调用确定性结构构建器生成可计算结构',
+        summary: 'Calling deterministic structure builder to generate computable structure',
         details: [],
       });
       currentToolId = buildToolId;
@@ -3064,12 +3073,12 @@ const AgentWorkspace: React.FC = () => {
       });
       addMessage({
         role: 'assistant',
-        title: '模型已生成',
+        title: 'Model generated',
         content: [
-          `已生成 ${structure.filename}。`,
-          `原子数：${structure.atoms.length}；键数：${structure.bonds.length}。`,
-          '你可以先打开完整建模页调整结构，确认后会回到这里继续下一步。',
-          '下一步请选择计算软件。我建议周期性催化/表面吸附体系先用 VASP relaxation，之后可追加 static/DOS。'
+          `Generated ${structure.filename}。`,
+          `Number of atoms:${structure.atoms.length}; Number of bonds:${structure.bonds.length}。`,
+          'You can open the full modeling page to adjust the structure first; after confirmation, return here for the next step.',
+          'Next, please select compute software. For periodic catalysis/surface adsorption systems, VASP relaxation is recommended first, followed by static/DOS.'
         ].join('\n'),
       });
       void recordHarnessCheckpoint({
@@ -3101,7 +3110,7 @@ const AgentWorkspace: React.FC = () => {
       setPhase('await_software');
     } catch (error) {
       const message = error instanceof DOMException && error.name === 'AbortError'
-        ? '建模请求超时：后端在限定时间内没有返回'
+        ? 'Modeling request timed out: Backend did not respond within the time limit'
         : error instanceof Error ? error.message : String(error);
       updateTool(currentToolId, {
         status: 'error',
@@ -3109,7 +3118,7 @@ const AgentWorkspace: React.FC = () => {
       });
       addMessage({
         role: 'assistant',
-        title: '建模失败',
+        title: 'Modeling failed',
         content: message,
         status: 'error',
       });
@@ -3121,8 +3130,8 @@ const AgentWorkspace: React.FC = () => {
     if (!modelStructure) {
       addMessage({
         role: 'assistant',
-        title: '没有可编辑结构',
-        content: '请先让 Agent 生成或上传一个模型结构，再进入 Modeling Agent 修改。',
+        title: 'No editable structure',
+        content: 'Please have Agent generate or upload a model structure first before opening Modeling Agent to modify it.',
         status: 'error',
       });
       return;
@@ -3134,7 +3143,7 @@ const AgentWorkspace: React.FC = () => {
   }, [addMessage, modelStructure, navigate, saveWorkflowSnapshot, setMolecularData, setShowBonds]);
 
   const openManualModelingForWorkflow = useCallback(() => {
-    const prompt = research?.user_goal?.interpreted_goal || messages.find((message) => message.role === 'user')?.content || workspacePrompt || '请根据目标文献手动建立模型';
+    const prompt = research?.user_goal?.interpreted_goal || messages.find((message) => message.role === 'user')?.content || workspacePrompt || 'Please manually build the model based on target literature';
     saveWorkflowSnapshot({
       phase: 'await_model',
       selectedIdeaId: null,
@@ -3153,7 +3162,7 @@ const AgentWorkspace: React.FC = () => {
 
   const compileInputs = useCallback(async (nextIntent: ComputeIntent) => {
     if (!modelStructure) {
-      addMessage({ role: 'assistant', title: '没有结构', content: '请先确认或生成模型结构，再生成计算输入。', status: 'error' });
+      addMessage({ role: 'assistant', title: 'No structure', content: 'Please confirm or generate a model structure before generating compute input files.', status: 'error' });
       return;
     }
     setPhase('compiling');
@@ -3162,7 +3171,7 @@ const AgentWorkspace: React.FC = () => {
       name: 'compute.compile',
       agent: 'Compute',
       status: 'running',
-      summary: `生成 ${nextIntent.engine} ${nextIntent.workflow} 输入文件`,
+      summary: `Generate ${nextIntent.engine} ${nextIntent.workflow} Input files`,
       details: [`quality=${nextIntent.quality}`, `vdw=${nextIntent.vdw}`, `spin=${nextIntent.spin_mode}`],
     });
     try {
@@ -3176,6 +3185,10 @@ const AgentWorkspace: React.FC = () => {
       const nextCompiled: CompiledInputs = {
         files: payload.files,
         normalizedIntent: payload.normalizedIntent,
+        preview: payload.preview,
+        validation: payload.validation,
+        audit: payload.audit,
+        auditToken: payload.auditToken,
         success: true,
       };
       setCompiledInputs(nextCompiled);
@@ -3186,11 +3199,11 @@ const AgentWorkspace: React.FC = () => {
       });
       addMessage({
         role: 'assistant',
-        title: '输入文件建议',
+        title: 'Input file recommendations',
         content: [
-          `已为 ${nextIntent.engine} / ${nextIntent.workflow} 生成 ${Object.keys(nextCompiled.files).length} 个输入文件。`,
-          `推荐参数：quality=${nextIntent.quality}, spin=${nextIntent.spin_mode}, vdw=${String(nextIntent.vdw)}, kpoints=${nextIntent.kpoints_mode}。`,
-          '是否使用推荐输入文件？如果要改，请直接告诉我具体修改，例如：ENCUT=520, quality=high, workflow=static。'
+          `Generated ${nextIntent.engine} / ${nextIntent.workflow} Generate ${Object.keys(nextCompiled.files).length} input file(s).`,
+          `Recommended parameters: quality=${nextIntent.quality}, spin=${nextIntent.spin_mode}, vdw=${String(nextIntent.vdw)}, kpoints=${nextIntent.kpoints_mode}。`,
+          'Use recommended input files? To make changes, specify directly, e.g., ENCUT=520, quality=high, Agent=static.'
         ].join('\n'),
       });
       void recordHarnessCheckpoint({
@@ -3221,7 +3234,7 @@ const AgentWorkspace: React.FC = () => {
       updateTool(toolId, { status: 'error', details: [error instanceof Error ? error.message : String(error)] });
       addMessage({
         role: 'assistant',
-        title: '输入文件生成失败',
+        title: 'Input file generation failed',
         content: error instanceof Error ? error.message : String(error),
         status: 'error',
       });
@@ -3229,12 +3242,18 @@ const AgentWorkspace: React.FC = () => {
     }
   }, [addMessage, addTool, modelStructure, postJson, recordHarnessCheckpoint, updateTool]);
 
-  const selectEngine = useCallback((engine: EngineType) => {
-    const nextIntent = { ...computeIntent, engine };
+const selectEngine = useCallback((engine: EngineType) => {
+    const nextIntent = {
+      ...computeIntent,
+      engine,
+      workflow: engine === 'lammps'
+        ? 'irradiation_creep' as const
+        : computeIntent.workflow === 'irradiation_creep' ? 'relax' as const : computeIntent.workflow,
+    };
     setComputeIntent(nextIntent);
     addMessage({
       role: 'user',
-      content: `选择计算软件：${engineOptions.find((item) => item.id === engine)?.label || engine}`,
+      content: `Select compute software:${engineOptions.find((item) => item.id === engine)?.label || engine}`,
     });
     void recordHarnessCheckpoint({
       phase: 'await_software',
@@ -3249,19 +3268,22 @@ const AgentWorkspace: React.FC = () => {
 
   const applyInputModification = useCallback((text: string) => {
     const params = parseCustomParams(text);
+    const agentTask = params.Agent || params.agent || params.workflow;
     const nextIntent: ComputeIntent = {
       ...computeIntent,
-      workflow: (params.workflow as ComputeIntent['workflow']) || computeIntent.workflow,
+      workflow: (agentTask as ComputeIntent['workflow']) || computeIntent.workflow,
       quality: (params.quality as ComputeIntent['quality']) || computeIntent.quality,
       custom_params: {
         ...(computeIntent.custom_params || {}),
         ...params,
       },
     };
+    delete nextIntent.custom_params?.Agent;
+    delete nextIntent.custom_params?.agent;
     delete nextIntent.custom_params?.workflow;
     delete nextIntent.custom_params?.quality;
     setComputeIntent(nextIntent);
-    addMessage({ role: 'user', content: `修改输入文件：${text}` });
+    addMessage({ role: 'user', content: `Modify input files:${text}` });
     void recordHarnessCheckpoint({
       phase: 'await_input',
       status: 'success',
@@ -3276,6 +3298,15 @@ const AgentWorkspace: React.FC = () => {
 
   const acceptInputs = useCallback(() => {
     if (!compiledInputs) return;
+    if (!compiledInputs.validation?.submissionReady || !compiledInputs.auditToken) {
+      addMessage({
+        role: 'assistant',
+        title: 'Inputs have not passed scientific validation yet',
+        content: compiledInputs.validation?.blockingIssues?.join('\n') || 'Missing server-signed audit manifest; please recompile.',
+        status: 'error',
+      });
+      return;
+    }
     void recordHarnessCheckpoint({
       phase: 'await_input',
       status: 'success',
@@ -3286,28 +3317,47 @@ const AgentWorkspace: React.FC = () => {
     });
     addMessage({
       role: 'assistant',
-      title: '选择提交位置',
+      title: 'Select Submission Target',
       content: configuredProfiles.length
-        ? `可以提交到：${configuredProfiles.map((profile) => profile.label).join('、')}。请选择目标。`
-        : '当前没有配置真实集群，仍可使用 Local Demo Runner 物化输入文件并跑通流程。',
+        ? `Can be submitted to:${configuredProfiles.map((profile) => profile.label).join('、')}. Please select a target.`
+        : 'No real cluster is currently configured; you can still use Local Demo Runner to materialize input files and run through the Agent.',
     });
     setPhase('await_submit');
   }, [addMessage, compiledInputs, configuredProfiles, recordHarnessCheckpoint]);
 
   const fetchResults = useCallback(async (jobId: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/compute/job/${encodeURIComponent(jobId)}/results`);
+      const response = await fetch(`${API_BASE_URL}/compute/job/${encodeURIComponent(jobId)}/results`, {
+        headers: getAuthHeaders(),
+      });
       const payload = await response.json();
       if (payload?.success) {
-        setComputeResult(payload.metrics || null);
+        setComputeResult(payload.metrics ? {
+          ...payload.metrics,
+          resultSource: payload.resultSource,
+          isDemo: payload.isDemo,
+          audit: payload.audit,
+          potcarProvenance: payload.potcarProvenance,
+          resultAudit: payload.resultAudit,
+          resultAuditToken: payload.resultAuditToken,
+        } : null);
+        if (payload.isDemo) {
+          addMessage({
+            role: 'assistant',
+            title: 'Demo Agent completed',
+            content: 'This is not a VASP compute result, does not display scientific values, and cannot generate paper PPT presentation. Please select a configured PBS or Slurm environment to run real jobs.',
+          });
+          setPhase('done');
+          return;
+        }
         addMessage({
           role: 'assistant',
-          title: '计算结束',
+          title: 'Compute completed',
           content: [
-            `状态：${payload.metrics?.converged ? 'converged' : 'finished / check warnings'}`,
-            `能量：${payload.metrics?.totalEnergyEv != null ? `${payload.metrics.totalEnergyEv} eV` : 'N/A'}`,
-            `最大力：${payload.metrics?.maxForceEvPerA != null ? `${payload.metrics.maxForceEvPerA} eV/A` : 'N/A'}`,
-            '是否输出结果并生成可下载中文 PPT？'
+            `Status:${payload.metrics?.converged ? 'converged' : 'finished / check warnings'}`,
+            `Energy:${payload.metrics?.totalEnergyEv != null ? `${payload.metrics.totalEnergyEv} eV` : 'N/A'}`,
+            `Max force:${payload.metrics?.maxForceEvPerA != null ? `${payload.metrics.maxForceEvPerA} eV/A` : 'N/A'}`,
+            'Output results and generate downloadable Chinese PPT?'
           ].join('\n'),
         });
         void recordHarnessCheckpoint({
@@ -3331,23 +3381,26 @@ const AgentWorkspace: React.FC = () => {
               warnings: payload.warnings || [],
               hasContcar: Boolean(payload.hasContcar),
               contcar: payload.contcar || null,
+              resultAudit: payload.resultAudit || null,
             },
           },
         });
         setPhase('await_ppt');
       }
     } catch (error) {
-      addMessage({ role: 'assistant', title: '结果读取失败', content: error instanceof Error ? error.message : String(error), status: 'error' });
+      addMessage({ role: 'assistant', title: 'Failed to read results', content: error instanceof Error ? error.message : String(error), status: 'error' });
       setPhase('error');
     }
-  }, [addMessage, recordHarnessCheckpoint]);
+  }, [addMessage, getAuthHeaders, recordHarnessCheckpoint]);
 
   const startPolling = useCallback((jobId: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
     setPhase('monitoring');
     pollRef.current = setInterval(async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/compute/job/${encodeURIComponent(jobId)}/status`);
+        const response = await fetch(`${API_BASE_URL}/compute/job/${encodeURIComponent(jobId)}/status`, {
+          headers: getAuthHeaders(),
+        });
         const payload = await response.json();
         if (!payload?.success) return;
         setJobStatus((prev) => prev ? {
@@ -3362,7 +3415,7 @@ const AgentWorkspace: React.FC = () => {
           if (payload.jobStatus === 'completed') {
             void fetchResults(jobId);
           } else {
-            addMessage({ role: 'assistant', title: '计算没有完成', content: `Job ${jobId}: ${payload.jobStatus}`, status: 'error' });
+            addMessage({ role: 'assistant', title: 'Compute did not complete', content: `Job ${jobId}: ${payload.jobStatus}`, status: 'error' });
             setPhase('error');
           }
         }
@@ -3370,13 +3423,17 @@ const AgentWorkspace: React.FC = () => {
         // Keep polling through transient network errors.
       }
     }, 5000);
-  }, [addMessage, fetchResults]);
+  }, [addMessage, fetchResults, getAuthHeaders]);
 
   const submitJob = useCallback(async (profileId: string) => {
     if (!compiledInputs || !modelStructure) return;
     const profile = profiles.find((item) => item.id === profileId) || selectedProfile;
     if (!profile) {
-      addMessage({ role: 'assistant', title: '没有提交目标', content: '请先配置或选择计算 profile。', status: 'error' });
+      addMessage({ role: 'assistant', title: 'No submission target', content: 'Please configure or select a compute profile first.', status: 'error' });
+      return;
+    }
+    if (!(profile.ready ?? profile.configured) || profile.directSubmitSupported === false) {
+      addMessage({ role: 'assistant', title: 'Compute environment unavailable', content: 'This environment failed real-time check or can only be submitted via an independent proxy queue.', status: 'error' });
       return;
     }
     setSelectedProfileId(profile.id);
@@ -3385,7 +3442,7 @@ const AgentWorkspace: React.FC = () => {
       name: 'compute.submit',
       agent: 'Compute',
       status: 'running',
-      summary: `提交到 ${profile.label}`,
+      summary: `Submit to ${profile.label}`,
       details: [profile.summary],
     });
     try {
@@ -3402,6 +3459,7 @@ const AgentWorkspace: React.FC = () => {
         structure: { meta: { formula: modelStructure.filename } },
         intent: computeIntent,
         compiledFiles: compiledInputs.files,
+        auditToken: compiledInputs.auditToken,
       });
       if (!payload?.success) throw new Error(payload?.error || 'Job submission failed');
       const job: JobStatus = {
@@ -3421,8 +3479,8 @@ const AgentWorkspace: React.FC = () => {
       });
       addMessage({
         role: 'assistant',
-        title: '作业已提交',
-        content: `已提交到 ${profile.label}。我会继续轮询状态，完成后询问是否生成 PPT。`,
+        title: 'Job submitted',
+        content: `Submitted to ${profile.label}. I will continue polling status and ask whether to generate PPT upon completion.`,
       });
       void recordHarnessCheckpoint({
         phase: 'monitoring',
@@ -3441,7 +3499,7 @@ const AgentWorkspace: React.FC = () => {
       startPolling(payload.jobId);
     } catch (error) {
       updateTool(toolId, { status: 'error', details: [error instanceof Error ? error.message : String(error)] });
-      addMessage({ role: 'assistant', title: '提交失败', content: error instanceof Error ? error.message : String(error), status: 'error' });
+      addMessage({ role: 'assistant', title: 'Submission failed', content: error instanceof Error ? error.message : String(error), status: 'error' });
       setPhase('error');
     }
   }, [addMessage, addTool, compiledInputs, computeIntent, modelStructure, postJson, profiles, recordHarnessCheckpoint, selectedProfile, startPolling, updateTool]);
@@ -3452,7 +3510,7 @@ const AgentWorkspace: React.FC = () => {
       name: 'presentation.generate-ppt',
       agent: 'Presentation',
       status: 'running',
-      summary: '生成可下载中文 PPTX',
+      summary: 'Generate downloadable Chinese PPTX',
       details: ['Collecting papers, model, compute inputs and results...'],
     });
     try {
@@ -3485,8 +3543,8 @@ const AgentWorkspace: React.FC = () => {
       });
       addMessage({
         role: 'assistant',
-        title: 'PPT 已生成',
-        content: `已生成可下载 PPT：${payload.filename}`,
+        title: 'PPT generated',
+        content: `Generated downloadable PPT:${payload.filename}`,
       });
       void recordHarnessCheckpoint({
         phase: 'done',
@@ -3511,7 +3569,7 @@ const AgentWorkspace: React.FC = () => {
       setPhase('done');
     } catch (error) {
       updateTool(toolId, { status: 'error', details: [error instanceof Error ? error.message : String(error)] });
-      addMessage({ role: 'assistant', title: 'PPT 生成失败', content: error instanceof Error ? error.message : String(error), status: 'error' });
+      addMessage({ role: 'assistant', title: 'PPT generation failed', content: error instanceof Error ? error.message : String(error), status: 'error' });
       setPhase('error');
     }
   }, [addMessage, addTool, compiledInputs, computeIntent, computeResult, jobStatus, messages, modelIntent, modelStructure, postJson, recordHarnessCheckpoint, research, researchStack, selectedIdea, updateTool]);
@@ -3523,7 +3581,7 @@ const AgentWorkspace: React.FC = () => {
       name: 'agent.chat',
       agent: 'Conversation',
       status: 'running',
-      summary: '调用对话模型并读取长期记忆',
+      summary: 'Calling chat model and loading long-term memory',
       details: ['mode=chat', chatSessionIdRef.current ? `session=${chatSessionIdRef.current}` : 'new session'],
     });
 
@@ -3558,18 +3616,20 @@ const AgentWorkspace: React.FC = () => {
       addMessage({
         role: 'assistant',
         title: llmFailed
-          ? '对话模型失败 · 已使用备用回复'
-          : payload.memories?.length ? `对话 · 已载入 ${payload.memories.length} 条记忆` : '对话',
+          ? 'Chat model failed · Fallback response used'
+          : payload.memories?.length ? `Chat · Loaded ${payload.memories.length} memories` : 'Chat',
         content: llmFailed
-          ? `${payload.reply || '未生成有效回复。'}\n\n对话模型调用失败，以上内容为备用回复。`
-          : payload.reply || '我在，但这次没有生成有效回复。',
+          ? `${payload.reply || 'No valid response generated.'}
+
+Chat model call failed; the above content is a fallback response.`
+          : payload.reply || 'I am here, but no valid response was generated this time.',
         status: llmFailed ? 'error' : undefined,
       });
       if (payload.reply && shouldAutoPromoteChatToRetrieval(content, payload.reply)) {
         addMessage({
           role: 'assistant',
-          title: '已接入检索流程',
-          content: '我现在开始执行真实文献和数据库检索，不只停留在对话回复。',
+          title: 'Retrieval Agent connected',
+          content: 'Starting real literature and database search, going beyond conversational responses.',
         });
         void runRetrieval(content);
       }
@@ -3578,7 +3638,7 @@ const AgentWorkspace: React.FC = () => {
       updateTool(toolId, { status: 'error', details: [message] });
       addMessage({
         role: 'assistant',
-        title: '对话失败',
+        title: 'Conversation failed',
         content: message,
         status: 'error',
       });
@@ -3598,9 +3658,10 @@ const AgentWorkspace: React.FC = () => {
       .map((digest) => digest.context ? `### ${digest.name}\n${digest.context}` : `### ${digest.name}\n${digest.summary}`)
       .join('\n\n');
     const content = [
-      prompt || (digests.some((digest) => digest.kind === 'structure') ? '基于上传结构继续科研流程' : '处理上传附件'),
-      fileNames.length ? `附件：${fileNames.join(', ')}` : '',
-      attachmentContext ? `附件解析上下文：\n${attachmentContext}` : '',
+      prompt || (digests.some((digest) => digest.kind === 'structure') ? 'Continue scientific Agent based on uploaded structure' : 'Processing uploaded attachment'),
+      fileNames.length ? `Attachment:${fileNames.join(', ')}` : '',
+      attachmentContext ? `Attachment parsing context:
+${attachmentContext}` : '',
     ].filter(Boolean).join('\n\n');
 
     if (phase === 'await_model') {
@@ -3643,7 +3704,7 @@ const AgentWorkspace: React.FC = () => {
   const startVoiceInput = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      addMessage({ role: 'system', content: '当前浏览器不支持语音输入。' });
+      addMessage({ role: 'system', content: 'Speech input is not supported in the current browser.' });
       return;
     }
     const recognition = new SpeechRecognition();
@@ -3684,7 +3745,7 @@ const AgentWorkspace: React.FC = () => {
     if (itemId === 'experts') {
       addMessage({
         role: 'assistant',
-        title: '专家库',
+        title: 'Expert Library',
         content: agents.map((agent) => `${agent.name}：${agent.output}`).join('\n'),
       });
       return;
@@ -3693,14 +3754,14 @@ const AgentWorkspace: React.FC = () => {
       void (async () => {
         const nextProfiles = await fetchProfiles({ log: true });
         const nextSources = await fetchStructureSources();
-        const liveSources = (nextSources?.live || structureSources?.live || []).map((source) => source.label).join('、') || '后台结构源 registry';
+        const liveSources = (nextSources?.live || structureSources?.live || []).map((source) => source.label).join('、') || 'Backend structure source registry';
         addMessage({
           role: 'assistant',
-          title: '连接器状态',
+          title: 'Connector status',
           content: [
-            `计算提交位置：${nextProfiles.length ? nextProfiles.map((profile) => `${profile.label}${profile.configured ? '(已配置)' : '(未配置)'}`).join('、') : '暂无 profile'}`,
-            `结构数据源：${liveSources}`,
-            '需要真实提交时，请先走到“输入文件检查”并选择提交位置。',
+            `Compute submission target:${nextProfiles.length ? nextProfiles.map((profile) => `${profile.label}${profile.configured ? '(Configured)' : '(Unconfigured)'}`).join('、') : 'No profile available'}`,
+            `Structure data source:${liveSources}`,
+            'To perform a real submission, please proceed to "Input File Inspection" and select a submission location.',
           ].join('\n'),
         });
       })();
@@ -3720,14 +3781,14 @@ const AgentWorkspace: React.FC = () => {
                 onClick={openManualModelingForWorkflow}
                 className="h-9 rounded-[32px] bg-[#0A1128] px-4 text-xs font-semibold text-white hover:bg-[#162044]"
               >
-                去 Modeling Agent 自建模型
+                Go to Modeling Agent to Build Model Manually
               </button>
               <span className="text-xs text-gray-400">
-                无可用推荐：{research.no_model_recommendation?.reason || '没有和检索文献匹配的结构。'}
+                No recommendations available:{research.no_model_recommendation?.reason || 'No structures matched the retrieved literature.'}
               </span>
               {candidateSummary && (
                 <span className="max-w-3xl truncate text-xs text-gray-500" title={candidateSummary}>
-                  已查到候选：{candidateSummary}
+                  Candidates found:{candidateSummary}
                 </span>
               )}
             </div>
@@ -3741,7 +3802,7 @@ const AgentWorkspace: React.FC = () => {
             <button
               type="button"
               onClick={() => {
-                addMessage({ role: 'user', content: '使用推荐模型' });
+                addMessage({ role: 'user', content: 'Use recommended model' });
                 void recordHarnessCheckpoint({
                   phase: 'await_model',
                   status: 'success',
@@ -3754,7 +3815,7 @@ const AgentWorkspace: React.FC = () => {
               }}
               className="h-9 rounded-[32px] bg-[#0A1128] px-4 text-xs font-semibold text-white hover:bg-[#162044]"
             >
-              使用推荐模型
+              Use recommended model
             </button>
             {research.idea_cards.slice(0, 4).map((idea) => (
               <button
@@ -3769,7 +3830,7 @@ const AgentWorkspace: React.FC = () => {
                 {idea.blueprint?.structure_source?.formula || idea.material_family || idea.title.slice(0, 24)}
               </button>
             ))}
-            <span className="text-xs text-gray-400">也可以直接输入自定义模型。</span>
+            <span className="text-xs text-gray-400">You can also directly enter a custom model.</span>
           </div>
         </div>
       );
@@ -3786,9 +3847,11 @@ const AgentWorkspace: React.FC = () => {
                 onClick={() => selectEngine(engine.id)}
                 className={cx(
                   'h-9 rounded-[32px] border px-3 text-xs font-semibold transition',
-                  engine.id === 'vasp' ? 'border-[#0A1128] bg-[#0A1128] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  computeIntent.engine === engine.id
+                    ? 'border-[#0A1128] bg-[#0A1128] text-white'
+                    : 'border-gray-200 text-gray-600 hover:border-[#0A1128] hover:text-[#0A1128]'
                 )}
-                title={engine.summary}
+                title={`${engine.summary} · Input compiler available; execution depends on the selected cluster environment`}
               >
                 {engine.label}
               </button>
@@ -3807,9 +3870,9 @@ const AgentWorkspace: React.FC = () => {
               onClick={acceptInputs}
               className="h-9 rounded-[32px] bg-[#0A1128] px-4 text-xs font-semibold text-white hover:bg-[#162044]"
             >
-              使用推荐输入文件
+              Use recommended input file
             </button>
-            <span className="text-xs text-gray-400">需要更改就直接输入参数，例如 ENCUT=520, workflow=static。</span>
+            <span className="text-xs text-gray-400">To modify, enter parameters directly, e.g., ENCUT=520, Agent=static.</span>
           </div>
         </div>
       );
@@ -3819,18 +3882,18 @@ const AgentWorkspace: React.FC = () => {
       return (
         <div className="border-t border-gray-200 bg-white px-4 py-3">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
-            {(profiles.length ? profiles : [{ id: 'local_demo', label: 'Local Demo Runner', configured: true } as ServerComputeProfile]).map((profile) => (
+            {(profiles.length ? profiles : [{ id: 'local_demo', label: 'Input demo (Non-scientific compute)', configured: true, ready: true } as ServerComputeProfile]).map((profile) => (
               <button
                 key={profile.id}
                 type="button"
                 onClick={() => void submitJob(profile.id)}
-                disabled={!profile.configured}
+                disabled={!(profile.ready ?? profile.configured) || profile.directSubmitSupported === false || !compiledInputs?.validation?.submissionReady || !compiledInputs?.auditToken}
                 className={cx(
                   'h-9 rounded-[32px] border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40',
-                  profile.configured ? 'border-[#0A1128] bg-[#0A1128] text-white hover:bg-[#162044]' : 'border-gray-200 text-gray-500'
+                  (profile.ready ?? profile.configured) ? 'border-[#0A1128] bg-[#0A1128] text-white hover:bg-[#162044]' : 'border-gray-200 text-gray-500'
                 )}
               >
-                提交到 {profile.label}
+                {profile.mode === 'local_demo' ? 'Create Demo Record' : `Submit real compute to ${profile.label}`}
               </button>
             ))}
           </div>
@@ -3847,25 +3910,25 @@ const AgentWorkspace: React.FC = () => {
               onClick={() => void generatePpt()}
               className="h-9 rounded-[32px] bg-[#0A1128] px-4 text-xs font-semibold text-white hover:bg-[#162044]"
             >
-              输出结果并生成 PPT
+              Output results and generate PPT
             </button>
             <button
               type="button"
               onClick={() => {
-                addMessage({ role: 'user', content: '不生成 PPT，结束对话' });
-                addMessage({ role: 'assistant', title: '已结束', content: '计算结果已保留在当前会话中。' });
+                addMessage({ role: 'user', content: 'End conversation without generating PPT' });
+                addMessage({ role: 'assistant', title: 'Ended', content: 'Compute results preserved in current session.' });
                 void recordHarnessCheckpoint({
                   phase: 'done',
                   status: 'success',
                   agent: 'Orchestrator',
                   toolName: 'human.skip_presentation',
-                  summary: 'User ended the workflow without generating a PPT',
+                  summary: 'User ended the Agent without generating a PPT',
                 });
                 setPhase('done');
               }}
               className="h-9 rounded-[32px] border border-gray-200 px-3 text-xs font-semibold text-gray-600 hover:border-gray-300"
             >
-              不需要 PPT
+              No PPT needed
             </button>
           </div>
         </div>
@@ -3876,26 +3939,26 @@ const AgentWorkspace: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#F5F5F0] text-gray-800">
+    <div className="h-screen w-screen overflow-hidden bg-[#F5F5F0] text-[#1d1d1f]">
       <div className="flex h-full min-w-0">
-        <aside className="hidden h-full w-[280px] shrink-0 border-r border-gray-200 bg-white lg:flex lg:flex-col">
+        <aside className="hidden h-full w-[260px] shrink-0 border-r border-black/5 bg-white/90 md:flex md:flex-col xl:w-[280px]">
           <div className="border-b border-gray-200 px-5 py-5">
             <button type="button" onClick={() => navigate('/workspace')} className="flex w-full items-center gap-3 text-left">
-              <div className="flex h-10 w-10 items-center justify-center rounded-[16px] bg-[#0A1128] text-white">
+              <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[#0A1128] text-white shadow-sm">
                 <Bot size={20} />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold">科研工作台</p>
-                <p className="truncate text-[11px] text-gray-500">Research workflow</p>
+                <p className="truncate text-sm font-bold">Research Workspace</p>
+                <p className="truncate text-[11px] text-gray-500">Research Agent</p>
               </div>
             </button>
-            <div className="mt-4 flex items-center gap-2 rounded-[24px] border border-gray-200 bg-[#F5F5F0] px-3 py-2">
+            <div className="mt-4 flex items-center gap-2 rounded-[14px] border border-black/5 bg-[#F5F5F0] px-3 py-2.5">
               <Search size={15} className="text-gray-400" />
               <input
                 value={taskSearch}
                 onChange={(event) => setTaskSearch(event.target.value)}
                 className="min-w-0 flex-1 bg-transparent text-xs text-gray-700 outline-none placeholder:text-gray-400"
-                placeholder="搜索任务"
+                placeholder="Search tasks"
               />
               <Settings2 size={15} className="text-gray-400" />
             </div>
@@ -3905,23 +3968,23 @@ const AgentWorkspace: React.FC = () => {
             <button
               type="button"
               onClick={resetTask}
-              className="mb-3 flex w-full items-center gap-2 rounded-[32px] border border-gray-200 bg-white px-4 py-2.5 text-left text-sm font-semibold shadow-[0_4px_30px_rgba(0,0,0,0.04)] transition hover:border-gray-300"
+              className="apple-button-primary mb-4 w-full justify-center shadow-none"
             >
               <MessageSquarePlus size={16} />
-              新任务
+              New task
             </button>
 
             <div>
               <div className="flex items-center justify-between gap-2 px-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">
-                  {showArchivedTasks ? '已归档' : '任务记录'}
+                  {showArchivedTasks ? 'Archived' : 'Records'}
                 </p>
                 <button
                   type="button"
                   onClick={() => setShowArchivedTasks((value) => !value)}
                   className="rounded-[32px] border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-500 transition hover:bg-[#F5F5F0] hover:text-[#0A1128]"
                 >
-                  {showArchivedTasks ? `返回 ${activeTasks.length}` : `归档 ${archivedTasks.length}`}
+                  {showArchivedTasks ? `Returned ${activeTasks.length}` : `Archive ${archivedTasks.length}`}
                 </button>
               </div>
               <div className="mt-2 space-y-1">
@@ -3948,8 +4011,8 @@ const AgentWorkspace: React.FC = () => {
                           </span>
                         </div>
                         <div className="mt-1 flex items-center gap-2 pl-4 text-[10px] text-gray-400">
-                          <span>{phaseLabel[task.snapshot.phase] || '任务'}</span>
-                          <span>{messageCount} 条对话</span>
+                          <span>{phaseLabel[task.snapshot.phase] || 'Tasks'}</span>
+                          <span>{messageCount} messages</span>
                           <span>{formatTaskTime(task.updatedAt)}</span>
                         </div>
                       </button>
@@ -3958,7 +4021,7 @@ const AgentWorkspace: React.FC = () => {
                           type="button"
                           onClick={() => task.archived ? restoreTask(task.id) : archiveTask(task.id)}
                           className="flex h-8 w-8 items-center justify-center rounded-[16px] text-gray-400 transition hover:bg-white hover:text-[#0A1128]"
-                          title={task.archived ? '恢复任务' : '归档任务'}
+                          title={task.archived ? 'Restore task' : 'Archive task'}
                         >
                           {task.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                         </button>
@@ -3966,7 +4029,7 @@ const AgentWorkspace: React.FC = () => {
                           type="button"
                           onClick={() => deleteTask(task.id)}
                           className="flex h-8 w-8 items-center justify-center rounded-[16px] border border-transparent text-gray-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                          title="删除任务"
+                          title="Delete task"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -3976,15 +4039,35 @@ const AgentWorkspace: React.FC = () => {
                 })}
                 {!filteredTasks.length && (
                   <div className="rounded-[16px] border border-gray-100 bg-gray-50 px-3 py-3 text-xs leading-5 text-gray-500">
-                    {taskSearchQuery ? '没有匹配的任务。' : showArchivedTasks ? '暂无归档任务。' : '暂无历史任务，创建新任务后会自动保存在这里。'}
+                    {taskSearchQuery ? 'No matching tasks.' : showArchivedTasks ? 'No archived tasks.' : 'No task history. Created tasks will automatically be saved here.'}
                   </div>
                 )}
               </div>
             </div>
 
+            <div className="mt-6">
+              <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">Tool portals</p>
+              <nav className="mt-2 grid grid-cols-2 gap-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleNavItem(item.id)}
+                      className="flex min-w-0 items-center gap-2 rounded-[14px] px-3 py-2 text-left text-xs text-gray-600 transition hover:bg-[#F5F5F0] hover:text-[#0A1128]"
+                    >
+                      <Icon size={15} className="shrink-0" />
+                      <span className="min-w-0 truncate">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+
             {!showArchivedTasks && !taskSearchQuery && (
               <div className="mt-6">
-                <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">快速开始</p>
+                <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">Quick start</p>
                 <div className="mt-2 space-y-1">
                   {recentTasks.map((task, index) => (
                     <button
@@ -3998,42 +4081,23 @@ const AgentWorkspace: React.FC = () => {
                     >
                       {index === 0 ? <Zap size={14} className="text-[#0A1128]" /> : <Check size={14} className="text-gray-400" />}
                       <span className="min-w-0 flex-1 truncate">{task}</span>
-                      <span className="text-[10px] text-gray-400">模板</span>
+                      <span className="text-[10px] text-gray-400">Templates</span>
                     </button>
                   ))}
                 </div>
               </div>
             )}
-
-            <div className="mt-6">
-              <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">工具入口</p>
-              <nav className="mt-2 space-y-1">
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => handleNavItem(item.id)}
-                      className="flex w-full items-center gap-3 rounded-[16px] px-3 py-2.5 text-left text-sm text-gray-600 transition hover:bg-[#F5F5F0] hover:text-[#0A1128]"
-                    >
-                      <Icon size={17} />
-                      <span className="min-w-0 truncate">{item.label}</span>
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
           </div>
 
           <div className="border-t border-gray-200 px-5 py-4">
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">Account</p>
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-[16px] bg-[#F5F5F0] text-xs font-bold text-gray-700">
                 {accountLabel.slice(0, 1).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold">{accountLabel}</p>
-                <p className="truncate text-[11px] text-gray-400">科研工作区</p>
+                <p className="truncate text-[11px] text-gray-400">Agent Workspace</p>
               </div>
             </div>
           </div>
@@ -4047,11 +4111,11 @@ const AgentWorkspace: React.FC = () => {
               className="flex h-10 items-center gap-2 rounded-[32px] border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 transition hover:border-gray-300"
             >
               <Home size={16} />
-              首页
+              Home
             </button>
             <div className="hidden min-w-0 flex-1 md:block">
-              <p className="truncate text-sm font-semibold">{activeTask?.title || '连续科研流程'}</p>
-              <p className="truncate text-[11px] text-gray-400">检索 &gt; 模型确认 &gt; 输入文件检查 &gt; 提交计算 &gt; 结果汇报</p>
+              <p className="truncate text-sm font-semibold">{activeTask?.title || 'Continuous scientific Agent'}</p>
+              <p className="truncate text-[11px] text-gray-400">Search &gt; Model Confirmation &gt; Input File Inspection &gt; Submit Compute &gt; Results Reporting</p>
             </div>
             <div className="ml-auto flex items-center gap-2">
               <span
@@ -4061,22 +4125,22 @@ const AgentWorkspace: React.FC = () => {
                     ? 'border-red-200 bg-red-50 text-red-600'
                     : 'border-gray-200 bg-gray-50 text-gray-700',
                 )}
-                title={runtimeSyncError || '任务由服务端 Runtime 持久化，本地存储仅作缓存'}
+                title={runtimeSyncError || 'Tasks are persisted by server Runtime; local storage is cache only'}
               >
                 {runtimeSyncState === 'connecting' || runtimeSyncState === 'saving'
                   ? <Loader2 size={14} className="animate-spin" />
                   : <Server size={14} />}
                 {runtimeSyncState === 'connecting'
-                  ? 'Runtime 连接中'
+                  ? 'Connecting to Runtime'
                   : runtimeSyncState === 'saving'
-                    ? 'Runtime 保存中'
+                    ? 'Saving to Runtime'
                     : runtimeSyncState === 'synced'
-                      ? 'Runtime 已同步'
-                      : 'Runtime 离线'}
+                      ? 'Runtime synchronized'
+                      : 'Runtime offline'}
               </span>
               <span className="hidden h-9 items-center gap-2 rounded-[32px] border border-gray-200 bg-gray-50 px-3 text-xs font-semibold text-gray-700 sm:flex">
                 <ShieldCheck size={14} className="text-gray-500" />
-                来源校验
+                Source verification
               </span>
               <div className="relative">
                 <button
@@ -4088,8 +4152,8 @@ const AgentWorkspace: React.FC = () => {
                 </button>
                 {isModelMenuOpen && (
                   <div className="absolute right-0 top-11 z-30 w-[260px] rounded-[16px] border border-gray-200 bg-white p-3 text-xs shadow-[0_4px_30px_rgba(0,0,0,0.08)]">
-                    <p className="font-semibold text-[#0A1128]">文本规划模型</p>
-                    <p className="mt-1 leading-5 text-gray-500">对话规划使用 {textModelName}；检索、建模、计算和 PPT 由后端工具执行。</p>
+                    <p className="font-semibold text-[#0A1128]">Text planning model</p>
+                    <p className="mt-1 leading-5 text-gray-500">Used for dialogue planning {textModelName}; search, modeling, compute, and PPT are executed by backend tools.</p>
                   </div>
                 )}
               </div>
@@ -4117,7 +4181,7 @@ const AgentWorkspace: React.FC = () => {
                           </span>
                           <div>
                             <p className={cx('text-[10px] font-bold', isDone || isActive ? 'text-[#0A1128]' : 'text-gray-400')}>{stage.label}</p>
-                            <p className="text-[9px] text-gray-400">{isDone ? '已完成' : isActive ? phaseLabel[phase] : '待执行'}</p>
+                            <p className="text-[9px] text-gray-400">{isDone ? 'Completed' : isActive ? phaseLabel[phase] : 'Pending'}</p>
                           </div>
                         </div>
                       </React.Fragment>
@@ -4130,28 +4194,28 @@ const AgentWorkspace: React.FC = () => {
                 <div className="mx-auto max-w-5xl space-y-4">
                   {(phase !== 'idle' || research || researchStack || modelStructure || compiledInputs || jobStatus) && <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
                     <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-[16px] bg-[#0A1128] text-white">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[#0A1128] text-white">
                         {phase === 'retrieving' || phase === 'modeling' || phase === 'compiling' || phase === 'submitting' || phase === 'monitoring' || phase === 'ppt'
                           ? <Loader2 size={18} className="animate-spin" />
                           : <BrainCircuit size={18} />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold">流程进度：{phaseLabel[phase]}</p>
+                        <p className="text-sm font-bold">Agent progress:{phaseLabel[phase]}</p>
                         <p className="mt-1 text-xs text-gray-500">
-                          {research ? `${getVerifiedPapers(research.papers || []).length} 篇可核验文献 · ${research.idea_cards?.length || 0} 个模型建议` : '等待新的科研任务'}
-                          {researchStack ? ` · 可行性 ${researchStack.feasibility.score}/100 · ${researchStack.experiment.first_batch.length} 组实验` : ''}
-                          {modelStructure ? ` · ${modelStructure.atoms.length} 个原子` : ''}
-                          {compiledInputs ? ` · ${compiledFileNames.length} 个输入文件` : ''}
-                          {jobStatus ? ` · 作业 ${jobStatus.status}` : ''}
+                          {research ? `${getVerifiedPapers(research.papers || []).length} verifiable papers · ${research.idea_cards?.length || 0} model recommendations` : 'Awaiting new scientific tasks'}
+                          {researchStack ? ` · Feasibility ${researchStack.feasibility.score}/100 · ${researchStack.experiment.first_batch.length} experiment sets` : ''}
+                          {modelStructure ? ` · ${modelStructure.atoms.length} atoms` : ''}
+                          {compiledInputs ? ` · ${compiledFileNames.length} input files` : ''}
+                          {jobStatus ? ` · Job ${jobStatus.status}` : ''}
                         </p>
                       </div>
                       {pptUrl && (
                         <a
                           href={pptUrl}
-                          className="flex h-9 items-center gap-2 rounded-[32px] bg-[#0A1128] px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-[#162044]"
+                          className="apple-button-primary min-h-9 px-4 py-2 text-xs"
                         >
                           <Download size={14} />
-                          下载 PPT
+                          Download PPT
                         </a>
                       )}
                     </div>
@@ -4182,7 +4246,7 @@ const AgentWorkspace: React.FC = () => {
                     <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
                       <div className="mb-3 flex items-center gap-2">
                         <Library size={16} className="text-gray-500" />
-                        <p className="text-sm font-bold text-[#0A1128]">可核验文献</p>
+                        <p className="text-sm font-bold text-[#0A1128]">Verifiable literature</p>
                       </div>
                       {getVerifiedPapers(research.papers || []).length ? (
                         <div className="grid gap-3 md:grid-cols-2">
@@ -4210,7 +4274,7 @@ const AgentWorkspace: React.FC = () => {
                           })}
                         </div>
                       ) : (
-                        <p className="text-xs leading-5 text-gray-500">本轮没有返回带 DOI 或可打开来源链接的文献，因此不会把检索结果当作论文证据。</p>
+                        <p className="text-xs leading-5 text-gray-500">No literature with DOI or accessible source link was returned in this round, so search results will not be used as paper evidence.</p>
                       )}
                     </div>
                   )}
@@ -4221,16 +4285,16 @@ const AgentWorkspace: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <Database size={16} className="text-gray-500" />
                           <div>
-                            <p className="text-sm font-bold text-[#0A1128]">候选结构</p>
+                            <p className="text-sm font-bold text-[#0A1128]">Candidate structures</p>
                             <p className="mt-1 text-xs text-gray-500">
                               {research.structure_query_plan?.sources?.length
                                 ? research.structure_query_plan.sources.slice(0, 5).map((item) => `${item.formula}（${structureQueryReasonLabel(item.reason)}）`).join('、')
-                                : '没有可查询公式；需要在 Modeling Agent 中指定材料。'}
+                                : 'No queryable formula; material must be specified in Modeling Agent.'}
                             </p>
                           </div>
                         </div>
                         <span className="rounded-[32px] border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-semibold text-gray-500">
-                          {(research.structures || []).length} 个数据库候选
+                          {(research.structures || []).length} database candidates
                         </span>
                       </div>
                       {(research.structures || []).length ? (
@@ -4259,7 +4323,7 @@ const AgentWorkspace: React.FC = () => {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-xs leading-5 text-gray-500">本轮没有从真实结构数据库返回候选结构，因此不会强行给模型推荐。可以进入 Modeling Agent 按目标论文自建模型。</p>
+                        <p className="text-xs leading-5 text-gray-500">No candidate structures were returned from real structure databases in this round, so no recommendations will be forced. You can enter Modeling Agent to build a model based on target papers.</p>
                       )}
                     </div>
                   )}
@@ -4276,16 +4340,35 @@ const AgentWorkspace: React.FC = () => {
                     <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
                       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm font-bold text-[#0A1128]">输入文件检查</p>
-                          <p className="mt-1 text-xs text-gray-500">这些内容可直接编辑；提交计算和生成 PPT 会使用编辑后的版本。</p>
+                          <p className="text-sm font-bold text-[#0A1128]">Input File Inspection</p>
+                          <p className="mt-1 text-xs text-gray-500">Input files are signed by the server. To modify, please enter parameters below and recompile.</p>
                         </div>
                         <button
                           type="button"
                           onClick={acceptInputs}
                           className="rounded-[32px] bg-[#0A1128] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#162044]"
                         >
-                          确认输入文件
+                          Confirm input file
                         </button>
+                      </div>
+                      <div className={cx(
+                        'mb-3 rounded-[16px] border p-3',
+                        compiledInputs.validation?.submissionReady ? 'border-green-100 bg-green-50' : 'border-red-100 bg-red-50'
+                      )}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-bold text-[#0A1128]">
+                            {compiledInputs.validation?.submissionReady ? 'Scientific Validation Passed' : 'Currently Not Submittable'}
+                          </p>
+                          <span className="font-mono text-[10px] text-gray-500">
+                            {compiledInputs.audit?.auditId ? compiledInputs.audit.auditId.slice(0, 16) : 'unsigned'}
+                          </span>
+                        </div>
+                        {compiledInputs.validation?.blockingIssues?.map((issue) => (
+                          <p key={issue} className="mt-2 text-[11px] text-red-700">• {issue}</p>
+                        ))}
+                        {compiledInputs.validation?.warnings?.map((warning) => (
+                          <p key={warning} className="mt-2 text-[11px] text-gray-600">• {warning}</p>
+                        ))}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {compiledFileNames.map((name) => (
@@ -4312,17 +4395,7 @@ const AgentWorkspace: React.FC = () => {
                           </div>
                           <textarea
                             value={selectedInputContent}
-                            onChange={(event) => updateCompiledInputFile(selectedInputFileName, event.target.value)}
-                            onBlur={() => {
-                              void recordHarnessCheckpoint({
-                                phase: 'await_input',
-                                status: 'success',
-                                agent: 'Orchestrator',
-                                toolName: 'human.edit_input_file',
-                                summary: `User edited ${selectedInputFileName}`,
-                                details: [`${selectedInputContent.length} chars`],
-                              });
-                            }}
+                            readOnly
                             spellCheck={false}
                             className="min-h-[260px] w-full resize-y border-0 bg-transparent p-3 font-mono text-xs leading-5 text-gray-800 outline-none"
                           />
@@ -4335,7 +4408,7 @@ const AgentWorkspace: React.FC = () => {
                     <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-[0_4px_30px_rgba(0,0,0,0.05)]">
                       <div className="mb-3 flex items-center gap-2">
                         <Play size={15} className="text-gray-500" />
-                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-gray-500">执行记录</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-gray-500">Execution log</p>
                       </div>
                       <div className="space-y-3">
                         {visibleToolEvents.map((event) => (
@@ -4381,7 +4454,7 @@ const AgentWorkspace: React.FC = () => {
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="flex h-8 w-8 items-center justify-center rounded-[16px] text-gray-500 hover:bg-[#F5F5F0]"
-                      title="添加文件"
+                      title="Add file"
                     >
                       <Paperclip size={16} />
                     </button>
@@ -4389,12 +4462,12 @@ const AgentWorkspace: React.FC = () => {
                       type="button"
                       onClick={() => navigate('/materials')}
                       className="flex h-8 w-8 items-center justify-center rounded-[16px] text-gray-500 hover:bg-[#F5F5F0]"
-                      title="打开材料库"
+                      title="Open Materials Library"
                     >
                       <FolderOpen size={16} />
                     </button>
                     <div className="ml-auto text-[11px] font-semibold text-gray-400">
-                      {attachedFiles.length ? `${attachedFiles.length} 个附件` : phaseLabel[phase]}
+                      {attachedFiles.length ? `${attachedFiles.length} attachments` : phaseLabel[phase]}
                     </div>
                   </div>
                   {attachedFiles.length > 0 && (
@@ -4423,13 +4496,13 @@ const AgentWorkspace: React.FC = () => {
                       }}
                       rows={2}
                       className="min-h-[54px] flex-1 resize-none border-0 bg-transparent text-sm outline-none placeholder:text-gray-400"
-                      placeholder="输入任务或修改，例如：检索 CO2 加氢催化剂文章；ENCUT=520；使用 CP2K..."
+                      placeholder="Enter task or modification, e.g., search CO2 hydrogenation catalyst papers; ENCUT=520; use CP2K..."
                     />
                     <button
                       type="button"
                       onClick={startVoiceInput}
                       className={cx('flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border text-gray-500 hover:bg-[#F5F5F0]', isListening ? 'border-[#0A1128] bg-white text-[#0A1128] shadow-sm ring-1 ring-black/5' : 'border-gray-200')}
-                      title="语音输入"
+                      title="Speech input"
                     >
                       <Mic size={16} />
                     </button>
@@ -4437,8 +4510,8 @@ const AgentWorkspace: React.FC = () => {
                       type="button"
                       onClick={() => void handleComposerSubmit()}
                       disabled={phase === 'retrieving' || phase === 'modeling' || phase === 'compiling' || phase === 'submitting' || phase === 'ppt'}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] bg-[#0A1128] text-white hover:bg-[#162044] disabled:cursor-not-allowed disabled:bg-gray-300"
-                      title="发送"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0A1128] text-white transition hover:bg-[#162044] disabled:cursor-not-allowed disabled:bg-gray-300"
+                      title="Send"
                     >
                       <ArrowRight size={18} />
                     </button>
@@ -4454,25 +4527,25 @@ const AgentWorkspace: React.FC = () => {
                     <BrainCircuit size={20} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold">运行检查</p>
+                    <p className="truncate text-sm font-bold">Run inspection</p>
                     <p className="truncate text-xs text-gray-500">{phaseLabel[phase]}</p>
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
                   <div className="rounded-[16px] border border-gray-200 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">文献</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">Literature</p>
                     <p className="mt-1 font-bold">{getVerifiedPapers(research?.papers || []).length}</p>
                   </div>
                   <div className="rounded-[16px] border border-gray-200 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">原子</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">Atoms</p>
                     <p className="mt-1 font-bold">{modelStructure?.atoms.length || 0}</p>
                   </div>
                   <div className="rounded-[16px] border border-gray-200 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">输入</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">Input</p>
                     <p className="mt-1 font-bold">{compiledFileNames.length}</p>
                   </div>
                   <div className="rounded-[16px] border border-gray-200 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">作业</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">Job</p>
                     <p className="mt-1 truncate font-bold">{jobStatus?.status || '-'}</p>
                   </div>
                 </div>
@@ -4482,7 +4555,7 @@ const AgentWorkspace: React.FC = () => {
                 <div className="mb-5 rounded-[24px] border border-gray-100 bg-gray-50 p-4">
                   <div className="flex items-center gap-2">
                     <ShieldCheck size={16} className="text-gray-600" />
-                    <p className="text-sm font-bold">过程记录</p>
+                    <p className="text-sm font-bold">Process log</p>
                   </div>
                   {harnessSession ? (
                     <div className="mt-3 space-y-3">
@@ -4493,11 +4566,11 @@ const AgentWorkspace: React.FC = () => {
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div className="rounded-[16px] border border-gray-200 bg-white p-2">
-                          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">节点</p>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">Node</p>
                           <p className="mt-1 font-bold">{harnessSession.checkpoints.length}</p>
                         </div>
                         <div className="rounded-[16px] border border-gray-200 bg-white p-2">
-                          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">产物</p>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">Artifacts</p>
                           <p className="mt-1 font-bold">{harnessSession.checkpoints.filter((item) => item.artifact && item.artifact.id !== 'pending').length}</p>
                         </div>
                       </div>
@@ -4522,7 +4595,7 @@ const AgentWorkspace: React.FC = () => {
                     </div>
                   ) : (
                     <p className="mt-3 text-xs leading-5 text-gray-500">
-                      新任务开始后会创建运行记录，保存工具调用、用户确认和关键产物。
+                      A run record will be created after a new task starts, saving tool calls, user confirmations, and key artifacts.
                     </p>
                   )}
                 </div>
@@ -4532,15 +4605,15 @@ const AgentWorkspace: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <Database size={16} className="text-gray-500" />
                       <div>
-                        <p className="text-sm font-bold">数据来源</p>
-                        <p className="mt-0.5 text-[10px] text-gray-400">当前查询式：{activeSourceFormula}</p>
+                        <p className="text-sm font-bold">Data sources</p>
+                        <p className="mt-0.5 text-[10px] text-gray-400">Current query:{activeSourceFormula}</p>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => void fetchStructureSources()}
                       className="flex h-8 w-8 items-center justify-center rounded-[16px] border border-gray-200 text-gray-500 transition hover:bg-[#F5F5F0]"
-                      title="刷新后台数据源登记"
+                      title="Refresh Backend Data Source Registrations"
                     >
                       <RefreshCw size={14} />
                     </button>
@@ -4566,7 +4639,7 @@ const AgentWorkspace: React.FC = () => {
                             onClick={() => void probeStructureSource(db)}
                             className="rounded-[32px] border border-gray-200 px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 transition hover:border-gray-300 hover:bg-[#F5F5F0]"
                           >
-                            {isLiveSearch ? '查当前体系' : '查看登记'}
+                            {isLiveSearch ? 'Query current system' : 'View registration'}
                           </button>
                           {registryEntry?.homepage && (
                             <a
@@ -4574,7 +4647,7 @@ const AgentWorkspace: React.FC = () => {
                               target="_blank"
                               rel="noreferrer"
                               className="flex h-7 w-7 items-center justify-center rounded-[16px] text-gray-400 hover:bg-[#F5F5F0] hover:text-[#0A1128]"
-                              title="打开来源主页"
+                              title="Open source homepage"
                             >
                               <ExternalLink size={13} />
                             </a>
@@ -4610,7 +4683,7 @@ const AgentWorkspace: React.FC = () => {
                   <div className="mb-5 rounded-[24px] border border-gray-100 bg-gray-50 p-4">
                     <div className="flex items-center gap-2">
                       <FlaskConical size={16} className="text-gray-600" />
-                      <p className="text-xs font-bold">当前模型建议</p>
+                      <p className="text-xs font-bold">Current model suggestion</p>
                     </div>
                     <p className="mt-3 text-sm font-bold">{selectedIdea.title}</p>
                     <p className="mt-2 text-xs leading-5 text-gray-600">{selectedIdea.fit_reason}</p>
@@ -4629,10 +4702,10 @@ const AgentWorkspace: React.FC = () => {
                   <div className="mb-5 rounded-[24px] border border-gray-100 bg-gray-50 p-4">
                     <div className="flex items-center gap-2">
                       <FileText size={16} className="text-gray-600" />
-                      <p className="text-xs font-bold">输入文件</p>
+                      <p className="text-xs font-bold">Input files</p>
                     </div>
                     <div className="mt-3 space-y-2 text-xs text-gray-600">
-                      <p>中间区域已经提供完整编辑器。</p>
+                      <p>Full editor is available in the central area.</p>
                       <p>{compiledFileNames.join('、')}</p>
                     </div>
                   </div>
@@ -4641,7 +4714,7 @@ const AgentWorkspace: React.FC = () => {
                 <div className="rounded-[24px] border border-gray-100 bg-gray-50 p-4">
                   <div className="flex items-center gap-2">
                     <Server size={16} className="text-gray-600" />
-                    <p className="text-xs font-bold">提交位置</p>
+                    <p className="text-xs font-bold">Submission location</p>
                   </div>
                   <div className="mt-3 space-y-2">
                     {profiles.map((profile) => (
@@ -4649,15 +4722,16 @@ const AgentWorkspace: React.FC = () => {
                         key={profile.id}
                         type="button"
                         onClick={() => setSelectedProfileId(profile.id)}
+                        disabled={!(profile.ready ?? profile.configured) || profile.directSubmitSupported === false}
                         className={cx(
-                          'w-full rounded-[16px] border p-2 text-left text-xs transition',
-                          selectedProfileId === profile.id ? 'border-[#0A1128] bg-white text-[#0A1128]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                          'w-full rounded-[16px] border p-2 text-left text-xs transition disabled:cursor-not-allowed disabled:opacity-50',
+                          selectedProfileId === profile.id ? 'border-[#0A1128] bg-white text-[#1d1d1f]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                         )}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-bold">{profile.label}</span>
-                          <span className={cx('rounded-[16px] border px-1.5 py-0.5 text-[9px] font-bold', profile.configured ? 'border-gray-200 bg-white text-[#0A1128]' : 'border-gray-200 bg-gray-100 text-gray-400')}>
-                            {profile.configured ? '已配置' : '未配置'}
+                          <span className={cx('rounded-[16px] border px-1.5 py-0.5 text-[9px] font-bold', (profile.ready ?? profile.configured) && profile.directSubmitSupported !== false ? 'border-gray-200 bg-white text-[#1d1d1f]' : 'border-gray-200 bg-gray-100 text-gray-400')}>
+                            {!profile.configured ? 'Not configured' : profile.directSubmitSupported === false ? 'Proxy queue only' : profile.ready === false ? 'Inspection failed' : 'Ready for submission'}
                           </span>
                         </div>
                         <p className="mt-1 line-clamp-2 text-[11px] text-gray-400">{profile.summary}</p>

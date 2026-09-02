@@ -147,7 +147,7 @@ const FigureMode: React.FC = () => {
 
   const handleProfile = async () => {
     if (!file) {
-      setError('请先上传 CSV、TSV 或 JSON 数据文件。');
+      setError('Please upload a CSV, TSV, or JSON data file first.');
       return;
     }
     setLoadingKey('profile');
@@ -166,7 +166,7 @@ const FigureMode: React.FC = () => {
 
   const handleCompile = async () => {
     if (!profile) {
-      setError('请先完成数据 profiling。');
+      setError('Please complete data profiling first.');
       return;
     }
     setLoadingKey('contract');
@@ -192,7 +192,7 @@ const FigureMode: React.FC = () => {
 
   const handleRender = async () => {
     if (!file || !contract) {
-      setError('请先准备数据文件并生成 figure contract。');
+      setError('Please prepare data files and generate figure contract first.');
       return;
     }
     setLoadingKey('render');

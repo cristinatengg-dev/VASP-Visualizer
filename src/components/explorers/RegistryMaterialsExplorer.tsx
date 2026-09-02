@@ -313,7 +313,10 @@ const RegistryMaterialsExplorer: React.FC<{ config: RegistryExplorerConfig }> = 
 
     try {
       const res = await fetch(`${API_BASE_URL}/materials/search?formula=${encodeURIComponent(searchFormula)}`);
-      const data = await res.json();
+      const raw = await res.text();
+      if (!raw.trim()) throw new Error('The materials search service is unavailable. Please retry in a moment.');
+      const data = JSON.parse(raw);
+      if (!res.ok) throw new Error(data.error || `Materials search failed (${res.status})`);
       if (data.success) {
         setResults(data.results);
         setActiveTab('all');
@@ -526,7 +529,7 @@ const RegistryMaterialsExplorer: React.FC<{ config: RegistryExplorerConfig }> = 
               <p className="text-[10px] font-bold uppercase tracking-widest text-[#0A1128]">How we handle closed data</p>
               <div className="mt-4 space-y-3 text-[13px] leading-relaxed text-gray-500">
                 <p><span className="font-semibold text-gray-700">1.</span> Use the institution’s existing license or subscription.</p>
-                <p><span className="font-semibold text-gray-700">2.</span> Apply through the official portal, member route, or account workflow.</p>
+                <p><span className="font-semibold text-gray-700">2.</span> Apply through the official portal, member route, or account Agent.</p>
                 <p><span className="font-semibold text-gray-700">3.</span> Ask for redistribution or mirror rights before shipping data in product features.</p>
                 <p><span className="font-semibold text-gray-700">4.</span> If rights stay unclear, keep the integration at outbound-link or metadata level only.</p>
               </div>

@@ -201,6 +201,7 @@ async function buildServerFilesystemResultPayload({
     vaspOutTail,
     runtimeStatus,
     jobRun,
+    workflow: jobSpec?.preview?.workflow || jobSpec?.workflow || jobSpec?.audit?.workflow || null,
   });
   const warnings = collectWarnings({
     jobStdoutTail,

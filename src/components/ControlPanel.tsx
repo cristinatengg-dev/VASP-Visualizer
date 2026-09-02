@@ -580,7 +580,7 @@ C/H/1.2`
             const hint = (
                 rawMessage.includes('parse-structure') ||
                 rawMessage.includes('structure') ||
-                rawMessage.includes('结构') ||
+                rawMessage.includes('Structure') ||
                 rawMessage.includes('atom count') ||
                 rawMessage.includes('atom') ||
                 rawMessage.includes('Failed to extract structure section')

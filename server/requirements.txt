@@ -1,8 +1,8 @@
-pymatgen>=2024.8.9,<2025
-ase>=3.22.1
-numpy>=1.24.0,<2
-scipy>=1.10.0
-networkx>=3.0
-rdkit>=2023.9.1
-matplotlib>=3.8.0,<4
-python-pptx>=0.6.23,<1
+pymatgen==2024.8.9
+ase==3.26.0
+numpy==1.26.4
+scipy==1.13.1
+networkx==3.2.1
+rdkit==2025.9.2
+matplotlib==3.9.4
+python-pptx==0.6.23

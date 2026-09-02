@@ -1,12 +1,12 @@
 # Stage 1: Build
-FROM node:22-alpine as builder
+FROM node:22.22-alpine3.23 AS builder
 
 RUN npm config set registry https://registry.npmmirror.com
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 COPY . .
 
@@ -16,7 +16,7 @@ ENV VITE_PHONE_AUTH_ENABLED=${VITE_PHONE_AUTH_ENABLED}
 RUN npm run build
 
 # Stage 2: Serve
-FROM nginx:alpine
+FROM nginx:1.31.4-alpine3.24
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf

@@ -19,11 +19,11 @@ const humanizeModelingError = (message: string) => {
   const raw = String(message || '').trim();
 
   if (!raw) {
-    return '建模请求暂时失败，请稍后再试。';
+    return 'Modeling request temporarily failed. Please try again later.';
   }
 
   if (/(TEXT_LLM_API_KEY|GEMINI_API_KEY).*not configured/i.test(raw)) {
-    return '智能解析暂时不可用，请直接调整下方参数或稍后再试。';
+    return 'AI parsing is temporarily unavailable. Please adjust the parameters below directly or try again later.';
   }
 
   if (
@@ -33,15 +33,15 @@ const humanizeModelingError = (message: string) => {
     || /quota exceeded/i.test(raw)
     || /resource_exhausted/i.test(raw)
   ) {
-    return '智能解析暂时不可用，系统已自动回退到基础建模解析。';
+    return 'AI parsing is temporarily unavailable. System automatically fell back to basic modeling parsing.';
   }
 
   if (/runtime demo route is unavailable/i.test(raw) || /Cannot POST .*runtime-demo/i.test(raw)) {
-    return '运行时增强暂时不可用，系统已自动回退到标准建模流程。';
+    return 'Runtime enhancement is temporarily unavailable. System automatically fell back to standard modeling Agent.';
   }
 
   if (/Transaction numbers are only allowed on a replica set member or mongos/i.test(raw)) {
-    return '运行时增强暂时不可用，系统已自动回退到无事务模式。';
+    return 'Runtime enhancement is temporarily unavailable. System automatically fell back to non-transactional mode.';
   }
 
   return raw.replace(/^HTTP\s+\d+:\s*/i, '');

@@ -109,8 +109,10 @@ async function copyRemoteDirectoryToLocal(config, remoteDir, localDir) {
 
 function parseSubmittedJobId(output) {
   const text = String(output || '');
-  const match = text.match(/job\s+(\d+)/i);
-  return match ? match[1] : null;
+  const schedulerMessage = text.match(/job\s+(\d+(?:\.[A-Za-z0-9._-]+)?)/i);
+  if (schedulerMessage) return schedulerMessage[1];
+  const qsubMessage = text.match(/^\s*(\d+(?:\.[A-Za-z0-9._-]+)?)(?:\s|$)/m);
+  return qsubMessage ? qsubMessage[1] : null;
 }
 
 async function materializeRemotePotcar({
@@ -129,15 +131,14 @@ async function materializeRemotePotcar({
     };
   }
 
-  const command = [
-    `cd ${quotePosix(remoteDir)}`,
-    'python3 - <<\'PY\'',
-    'import json, pathlib, sys',
+  const pythonProgram = [
+    'import hashlib, json, pathlib, re, sys',
     `base_dir = pathlib.Path(${JSON.stringify(remotePotcarDir)})`,
     `symbols = json.loads(${JSON.stringify(JSON.stringify(uniqueSymbols))})`,
     'target = pathlib.Path("POTCAR")',
     'candidates = []',
     'parts = []',
+    'entries = []',
     'for symbol in symbols:',
     '    candidate_paths = [',
     '        base_dir / symbol / "POTCAR",',
@@ -149,14 +150,41 @@ async function materializeRemotePotcar({
     '    if match is None:',
     '        print(f"MISSING:{symbol}")',
     '        sys.exit(12)',
+    '    content = match.read_text()',
     '    candidates.append(str(match))',
-    '    parts.append(match.read_text())',
-    'target.write_text("\\n".join(parts))',
+    '    parts.append(content)',
+    '    title_match = re.search(r"^\\s*TITEL\\s*=\\s*(.+)$", content, re.M | re.I)',
+    '    enmax_match = re.search(r"^\\s*ENMAX\\s*=\\s*([\\d.]+)", content, re.M | re.I)',
+    '    zval_match = re.search(r"\\bZVAL\\s*=\\s*([\\d.]+)", content, re.I)',
+    '    entries.append({"symbol": symbol, "source": str(match.relative_to(base_dir)), "title": title_match.group(1).strip() if title_match else None, "enmaxEv": float(enmax_match.group(1)) if enmax_match else None, "zval": float(zval_match.group(1)) if zval_match else None, "sha256": hashlib.sha256(content.encode()).hexdigest(), "sizeBytes": len(content.encode())})',
+    'combined = "\\n".join(parts)',
+    'target.write_text(combined)',
+    'spec_path = pathlib.Path("POTCAR.spec.json")',
+    'spec = json.loads(spec_path.read_text()) if spec_path.is_file() else {}',
+    'requested_encut = spec.get("encutEv")',
+    'requested_nelect = spec.get("requestedNelect")',
+    'charge = float(spec.get("charge") or 0)',
+    'counts = spec.get("counts") or []',
+    'max_enmax = max((entry["enmaxEv"] for entry in entries if entry["enmaxEv"] is not None), default=None)',
+    'if max_enmax is not None and requested_encut is not None and float(requested_encut) < max_enmax:',
+    '    print(f"ENCUT_BELOW_ENMAX:{requested_encut}<{max_enmax}")',
+    '    sys.exit(13)',
+    'can_verify_nelect = len(counts) == len(entries) and all(entry["zval"] is not None for entry in entries)',
+    'neutral_nelect = sum(float(counts[index]) * entry["zval"] for index, entry in enumerate(entries)) if can_verify_nelect else None',
+    'expected_nelect = neutral_nelect - charge if neutral_nelect is not None else None',
+    'if requested_nelect is not None and expected_nelect is None:',
+    '    print("NELECT_PROVENANCE_UNAVAILABLE")',
+    '    sys.exit(14)',
+    'if requested_nelect is not None and abs(float(requested_nelect) - expected_nelect) > 1e-6:',
+    '    print(f"NELECT_CHARGE_MISMATCH:{requested_nelect}!={expected_nelect}")',
+    '    sys.exit(15)',
+    'provenance = {"schemaVersion": "vasp-potcar-provenance/v1", "functional": spec.get("functional"), "family": spec.get("family"), "symbols": symbols, "counts": counts, "requestedEncutEv": requested_encut, "requestedNelect": requested_nelect, "neutralElectronCount": neutral_nelect, "expectedNelect": expected_nelect, "charge": charge, "maxEnmaxEv": max_enmax, "recommendedEncutEv": int(max_enmax * 1.3 + 0.999999) if max_enmax is not None else None, "combinedSha256": hashlib.sha256(combined.encode()).hexdigest(), "entries": entries}',
+    'pathlib.Path("POTCAR.provenance.json").write_text(json.dumps(provenance, indent=2))',
     'print("POTCAR_READY")',
     'for item in candidates:',
     '    print(item)',
-    'PY',
-  ].join('; ');
+  ].join('\n');
+  const command = `cd ${quotePosix(remoteDir)} && python3 - <<'PY'\n${pythonProgram}\nPY`;
 
   const result = await runRemoteShellCommand(config, command);
   if (!result.ok) {
@@ -247,6 +275,7 @@ async function submitRemotePbsJob({
 module.exports = {
   copyRemoteDirectoryToLocal,
   materializeRemotePotcar,
+  parseSubmittedJobId,
   quotePosix,
   runRemoteShellCommand,
   submitRemotePbsJob,

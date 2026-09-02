@@ -23,327 +23,327 @@ const Manual: React.FC = () => {
       <div className="max-w-4xl mx-auto space-y-12 print:w-full print:max-w-none">
         {/* Header */}
         <header className="border-b-2 border-gray-800 pb-6 mb-12">
-          <h1 className="text-4xl font-bold mb-4">SCI Visualizer 1.0 用户操作手册</h1>
+          <h1 className="text-4xl font-bold mb-4">SCI Visualizer 1.0 User Manual</h1>
           <p className="text-xl text-gray-600 italic">User Manual</p>
         </header>
 
         {/* 1. Introduction */}
         <section>
-          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">1. 产品简介 (Introduction)</h2>
+          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">1. Product Introduction</h2>
           <p className="mb-4 leading-relaxed">
-            SCI Visualizer 1.0 是专为科研人员和超算平台打造的 <strong>Web 端高性能结构可视化平台</strong>。它利用 WebGL 与 WebCodecs 硬件加速技术，无需安装任何插件，即可在浏览器中实现 结构与轨迹的秒级渲染与导出。
+            SCI Visualizer 1.0 is a high-performance web-based structure visualization platform built for researchers and HPC platforms <strong>Web-based High-Performance Structure Visualization Platform</strong>. Leveraging WebGL and WebCodecs hardware acceleration without requiring any plugins, it achieves second-level rendering and export of structures and trajectories directly in the browser.
           </p>
           <p className="mb-4 leading-relaxed">
-            平台包含五大智能 Agent，覆盖从 <strong>研究构思 → 建模 → 计算 → 可视化渲染 → 封面生成</strong> 的完整科研工作流。
+            The platform features five intelligent Agents, covering the complete scientific Agent from <strong>Research Idea → Modeling → Compute → Visualization Rendering → Cover Generation</strong> .
           </p>
           <div className="bg-gray-50 p-4 rounded border border-gray-100 mb-4">
-            <p className="font-bold mb-2">支持格式:</p>
+            <p className="font-bold mb-2">Supported Formats:</p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>VASP:</strong> POSCAR, CONTCAR, XDATCAR (支持大体系轨迹)</li>
+              <li><strong>VASP:</strong> POSCAR, CONTCAR, XDATCAR (Large-system trajectories supported)</li>
               <li><strong>Crystallography:</strong> .cif</li>
             </ul>
           </div>
           <div className="bg-gray-50 p-4 rounded border border-gray-100 mb-4">
-            <p className="font-bold mb-2">平台 Agent 一览:</p>
+            <p className="font-bold mb-2">Platform Agent Overview:</p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>Idea Agent:</strong> 文献检索 + 结构数据库查询 + 智能研究方案生成</li>
-              <li><strong>Modeling Agent:</strong> 对话式晶体结构建模（自然语言 → 3D 结构）</li>
-              <li><strong>Compute Agent:</strong> VASP 输入文件编译 + HPC 集群配置 + 任务提交</li>
-              <li><strong>Rendering Agent:</strong> 云端高性能结构可视化与轨迹渲染</li>
-              <li><strong>Illustration Agent:</strong> 基于科研论文内容的期刊封面自动生成</li>
+              <li><strong>Idea Agent:</strong> Literature search + Structural database query + Intelligent research proposal generation</li>
+              <li><strong>Modeling Agent:</strong> Conversational crystal structure modeling (Natural language → 3D structure)</li>
+              <li><strong>Compute Agent:</strong> VASP input file compilation + HPC cluster configuration + Job submission</li>
+              <li><strong>Rendering Agent:</strong> High-performance cloud structure visualization and trajectory rendering</li>
+              <li><strong>Illustration Agent:</strong> Automatic journal cover generation based on paper content</li>
             </ul>
           </div>
         </section>
 
         {/* 2. Idea Agent */}
         <section>
-          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">2. Idea Agent — 研究方案智能生成</h2>
+          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">2. Idea Agent — Intelligent Research Proposal Generation</h2>
           <p className="mb-4 leading-relaxed">
-            Idea Agent 帮助科研人员从一句研究需求出发，自动检索学术文献、查询 Materials Project 数据库，并生成有文献依据的计算研究方案。
+            Idea Agent helps researchers start from a single research requirement to automatically search academic literature, query the Materials Project database, and generate literature-backed computational research proposals.
           </p>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">2.1 界面布局</h3>
-            <p className="mb-2">Idea Agent 采用三栏式布局：</p>
+            <h3 className="text-xl font-bold mb-2">2.1 Interface Layout</h3>
+            <p className="mb-2">Idea Agent uses a three-column layout:</p>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>左栏 — 推理时间线</strong>：展示 Agent 的思考过程，包括意图理解、查询翻译、文献搜索、结构检索和方案生成等阶段。底部是输入框。</li>
-              <li><strong>中栏 — Research Ideas</strong>：展示生成的研究方案卡片和检索到的文献列表。</li>
-              <li><strong>右栏 — Modeling Blueprint</strong>：点击某个研究方案卡片后展示详细的建模蓝图，包括结构来源、建模配方、文献依据和推荐路径。</li>
+              <li><strong>Left Column — Reasoning Timeline</strong>: Displays the Agent's reasoning process, including intent understanding, query translation, literature search, structure retrieval, and proposal generation stages. The input box is located at the bottom.</li>
+              <li><strong>Center Column — Research Ideas</strong>: Displays generated research proposal cards and retrieved literature lists.</li>
+              <li><strong>Right Column — Modeling Blueprint</strong>: Displays a detailed modeling blueprint after clicking a research proposal card, including structure source, modeling recipe, literature backing, and recommended path.</li>
             </ul>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">2.2 使用步骤</h3>
+            <h3 className="text-xl font-bold mb-2">2.2 Usage Steps</h3>
             <ol className="list-decimal pl-5 space-y-2 mb-4">
-              <li><strong>输入研究需求</strong>：在左栏底部的输入框中，用自然语言描述你的研究目标。支持中英文（中文查询会自动翻译为英文进行文献检索）。</li>
-              <li><strong>观察推理过程</strong>：左栏时间线实时展示各阶段进度——意图理解、查询翻译、多源文献搜索、Materials Project 结构查询、方案生成。</li>
-              <li><strong>浏览研究方案</strong>：中栏显示生成的 Idea 卡片，每张标注了难度等级（Starter / Intermediate / Advanced）、模型类型和目标性质。带 "Recommended" 标签的是系统推荐的最佳方案。</li>
-              <li><strong>查看建模蓝图</strong>：点击某张 Idea 卡片，右栏展示详细蓝图：为什么选这个方向、可以计算什么性质、结构来源（含 Materials Project ID）、建模配方（起始结构、超胞大小、缺陷/掺杂等）、文献依据和注意事项。</li>
-              <li><strong>发送到 Modeling Agent</strong>：点击蓝图底部的 "Send to Modeling Agent" 按钮，自动将建模参数传递到 Modeling Agent，开始实际建模工作。</li>
+              <li><strong>Input Research Requirement</strong>: Describe your research goal using natural language in the input box at the bottom of the left column. Supports Chinese and English (Chinese queries are automatically translated to English for literature search).</li>
+              <li><strong>Observe Reasoning Process</strong>: The timeline in the left column displays real-time progress for each stage—intent understanding, query translation, multi-source literature search, Materials Project structure query, and proposal generation.</li>
+              <li><strong>Browse Research Proposals</strong>: The center column displays generated Idea cards, each annotated with a difficulty level (Starter / Intermediate / Advanced), model type, and target property. Cards with the "Recommended" badge indicate the system's recommended best option.</li>
+              <li><strong>View Modeling Blueprint</strong>: Click an Idea card to view its detailed blueprint in the right column: rationale for selecting this direction, computable properties, structure source (including Materials Project ID), modeling recipe (initial structure, supercell size, defects/doping, etc.), literature backing, and notes.</li>
+              <li><strong>Send to Modeling Agent</strong>: Click the "Send to Modeling Agent" button at the bottom of the blueprint to automatically pass modeling parameters to Modeling Agent and initiate modeling.</li>
             </ol>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">2.3 文献检索来源</h3>
+            <h3 className="text-xl font-bold mb-2">2.3 Literature Search Sources</h3>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>CrossRef</strong>：同行评审期刊论文</li>
-              <li><strong>OpenAlex</strong>：开放学术图谱</li>
-              <li><strong>arXiv</strong>：预印本论文</li>
-              <li><strong>CORE</strong>：开放获取论文聚合</li>
-              <li><strong>Semantic Scholar</strong>：学术图谱、引用与跨学科论文搜索</li>
-              <li><strong>Europe PMC</strong>：生命科学、医学及开放全文论文聚合</li>
-              <li><strong>PubMed</strong>：NCBI 生物医学文献索引</li>
-              <li><strong>科研通</strong>：作为文献卡片的外部检索入口，不自动抓取或提交文献互助请求</li>
-              <li><strong>Materials Project</strong>：材料结构数据库（返回化学式、晶系、空间群、能量高于凸包值等信息）</li>
+              <li><strong>CrossRef</strong>: Peer-reviewed journal papers</li>
+              <li><strong>OpenAlex</strong>: Open academic graph</li>
+              <li><strong>arXiv</strong>: Preprint papers</li>
+              <li><strong>CORE</strong>: Open-access paper aggregation</li>
+              <li><strong>Semantic Scholar</strong>: Academic graph, citation, and cross-disciplinary paper search</li>
+              <li><strong>Europe PMC</strong>: Life sciences, medicine, and open full-text paper aggregation</li>
+              <li><strong>PubMed</strong>: NCBI biomedical literature index</li>
+              <li><strong>KeyanTong</strong>: Serves as an external search entry point for literature cards without automatically scraping or submitting document delivery requests</li>
+              <li><strong>Materials Project</strong>: Materials structure database (returns chemical formula, crystal system, space group, energy above hull, etc.)</li>
             </ul>
           </div>
         </section>
 
         {/* 3. Modeling Agent */}
         <section>
-          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">3. Modeling Agent — 对话式结构建模</h2>
+          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">3. Modeling Agent — Conversational Structure Modeling</h2>
           <p className="mb-4 leading-relaxed">
-            Modeling Agent 允许用户通过自然语言对话来构建晶体结构模型。支持从 Idea Agent 接收 handoff 参数，自动开始建模。
+            Modeling Agent allows users to build crystal structure models through natural language conversation. It supports receiving handoff parameters from Idea Agent to automatically start modeling.
           </p>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">3.1 界面布局</h3>
+            <h3 className="text-xl font-bold mb-2">3.1 Interface Layout</h3>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>左侧 — 对话面板 (Chat Panel)</strong>：与系统对话，描述你想要构建的结构。系统会解析你的意图并生成建模参数。</li>
-              <li><strong>右侧 — 3D 画布 (Canvas Panel)</strong>：实时预览生成的晶体结构，支持旋转、缩放、平移操作。</li>
+              <li><strong>Left Panel — Chat Panel</strong>: Converse with the system to describe the structure you want to build. The system will parse your intent and generate modeling parameters.</li>
+              <li><strong>Right Panel — Canvas Panel</strong>: Real-time preview of the generated crystal structure, supporting rotate, zoom, and pan operations.</li>
             </ul>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">3.2 使用步骤</h3>
+            <h3 className="text-xl font-bold mb-2">3.2 Usage Steps</h3>
             <ol className="list-decimal pl-5 space-y-2 mb-4">
-              <li><strong>描述目标结构</strong>：在左侧对话框中输入你想构建的结构描述，例如 "Build a bulk NaCoO2 crystal using Materials Project entry mp-867515"。</li>
-              <li><strong>系统解析意图</strong>：Modeling Agent 会自动解析你的需求，识别化学式、晶型、数据源等信息。</li>
-              <li><strong>预览结构</strong>：生成的结构会在右侧 3D 画布中实时显示。</li>
-              <li><strong>迭代优化</strong>：你可以继续对话来调整结构参数，如修改超胞大小、添加缺陷、调整掺杂等。</li>
+              <li><strong>Describe Target Structure</strong>: Enter the description of the structure you want to build in the left chat box, e.g., "Build a bulk NaCoO2 crystal using Materials Project entry mp-867515".</li>
+              <li><strong>System Parses Intent</strong>: Modeling Agent automatically parses your request, identifying chemical formulas, crystal phases, data sources, and other information.</li>
+              <li><strong>Preview Structure</strong>: The generated structure will display in real time on the right 3D canvas.</li>
+              <li><strong>Iterative Refinement</strong>: You can continue the conversation to adjust structural parameters, such as modifying supercell size, adding defects, or tuning doping.</li>
             </ol>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">3.3 从 Idea Agent 接收参数</h3>
+            <h3 className="text-xl font-bold mb-2">3.3 Receiving Parameters from Idea Agent</h3>
             <p className="mb-4 leading-relaxed">
-              当你在 Idea Agent 中点击 "Send to Modeling Agent" 后，Modeling Agent 会自动接收 handoff 参数（包括化学式、Materials Project ID、晶相信息和建模提示词），并预填充到对话框中，省去手动输入的步骤。
+              When you click "Send to Modeling Agent" in Idea Agent, Modeling Agent automatically receives the handoff parameters (including chemical formula, Materials Project ID, crystal phase information, and modeling prompt) and pre-fills them into the chat box, eliminating manual input steps.
             </p>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">3.4 GROMACS 轨迹查看器</h3>
+            <h3 className="text-xl font-bold mb-2">3.4 GROMACS Trajectory Viewer</h3>
             <p className="mb-3 leading-relaxed">
-              点击 Modeling Agent 顶部的 “GROMACS 轨迹” 可进入独立的分子动力学可视化页面。
+              Click "GROMACS Trajectory" at the top of Modeling Agent to enter the dedicated molecular dynamics visualization page.
             </p>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>文件组合</strong>：必须上传初始结构 <code>.gro</code> 与轨迹 <code>.xtc</code>；可同时附带 <code>.tpr</code>、<code>.top</code> 作为任务信息。</li>
-              <li><strong>逐帧查看</strong>：使用时间轴、前后帧、首尾帧、FPS 和 Step 控件查看或播放整个模拟过程。</li>
-              <li><strong>显示方式</strong>：支持 NewCartoon、Ball &amp; Stick、Licorice、Spacefill、Lines，以及 protein、ligand 等原子选择。</li>
-              <li><strong>完整轨迹</strong>：选择 Protein Cα、Backbone、Ligand 或重原子后，可将整个时间范围的运动路径叠加到同一场景。</li>
-              <li><strong>周期边界</strong>：页面提供快速居中、分子修复与主链对齐；用于正式分析时仍建议优先上传经 <code>gmx trjconv</code> 校正的轨迹。</li>
+              <li><strong>File Combination</strong>: Initial structure must be uploaded <code>.gro</code> and trajectory <code>.xtc</code>; can simultaneously include <code>.tpr</code>、<code>.top</code> as task information.</li>
+              <li><strong>Frame-by-Frame View</strong>: View or play back the full simulation using timeline, previous/next frame, first/last frame, FPS, and Step controls.</li>
+              <li><strong>Display Mode</strong>: Supports NewCartoon, Ball &amp;amp; Stick, Licorice, Spacefill, Lines, as well as atom selections such as protein and ligand.</li>
+              <li><strong>Full Trajectory</strong>: Overlay motion paths across the full time range onto a single scene after selecting Protein Cα, Backbone, Ligand, or heavy atoms.</li>
+              <li><strong>Periodic Boundary</strong>: Provides quick centering, molecule repair, and backbone alignment on page; uploading trajectories corrected via <code>gmx trjconv</code> is still recommended for formal analysis.</li>
             </ul>
           </div>
         </section>
 
         {/* 4. Compute Agent */}
         <section>
-          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">4. Compute Agent — VASP 计算任务编译与提交</h2>
+          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">4. Compute Agent — VASP Calculation Task Compilation &amp; Submission</h2>
           <p className="mb-4 leading-relaxed">
-            Compute Agent 将 Modeling Agent 生成的结构自动编译为完整的 VASP 输入文件套件，并支持配置 HPC 集群参数和提交计算任务。
+            Compute Agent automatically compiles structures generated by Modeling Agent into a complete suite of VASP input files, supporting HPC cluster parameter configuration and task submission.
           </p>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">4.1 五步工作流 (5-Step Pipeline)</h3>
+            <h3 className="text-xl font-bold mb-2">4.1 5-Step Pipeline</h3>
             <ol className="list-decimal pl-5 space-y-2 mb-4">
-              <li><strong>Select Structure</strong>：确认目标体系结构，查看原子数、体系类型（Slab/Bulk 等），确认固定原子设置。</li>
-              <li><strong>Compute Intent</strong>：选择计算任务类型和参数：
+              <li><strong>Select Structure</strong>: Confirm the target structure, inspect atom count and system type (Slab/Bulk, etc.), and verify selective dynamics (fixed atom) settings.</li>
+              <li><strong>Compute Intent</strong>: Select calculation task type and parameters:
                 <ul className="list-circle pl-5 mt-1 space-y-1 text-sm text-gray-700">
-                  <li><strong>Task Type</strong>：Relax（结构优化）、Static（静态计算）、DOS（态密度）、Band（能带结构）、Adsorption（吸附能）</li>
+                  <li><strong>Task Type</strong>: Relax (structure optimization), Static (static calculation), DOS (density of states), Band (band structure), Adsorption (adsorption energy)</li>
                   <li><strong>Accuracy</strong>：Fast / Standard / High</li>
-                  <li><strong>Core Settings</strong>：vDW (D3) 色散校正开关、Spin 自旋极化开关</li>
+                  <li><strong>Core Settings</strong>: vDW (D3) dispersion correction toggle, Spin polarization toggle</li>
                 </ul>
               </li>
-              <li><strong>HPC Profile</strong>：选择并配置 HPC 集群——节点数、每节点核数、最大运行时间 (Walltime)、可执行文件 (vasp_std / vasp_gpu)。</li>
-              <li><strong>Review & Compile</strong>：预览自动编译的 VASP 输入文件（INCAR / KPOINTS / POSCAR / POTCAR），支持查看提交脚本 (job.sh)。文件经过自动校验（VALIDATED）。</li>
-              <li><strong>Job Monitor</strong>：提交到集群后，实时监控任务状态、查看 Live Log 输出、Runtime Guardian（Custodian 自愈系统）自动检测并修复常见 VASP 错误。</li>
+              <li><strong>HPC Profile</strong>: Select and configure HPC cluster — node count, cores per node, maximum runtime (Walltime), executable file (vasp_std / vasp_gpu).</li>
+              <li><strong>Review & Compile</strong>: Preview automatically compiled VASP input files (INCAR / KPOINTS / POSCAR / POTCAR) and inspect submission scripts (job.sh). Files are automatically validated (VALIDATED).</li>
+              <li><strong>Job Monitor</strong>: After submitting to the cluster, monitor task status in real time, view Live Log output, and let Runtime Guardian (Custodian self-healing system) automatically detect and fix common VASP errors.</li>
             </ol>
           </div>
         </section>
 
         {/* 5. Rendering Agent */}
         <section>
-          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">5. Rendering Agent — 云端结构可视化</h2>
+          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">5. Rendering Agent — Cloud Structure Visualization</h2>
           <p className="mb-4 leading-relaxed">
-            Rendering Agent 是平台的核心可视化引擎，基于 WebGL 硬件加速技术，提供零延迟的大体系结构渲染与轨迹动画播放，支持多种出版级渲染风格和高分辨率导出。
+            Rendering Agent is the platform's core visualization engine, leveraging WebGL hardware acceleration to deliver zero-latency rendering of large systems and trajectory animation playback, supporting multiple publication-grade render styles and high-resolution export.
           </p>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">5.1 文件导入</h3>
+            <h3 className="text-xl font-bold mb-2">5.1 File Import</h3>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>单文件上传</strong>：点击虚线框或直接拖拽文件。</li>
-              <li><strong>多文件管理</strong>：支持一次性上传多个结构（如 POSCAR + XDATCAR）。</li>
-              <li><strong>智能切换</strong>：点击左侧文件列表切换视角。系统会自动保存当前文件的修改快照（Snapshot），防止编辑丢失。</li>
+              <li><strong>Single File Upload</strong>: Click the dashed area or drag and drop files directly.</li>
+              <li><strong>Multi-File Management</strong>: Supports uploading multiple structures at once (e.g., POSCAR + XDATCAR).</li>
+              <li><strong>Smart Switch</strong>: Click the left file list to switch viewports. The system automatically saves a snapshot of modifications for the current file to prevent losing edits.</li>
             </ul>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">5.2 视图操作</h3>
+            <h3 className="text-xl font-bold mb-2">5.2 Viewport Navigation</h3>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>旋转</strong>：左键拖拽</li>
-              <li><strong>平移</strong>：右键拖拽</li>
-              <li><strong>缩放</strong>：滚轮滚动</li>
-              <li><strong>标准视角</strong>：点击控制面板的 Top / Down / Front / Left / Right按钮快速对齐晶面。</li>
+              <li><strong>Rotate</strong>: Left-click drag</li>
+              <li><strong>Pan</strong>: Right-click drag</li>
+              <li><strong>Zoom</strong>: Scroll wheel</li>
+              <li><strong>Standard Views</strong>: Click Top / Down / Front / Left / Right buttons in the control panel to quickly align crystal planes.</li>
             </ul>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">5.3 渲染风格 (Render Styles)</h3>
-            <p className="mb-2">在右侧 "Material Style" 菜单中选择：</p>
+            <h3 className="text-xl font-bold mb-2">5.3 Render Styles</h3>
+            <p className="mb-2">Select in the "Material Style" menu on the right:</p>
             <ol className="list-decimal pl-5 space-y-2 mb-4">
-              <li><strong>Classic (经典)</strong>：经典的球棍模型（Ball-and-Stick），采用标准 CPK 配色。切换到该风格时会默认显示键（可在 Show Bonds 中手动关闭）。</li>
-              <li><strong>Stick Representation</strong>：以键棒为主的展示方式，原子球体会缩小用于标记元素位置，适合展示复杂骨架或孔道结构。</li>
-              <li><strong>Scientific Matte</strong>：无反光哑光材质，阴影柔和，专为出版级平面图设计。</li>
-              <li><strong>Metallic Glossy</strong>：高金属性质感，支持调节粗糙度 (Roughness) 和金属度 (Metalness)。</li>
-              <li><strong>Glass / Transparent</strong>：玻璃材质。支持调节透光率 (Transmission)，可清晰透视内部结构。</li>
-              <li><strong>Toon / Cel Shaded</strong>：卡通描边风格，颜色分层明显，适合机理示意图。</li>
+              <li><strong>Classic</strong>: Classic Ball-and-Stick model using standard CPK coloring. Switching to this style enables bonds by default (can be toggled off manually in Show Bonds).</li>
+              <li><strong>Stick Representation</strong>: Stick-dominated view with reduced atom sphere size for marking element locations, suitable for complex frameworks or porous structures.</li>
+              <li><strong>Scientific Matte</strong>: Non-reflective matte material with soft shadows, tailored for publication-grade 2D figures.</li>
+              <li><strong>Metallic Glossy</strong>: Metallic texture supporting adjustment of Roughness and Metalness.</li>
+              <li><strong>Glass / Transparent</strong>: Glass material. Supports Transmission adjustment for clear perspective into internal structures.</li>
+              <li><strong>Toon / Cel Shaded</strong>: Cartoon outline style with distinct color layering, ideal for mechanism schematics.</li>
             </ol>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">5.4 结构与表面处理 (Structure & Surface)</h3>
+            <h3 className="text-xl font-bold mb-2">5.4 Structure &amp; Surface Treatment</h3>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>Show Bonds (显示/隐藏键)</strong>：全局开关。切换到 Classic/Stick 风格时会默认开启键显示；对于超大体系（如 &gt;5000 原子），建议关闭此选项以提升流畅度。</li>
-              <li><strong>Unit Cell (晶胞框)</strong>：显示或隐藏周期性边界框。</li>
-              <li><strong>Tidy Surface (表面整洁)</strong>：自动检测被边界切断的分子，并在周期性边界外生成 "Ghost Atoms" (幽灵原子) 以补全键连，使表面看起来完整、美观。</li>
+              <li><strong>Show Bonds</strong>: Global toggle. Switching to Classic/Stick style enables bond display by default; for ultra-large systems (&amp;gt;5000 atoms), turning this off is recommended to improve performance.</li>
+              <li><strong>Unit Cell</strong>: Show or hide the periodic boundary box.</li>
+              <li><strong>Tidy Surface</strong>: Automatically detects molecules truncated by boundaries and generates "Ghost Atoms" outside periodic boundaries to complete bonds, producing a clean, intact surface.</li>
             </ul>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">5.5 光照系统 (Lighting Configuration)</h3>
-            <p className="mb-2">支持对场景光照进行精细调节：</p>
+            <h3 className="text-xl font-bold mb-2">5.5 Lighting Configuration</h3>
+            <p className="mb-2">Supports fine-grained adjustments to scene lighting:</p>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>Light Intensity (光强)</strong>：实时调节主光源亮度，防止画面过曝。</li>
-              <li><strong>Top Right</strong>：点击可调节光源方向，增加暗部细节。</li>
+              <li><strong>Light Intensity</strong>: Adjust main light source brightness in real time to avoid overexposure.</li>
+              <li><strong>Top Right</strong>: Click to adjust light source direction to enhance shadow details.</li>
             </ul>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">5.6 XDATCAR 轨迹与动画 (Trajectory)</h3>
-            <p className="mb-2">上传轨迹文件后，底部出现控制条：</p>
+            <h3 className="text-xl font-bold mb-2">5.6 XDATCAR Trajectory &amp; Animation</h3>
+            <p className="mb-2">After uploading a trajectory file, a control bar appears at the bottom:</p>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>进度控制</strong>：拖动滑块快速定位。</li>
-              <li><strong>步进微调</strong>：支持 +1/-1 逐帧检查，或 +10/-10 快速跳转。</li>
+              <li><strong>Progress Control</strong>: Drag the slider for quick positioning.</li>
+              <li><strong>Step Fine-Tuning</strong>: Supports +1/-1 frame-by-frame inspection or +10/-10 quick jumps.</li>
             </ul>
-            <h4 className="text-lg font-bold mb-2 mt-4">极速视频导出 (Turbo Export)</h4>
-            <p className="mb-2">基于 GPU 硬件加速的视频编码引擎：</p>
+            <h4 className="text-lg font-bold mb-2 mt-4">Turbo Export Video</h4>
+            <p className="mb-2">GPU hardware-accelerated video encoding engine:</p>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>FPS 设置</strong>：15 / 24 / 60 FPS。</li>
-              <li><strong>Sampling (采样加速)</strong>：
+              <li><strong>FPS Settings</strong>：15 / 24 / 60 FPS。</li>
+              <li><strong>Sampling Acceleration</strong>：
                 <ul className="list-circle pl-5 mt-1 space-y-1 text-sm text-gray-700">
-                  <li><strong>1x (Full)</strong>：逐帧导出，最平滑。</li>
-                  <li><strong>2x (Fast)</strong>：每 2 帧导出一帧，速度翻倍。</li>
-                  <li><strong>5x (Extreme)</strong>：每 5 帧导出一帧，适合长轨迹快速预览。</li>
-                  <li><strong>10x (LightSpeed)</strong>：光速导出模式。</li>
+                  <li><strong>1x (Full)</strong>: Exports frame by frame, smoothest.</li>
+                  <li><strong>2x (Fast)</strong>: Exports 1 frame every 2 frames, doubling the speed.</li>
+                  <li><strong>5x (Extreme)</strong>: Exports 1 frame every 5 frames, ideal for fast previews of long trajectories.</li>
+                  <li><strong>10x (LightSpeed)</strong>: Ultra-fast export mode.</li>
                 </ul>
               </li>
             </ul>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">5.7 原子编辑</h3>
+            <h3 className="text-xl font-bold mb-2">5.7 Atom Editing</h3>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>选择</strong>：单击选中原子（支持 Shift 多选）。按住 Shift 并在空白处左键拖拽可进行矩形框选；框选为 3D 穿透选择（不考虑遮挡，背后的原子也会被选中）。按住 Ctrl/⌘ 可在框选时追加到已选集合。</li>
-              <li><strong>移动</strong>：选中后拖拽原子可修改坐标（仅影响显示，不破坏原始数据）。</li>
-              <li><strong>改元素</strong>：在面板输入框修改元素符号（如 C -&gt; N）。</li>
-              <li><strong>删除</strong>：点击 "Delete" 移除多余原子。</li>
-              <li><strong>混合渲染</strong>：在 Set Style for Selected 下拉菜单，您可以勾选额外的显示 style 模式，此功能常用于突出显示催化剂的活性位点或吸附分子。</li>
+              <li><strong>Select</strong>: Click to select atoms (supports Shift multi-select). Hold Shift and left-click drag in empty space for box selection; box selection is 3D pass-through (ignores occlusion, background atoms are also selected). Hold Ctrl/⌘ during box selection to append to the current selection.</li>
+              <li><strong>Move</strong>: Drag selected atoms to modify coordinates (affects display only, without altering original data).</li>
+              <li><strong>Change Element</strong>: Modify the element symbol in the panel input field (e.g., C -&amp;gt; N).</li>
+              <li><strong>Delete</strong>: Click "Delete" to remove redundant atoms.</li>
+              <li><strong>Mixed Rendering</strong>: In the Set Style for Selected dropdown menu, you can check additional display style modes. This feature is commonly used to highlight active sites or adsorbed molecules of catalysts.</li>
             </ul>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">5.8 超胞生成 (Supercell)</h3>
-            <p className="mb-4">输入扩胞倍数（如 2x2x1），点击生成。系统会自动处理原子的周期性复制。</p>
+            <h3 className="text-xl font-bold mb-2">5.8 Supercell Generation</h3>
+            <p className="mb-4">Enter supercell expansion factors (e.g., 2x2x1) and click generate. The system automatically handles periodic atom replication.</p>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">5.9 导出 (Export)</h3>
+            <h3 className="text-xl font-bold mb-2">5.9 Export</h3>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>Export High-Res Image</strong>：导出 <strong>4K (4096px)</strong> 分辨率的透明背景 PNG。系统会自动调整相机视场以适配正方形画布，确保存图不畸变。</li>
-              <li><strong>Batch Export All (批量导出)</strong>：一键将列表中所有打开的文件导出为图片，并自动打包成 <code>.zip</code> 下载。</li>
+              <li><strong>Export High-Res Image</strong>: Export <strong>4K (4096px)</strong> resolution transparent-background PNG. The system automatically adjusts camera FOV to fit square canvases, ensuring saved images are distortion-free.</li>
+              <li><strong>Batch Export All</strong>: Export all open files in the list as images with one click, automatically packed into a <code>.zip</code> download.</li>
             </ul>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">5.10 专家配置 (Manual Config)</h3>
-            <p className="mb-2">在面板底部，你可以手动输入文本来覆盖默认设置：</p>
+            <h3 className="text-xl font-bold mb-2">5.10 Manual Config</h3>
+            <p className="mb-2">At the bottom of the panel, you can manually enter text to override default settings:</p>
             <ul className="list-disc pl-5 space-y-2 mb-4 font-mono text-sm">
-              <li><strong>Atom Colors</strong>: Fe/0/0/#FFA500 (格式：元素/占位/占位/HEX颜色)</li>
+              <li><strong>Atom Colors</strong>: Fe/0/0/#FFA500 (format: element/placeholder/placeholder/HEX color)</li>
               <li><strong>Atom Radii</strong>: Fe/0/0/1.5</li>
-              <li><strong>Bond Rules</strong>: Fe/O/2.5 (定义 Fe 和 O 之间最大成键距离为 2.5Å)</li>
+              <li><strong>Bond Rules</strong>: Fe/O/2.5 (defines maximum bonding distance between Fe and O as 2.5 Å)</li>
             </ul>
           </div>
         </section>
 
         {/* 6. Illustration Agent */}
         <section>
-          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">6. Illustration Agent — 期刊封面生成</h2>
+          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">6. Illustration Agent — Journal Cover Generation</h2>
           <p className="mb-4 leading-relaxed">
-            Illustration Agent 可以根据你的科研论文内容，自动生成高品质的期刊封面图片。
+            Illustration Agent automatically generates high-quality journal cover images based on your scientific paper content.
           </p>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">6.1 六步工作流 (6-Step Pipeline)</h3>
+            <h3 className="text-xl font-bold mb-2">6.1 6-Step Pipeline</h3>
             <ol className="list-decimal pl-5 space-y-2 mb-4">
-              <li><strong>Input (输入)</strong>：粘贴论文摘要/关键段落，或上传 PDF。支持五个输入区域：核心文本、补充说明、风格偏好、参考图片、高级开关。</li>
-              <li><strong>Parsing (科学实体提取)</strong>：系统自动解析文本，提取科学实体（化学式、反应物、产物、中间体、活性位点、反应机理等），生成结构化的 JSON 表示。</li>
-              <li><strong>Plan Selection (方案选择)</strong>：系统生成三种不同风格的视觉方案卡片供选择。每种方案包含不同的构图思路和视觉重点。</li>
-              <li><strong>Prompt Review (提示词确认)</strong>：查看编译的完整图像生成提示词，可以手动微调后确认。</li>
-              <li><strong>Base Generation (图像生成)</strong>：图像模型生成高清封面图片。支持多张候选图供选择。</li>
-              <li><strong>Export (导出)</strong>：下载最终的高分辨率封面图片。</li>
+              <li><strong>Input</strong>: Paste paper abstract/key paragraphs or upload PDF. Supports five input areas: core text, supplementary notes, style preferences, reference images, and advanced toggles.</li>
+              <li><strong>Parsing (Scientific Entity Extraction)</strong>: The system automatically parses text to extract scientific entities (chemical formulas, reactants, products, intermediates, active sites, reaction mechanisms, etc.), generating structured JSON representations.</li>
+              <li><strong>Plan Selection</strong>: The system generates three visual plan cards in different styles for selection. Each plan includes distinct composition concepts and visual focuses.</li>
+              <li><strong>Prompt Review</strong>: Review the compiled full image generation prompt, which can be manually fine-tuned before confirmation.</li>
+              <li><strong>Base Generation</strong>: The image model generates high-definition cover images, offering multiple candidates for selection.</li>
+              <li><strong>Export</strong>: Download the final high-resolution cover image.</li>
             </ol>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">6.2 风格调节</h3>
-            <p className="mb-2">支持六维风格滑块，实时调整封面风格：</p>
+            <h3 className="text-xl font-bold mb-2">6.2 Style Adjustment</h3>
+            <p className="mb-2">Supports 6D style sliders to adjust cover style in real time:</p>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>Cinematic</strong>：电影感光影效果</li>
-              <li><strong>Macro</strong>：微观放大视角</li>
-              <li><strong>Abstract</strong>：抽象艺术化程度</li>
-              <li><strong>Realistic</strong>：写实渲染质感</li>
-              <li><strong>Glass</strong>：玻璃/透明材质</li>
-              <li><strong>Metallic</strong>：金属质感</li>
+              <li><strong>Cinematic</strong>: Cinematic lighting effects</li>
+              <li><strong>Macro</strong>: Microscopic zoomed-in view</li>
+              <li><strong>Abstract</strong>: Abstract artistic degree</li>
+              <li><strong>Realistic</strong>: Realistic render texture</li>
+              <li><strong>Glass</strong>: Glass/transparent material</li>
+              <li><strong>Metallic</strong>: Metallic texture</li>
             </ul>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">6.3 高级开关</h3>
+            <h3 className="text-xl font-bold mb-2">6.3 Advanced Toggles</h3>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>Strict Chemical Structure</strong>：强制严格的化学结构正确性（CPK 原子颜色、正确键连）</li>
-              <li><strong>Prioritize Accuracy</strong>：优先科学准确性而非艺术效果</li>
-              <li><strong>Prioritize Art</strong>：优先视觉美感和创意表现</li>
-              <li><strong>Use Reference Constraint</strong>：参考已上传的参考图片来约束生成风格</li>
-              <li><strong>Publish Export Mode</strong>：启用出版级导出质量</li>
+              <li><strong>Strict Chemical Structure</strong>: Enforce strict chemical structural correctness (CPK atom colors, accurate bonding)</li>
+              <li><strong>Prioritize Accuracy</strong>: Prioritize scientific accuracy over artistic effects</li>
+              <li><strong>Prioritize Art</strong>: Prioritize visual aesthetics and creative expression</li>
+              <li><strong>Use Reference Constraint</strong>: Reference uploaded images to constrain generated style</li>
+              <li><strong>Publish Export Mode</strong>: Enable publication-grade export quality</li>
             </ul>
           </div>
         </section>
 
         {/* 7. User Profile */}
         <section>
-          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">7. 个人中心 (User Profile)</h2>
+          <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">7. User Profile</h2>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">11.1 访问方式</h3>
-            <p className="mb-4">点击页面右上角的头像图标进入个人中心。在此页面，您可以管理账户信息并查看当前的权益状态。</p>
+            <h3 className="text-xl font-bold mb-2">11.1 Access Method</h3>
+            <p className="mb-4">Click the avatar icon at the top right of the page to enter User Profile. On this page, you can manage account information and view your current tier benefits.</p>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">11.2 功能概览</h3>
+            <h3 className="text-xl font-bold mb-2">11.2 Overview of Features</h3>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong>额度查询</strong>：实时显示剩余的免费图片导出次数和视频导出次数。</li>
-              <li><strong>身份标识</strong>：显示当前账户等级。</li>
-              <li><strong>激活权益</strong>：在此处选择账号类型即可升级账户。</li>
+              <li><strong>Quota Check</strong>: Displays remaining free image exports and video exports in real time.</li>
+              <li><strong>Identity Badge</strong>: Displays current account tier.</li>
+              <li><strong>Activate Benefits</strong>: Select account type here to upgrade your account.</li>
             </ul>
           </div>
         </section>

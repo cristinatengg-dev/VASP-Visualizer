@@ -7,7 +7,10 @@ import { maskPhoneNumber } from '../utils/phone';
 import { PHONE_AUTH_ENABLED } from '../config';
 
 const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const { user } = useStore();
+    const { user, redeemCode } = useStore();
+    const [inviteCode, setInviteCode] = useState('');
+    const [redeemStatus, setRedeemStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const [redeemMsg, setRedeemMsg] = useState('');
     if (!user) return null;
 
     // Calculate Remaining Quotas based on Tier
@@ -37,11 +40,6 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const isLowQuota = (remaining: number, total: number) => total > 0 && (remaining / total) < 0.2;
     const showWarning = isLowQuota(imgRemaining, imgQuotaTotal) || isLowQuota(vidRemaining, vidQuotaTotal);
     
-    const [inviteCode, setInviteCode] = useState('');
-    const [redeemStatus, setRedeemStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-    const [redeemMsg, setRedeemMsg] = useState('');
-    const { redeemCode } = useStore();
-
     const handleRedeem = async () => {
         if (!inviteCode.trim()) return;
         setRedeemStatus('loading');
@@ -49,7 +47,7 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             await redeemCode(inviteCode);
             setRedeemStatus('success');
             setInviteCode('');
-            setRedeemMsg('成功！您已升级。');
+            setRedeemMsg('Success! You have been upgraded.');
             setTimeout(() => setRedeemStatus('idle'), 3000);
         } catch (e: any) {
             setRedeemStatus('error');
@@ -74,7 +72,7 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         user.tier === 'personal' ? "bg-gray-100 text-gray-600" :
                         user.tier === 'academic' ? "bg-slate-100 text-slate-700 ring-1 ring-slate-200" : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
                     )}>
-                        {user.tier === 'enterprise' ? '企业端' : user.tier === 'academic' ? '高校端' : '个人端'}
+                        {user.tier === 'enterprise' ? 'Enterprise' : user.tier === 'academic' ? 'Academic' : 'Personal'}
                     </div>
                 </div>
                 
@@ -162,7 +160,7 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                     <span className="text-gray-600 font-medium">Videos Exported</span>
                                     <span className="font-mono font-bold text-gray-900 bg-gray-50 px-2 py-0.5 rounded-lg">{user.used_vid}</span>
                                 </div>
-                                <div className="text-[10px] text-gray-400 mt-2 italic text-right">个人端 · 按 Agent 订阅</div>
+                                <div className="text-[10px] text-gray-400 mt-2 italic text-right">Personal · Per-Agent Subscription</div>
                              </div>
                         ) : (
                              <div className="space-y-5">
@@ -248,7 +246,7 @@ export const AccountDropdown: React.FC = () => {
                     className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-[32px] shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 hover:shadow-[0_8px_25px_rgba(0,0,0,0.08)] transition-all group ring-1 ring-black/5 text-[#0A1128] text-sm font-semibold"
                 >
                     <LogIn className="w-4 h-4 text-[#2E4A8E]" />
-                    登录
+                    Log In
                 </button>
             </div>
         );
@@ -279,7 +277,7 @@ export const AccountDropdown: React.FC = () => {
                         user.tier === 'academic' ? "text-slate-100 bg-slate-800 shadow-[0_2px_4px_rgba(0,0,0,0.2)]" :
                         "text-yellow-900 bg-yellow-300 shadow-[0_2px_4px_rgba(234,179,8,0.3)]"
                     )}>
-                        {user.tier === 'enterprise' ? '企业端' : user.tier === 'academic' ? '高校端' : '个人端'}
+                        {user.tier === 'enterprise' ? 'Enterprise' : user.tier === 'academic' ? 'Academic' : 'Personal'}
                     </span>
                 </div>
                 
@@ -303,7 +301,7 @@ export const AccountDropdown: React.FC = () => {
                     
                     <div>
                         <button 
-                            onClick={() => { logout(); setIsOpen(false); }}
+                            onClick={() => { logout(); setIsOpen(false); navigate('/login'); }}
                             className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 rounded-[24px] transition-colors"
                         >
                             <LogOut className="w-4 h-4" />

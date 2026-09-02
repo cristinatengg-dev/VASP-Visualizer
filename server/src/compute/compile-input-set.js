@@ -1,6 +1,8 @@
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const { getDefaultComputePythonExecutable } = require('./python-runtime');
+const { buildSignedComputeAudit } = require('./audit');
 
 const SUPPORTED_ENGINES = new Set([
   'vasp',
@@ -32,7 +34,7 @@ const SUPPORTED_WORKFLOWS = new Set([
   'irradiation_creep',
 ]);
 const SUPPORTED_QUALITIES = new Set(['fast', 'standard', 'high']);
-const SUPPORTED_SPIN_MODES = new Set(['none', 'auto', 'polarized']);
+const SUPPORTED_SPIN_MODES = new Set(['none', 'auto', 'polarized', 'collinear', 'non-collinear']);
 
 function normalizeComputeIntent(intent = {}, structurePreview = {}) {
   const engine = SUPPORTED_ENGINES.has(String(intent.engine || '').trim().toLowerCase())
@@ -57,7 +59,14 @@ function normalizeComputeIntent(intent = {}, structurePreview = {}) {
     workflow,
     quality,
     vdw: intent.vdw === true,
+    u_correction: intent.u_correction === true,
     spin_mode: spinMode,
+    kpoints_mode: ['auto', 'gamma', 'monkhorst'].includes(String(intent.kpoints_mode || '').trim().toLowerCase())
+      ? String(intent.kpoints_mode).trim().toLowerCase()
+      : 'auto',
+    restart_policy: ['basic', 'custodian'].includes(String(intent.restart_policy || '').trim().toLowerCase())
+      ? String(intent.restart_policy).trim().toLowerCase()
+      : 'basic',
     custom_params: intent.custom_params && typeof intent.custom_params === 'object'
       ? intent.custom_params
       : {},
@@ -157,10 +166,26 @@ async function compileComputeInputSet({ structure, intent } = {}) {
 
       try {
         const parsed = parseCompilerOutput(stdout);
+        const compilerSource = fs.readFileSync(compilerPath, 'utf8');
+        const signedAudit = process.env.TOKEN_SECRET
+          ? buildSignedComputeAudit({
+            files: parsed.files,
+            structure,
+            intent: normalizedIntent,
+            compileResult: parsed,
+            compilerSource,
+            secret: process.env.TOKEN_SECRET,
+          })
+          : null;
+        if (signedAudit) {
+          parsed.files['VASP_AUDIT.json'] = JSON.stringify(signedAudit.manifest, null, 2);
+        }
         settled = true;
         resolve({
           ...parsed,
           normalizedIntent,
+          audit: signedAudit?.manifest || null,
+          auditToken: signedAudit?.token || null,
           pythonExecutable,
           rawStderr: stderr.trim() || null,
         });

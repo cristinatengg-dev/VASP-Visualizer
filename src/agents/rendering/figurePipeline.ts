@@ -13,10 +13,10 @@ import type {
 function humanizeFigureApiError(message: string, fallback: string) {
   const raw = String(message || '').trim();
   if (!raw) return fallback;
-  if (/No figure data file uploaded/i.test(raw)) return '请先上传数据文件。';
-  if (/Uploaded figure dataset is empty/i.test(raw)) return '数据文件为空，暂时无法生成数据图。';
-  if (/Unsupported data format/i.test(raw)) return '目前数据图模式仅支持 CSV、TSV 和 JSON 表格数据。';
-  if (/Figure worker dependency missing/i.test(raw)) return '服务端缺少数据图依赖，请联系管理员补齐绘图环境。';
+  if (/No figure data file uploaded/i.test(raw)) return 'Please upload a data file first.';
+  if (/Uploaded figure dataset is empty/i.test(raw)) return 'Data file is empty; cannot generate data figure.';
+  if (/Unsupported data format/i.test(raw)) return 'Data figure mode currently supports CSV, TSV, and JSON tabular data only.';
+  if (/Figure worker dependency missing/i.test(raw)) return 'Server is missing data figure dependencies. Please contact administrator to set up the plotting environment.';
   return raw || fallback;
 }
 

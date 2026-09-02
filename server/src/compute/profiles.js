@@ -13,12 +13,13 @@ function buildServerLocalProfile() {
 
   return {
     id: 'server_local',
-    label: 'Server Local Execution',
+    label: '同机 VASP',
     system: 'local',
     mode: 'server_local',
     configured: Boolean(command),
+    directSubmitSupported: true,
     requiresApproval: true,
-    summary: 'Run the compute workload directly on the same server that hosts the browser/runtime backend.',
+    summary: '在后端所在服务器直接执行 VASP；提交前实时检查命令和本地 POTCAR 库。',
     schedulerRef,
     local: {
       command,
@@ -30,12 +31,13 @@ function buildServerLocalProfile() {
 function buildLocalDemoProfile() {
   return {
     id: 'local_demo',
-    label: 'Local Demo Runner',
+    label: '输入演示（非科研计算）',
     system: 'local',
     mode: 'local_demo',
     configured: true,
+    directSubmitSupported: true,
     requiresApproval: true,
-    summary: 'Materialize a real compute workdir locally and drive the runtime lifecycle without a real scheduler.',
+    summary: '仅物化输入文件并演示生命周期，不运行 VASP，也不会产生科研结果。',
   };
 }
 
@@ -48,14 +50,15 @@ function buildSlurmProfile() {
 
   return {
     id: 'slurm_default',
-    label: 'Slurm Default',
+    label: 'Slurm 集群',
     system: 'slurm',
     mode: 'slurm',
     configured: Boolean(partition && executable),
+    directSubmitSupported: true,
     requiresApproval: true,
     summary: ssh.configured
-      ? 'Submit the compiled workdir to a remote Slurm cluster over SSH.'
-      : 'Submit the compiled workdir to a Slurm cluster using local sbatch/squeue access.',
+      ? '通过后端预配置的 SSH 通道提交到远程 Slurm 集群。'
+      : '通过后端本地的 sbatch/squeue 通道提交到 Slurm 集群。',
     schedulerRef,
     hpc: {
       id: schedulerRef,
@@ -80,14 +83,15 @@ function buildPbsProfile() {
 
   return {
     id: 'pbs_default',
-    label: 'PBS Default',
+    label: 'PBS 集群',
     system: 'pbs',
     mode: 'pbs',
     configured: Boolean(queue && executable),
+    directSubmitSupported: true,
     requiresApproval: true,
     summary: ssh.configured
-      ? 'Submit the compiled workdir to a remote PBS cluster over SSH.'
-      : 'Submit the compiled workdir to a PBS cluster using local qsub/qstat access.',
+      ? '通过后端预配置的 SSH 通道提交到远程 PBS 集群。'
+      : '通过后端本地的 qsub/qstat 通道提交到 PBS 集群。',
     schedulerRef,
     hpc: {
       id: schedulerRef,
@@ -111,12 +115,13 @@ function buildPbsAgentProfile() {
 
   return {
     id: 'pbs_via_local_agent',
-    label: 'PBS via Local Agent',
+    label: 'PBS 独立代理队列',
     system: 'pbs',
     mode: 'pbs_agent',
     configured: Boolean(queue && executable && agentToken),
+    directSubmitSupported: false,
     requiresApproval: true,
-    summary: 'Queue the compiled workdir for a local compute agent running on a machine that can reach the PBS cluster.',
+    summary: '仅供独立计算代理消费，不能从当前直提页面执行。',
     schedulerRef,
     hpc: {
       id: schedulerRef,
@@ -154,7 +159,43 @@ function getComputeProfile(profileId) {
   return profiles.find((profile) => profile.id === requestedId) || null;
 }
 
+function toPublicComputeProfile(profile, readiness = {}) {
+  const hpc = profile.hpc ? {
+    id: profile.hpc.id,
+    partition: profile.hpc.partition,
+    queue: profile.hpc.queue,
+    nodes: profile.hpc.nodes,
+    ntasks_per_node: profile.hpc.ntasks_per_node,
+    ppn: profile.hpc.ppn,
+    walltime: profile.hpc.walltime,
+    moduleLoadConfigured: Boolean(profile.hpc.moduleLoad),
+    executableConfigured: Boolean(profile.hpc.executable),
+    accessMode: profile.hpc.accessMode,
+  } : undefined;
+  const local = profile.local ? {
+    shell: profile.local.shell,
+    commandConfigured: Boolean(profile.local.command),
+  } : undefined;
+
+  return {
+    id: profile.id,
+    label: profile.label,
+    system: profile.system,
+    mode: profile.mode,
+    configured: profile.configured,
+    ready: readiness.ready ?? profile.configured,
+    readinessReason: readiness.reason || null,
+    directSubmitSupported: profile.directSubmitSupported !== false,
+    requiresApproval: profile.requiresApproval,
+    summary: profile.summary,
+    schedulerRef: profile.schedulerRef,
+    ...(hpc ? { hpc } : {}),
+    ...(local ? { local } : {}),
+  };
+}
+
 module.exports = {
   getComputeProfile,
   listComputeProfiles,
+  toPublicComputeProfile,
 };

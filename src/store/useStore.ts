@@ -431,40 +431,39 @@ export const useStore = create<AppState>((set, get) => ({
   redeemCode: async (code) => {
       const { user } = get();
       if (!user) return false;
-      try {
-          const res = await fetch(`${API_BASE_URL}/auth/redeem`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: user.phone, code })
-          });
-          const data = await res.json();
-          if (data.success) {
-              await get().refreshUser();
-              return true;
-          }
-          throw new Error(data.error || 'Redemption failed');
-      } catch (e) { throw e; }
+      const token = localStorage.getItem('vasp_token') || '';
+      const res = await fetch(`${API_BASE_URL}/auth/redeem`, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ code })
+      });
+      const data = await res.json();
+      if (data.success) {
+          await get().refreshUser();
+          return true;
+      }
+      throw new Error(data.error || 'Redemption failed');
   },
 
   login: async (phone, code) => {
-    try {
-        const res = await fetch(`${API_BASE_URL}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, code })
-        });
-        const data = await res.json();
-        if (data.success) {
-            // 修改后：这里加上 enforceSvip
-            const vipUser = enforceSvip(data.user);
-            set({ user: vipUser });
-            
-            localStorage.setItem('vasp_token', data.token);
-            localStorage.setItem('vasp_user_id', vipUser.phone);
-            return vipUser; // 返回处理后的用户
-        }
-        throw new Error(data.error);
-    } catch (e) { throw e; }
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, code })
+    });
+    const data = await res.json();
+    if (data.success) {
+        const vipUser = enforceSvip(data.user);
+        set({ user: vipUser });
+
+        localStorage.setItem('vasp_token', data.token);
+        localStorage.setItem('vasp_user_id', vipUser.phone);
+        return vipUser;
+    }
+    throw new Error(data.error);
 },
   
   logout: () => {
@@ -890,7 +889,7 @@ export const useStore = create<AppState>((set, get) => ({
     let message = '';
     
     if (overlapCount > 1) {
-        message = `已选中 ${overlapCount} 个重叠原子`;
+        message = `Selected ${overlapCount} overlapping atoms`;
     }
     
     const isTargetSelected = state.selectedAtomIds.includes(id);

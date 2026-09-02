@@ -16,6 +16,31 @@ function extractUserId(req) {
   return '';
 }
 
+const LOCAL_OWNER_ID_PATTERN = /^local-[a-zA-Z0-9-]{12,160}$/;
+
+/**
+ * Resolve the storage owner for endpoints that support both signed-in users and
+ * anonymous local workspaces. Phone-number owners always require a verified
+ * bearer token; anonymous callers may only use high-entropy `local-*` ids.
+ */
+function resolveAgentOwnerId(req) {
+  if (req.agentAuthenticated) {
+    const authenticatedOwner = String(
+      req.agentUser?.phone || req.agentUser?.id || req.agentUser?._id || '',
+    ).trim();
+    if (authenticatedOwner) return authenticatedOwner;
+  }
+
+  const requestedOwner = String(
+    req.body?.ownerId || req.body?.userId || req.query?.ownerId || req.query?.userId || '',
+  ).trim();
+  if (LOCAL_OWNER_ID_PATTERN.test(requestedOwner)) return requestedOwner;
+
+  const error = new Error('A valid login token or local owner id is required');
+  error.statusCode = 401;
+  throw error;
+}
+
 /**
  * Agent capabilities are public. This function remains as the shared policy
  * boundary so subscription controls can be reintroduced without changing every
@@ -105,5 +130,6 @@ module.exports = {
   recordAgentUsage,
   requireAgentAccess,
   requireAgentIdentity,
+  resolveAgentOwnerId,
   handleAgentAccessCheck,
 };

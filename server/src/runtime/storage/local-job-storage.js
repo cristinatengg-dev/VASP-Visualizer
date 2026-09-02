@@ -29,6 +29,12 @@ function createLocalJobStorage() {
     const files = computeInputPayload?.files && typeof computeInputPayload.files === 'object'
       ? computeInputPayload.files
       : {};
+    let audit = null;
+    try {
+      audit = files['VASP_AUDIT.json'] ? JSON.parse(String(files['VASP_AUDIT.json'])) : null;
+    } catch (_error) {
+      audit = null;
+    }
 
     const writtenFiles = [];
     for (const [fileName, content] of Object.entries(files)) {
@@ -61,6 +67,12 @@ function createLocalJobStorage() {
             fileName: potcar.fileName,
             path: potcar.path,
           });
+          if (potcar.provenancePath) {
+            writtenFiles.push({
+              fileName: 'POTCAR.provenance.json',
+              path: potcar.provenancePath,
+            });
+          }
         }
       } catch (error) {
         potcar = {
@@ -89,6 +101,9 @@ function createLocalJobStorage() {
       inputDir,
       inputFiles: writtenFiles,
       potcar,
+      engine: computeInputPayload?.intent?.engine || audit?.engine || null,
+      workflow: computeInputPayload?.intent?.workflow || audit?.workflow || null,
+      audit,
       preview: computeInputSetArtifact.preview || {},
     };
 

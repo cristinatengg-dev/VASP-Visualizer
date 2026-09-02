@@ -782,16 +782,16 @@ const RenderingAgent: React.FC = () => {
       || /new_api_error/i.test(raw)
     ) {
       if (/No available channel|model_not_found/i.test(raw)) {
-        return '图像模型通道暂不可用，请在模型平台确认当前 API Key 的分组已开通 gpt-image-2。';
+        return 'Image model channel is temporarily unavailable. Please confirm on the model platform that current API Key\'s group has gpt-image-2 enabled.';
       }
-      return '图像服务鉴权失败，请联系管理员检查上游令牌或网关配置。';
+      return 'Image service authentication failed. Please contact administrator to check upstream token or gateway configuration.';
     }
 
     if (/(IMAGE_LLM_API_KEY|TEXT_LLM_API_KEY|GEMINI_API_KEY).*not configured/i.test(raw)) {
-      return '图像服务尚未配置，请联系管理员补充可用凭据。';
+      return 'Image service is not configured yet. Please contact administrator to add available credentials.';
     }
 
-    return raw || '图像分析暂时不可用，请稍后再试。';
+    return raw || 'Image analysis is temporarily unavailable. Please try again later.';
   }, []);
 
   // ── Input state ──
@@ -846,7 +846,7 @@ const RenderingAgent: React.FC = () => {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       const friendly = message === 'This operation was aborted'
-        ? 'PDF/分析请求超时，请重试或换更小的 PDF。'
+        ? 'PDF/analysis request timed out. Please try again or use a smaller PDF.'
         : presentRenderingError(message);
       setParseError(friendly);
       setCurrentStep('input');

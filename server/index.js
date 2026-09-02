@@ -10,7 +10,7 @@ const fs = require('fs');
 const { parseXDATCARStream } = require('./utils/parser');
 const ffmpeg = require('fluent-ffmpeg');
 const JSZip = require('jszip');
-const { randomUUID, createHash } = require('crypto');
+const { randomUUID, createHash, createHmac } = require('crypto');
 const zlib = require('zlib');
 const os = require('os');
 const readline = require('readline');
@@ -50,17 +50,24 @@ const {
 } = require('./src/materials/library-profiles');
 const { createCatalystRouter } = require('./src/catalyst/router');
 const { compileComputeInputSet } = require('./src/compute/compile-input-set');
-const { listComputeProfiles, getComputeProfile } = require('./src/compute/profiles');
+const { verifyComputeAudit } = require('./src/compute/audit');
+const { materializePotcar } = require('./src/compute/potcar');
+const { listComputeProfiles, getComputeProfile, toPublicComputeProfile } = require('./src/compute/profiles');
+const { getComputeRuntimeDiagnostics } = require('./src/compute/health');
 const { submitComputeJob } = require('./src/compute/submit-job');
 const { querySlurmJobStatus, queryPbsJobStatus, queryLocalJobStatus } = require('./src/compute/query-job');
+const { copyRemoteDirectoryToLocal } = require('./src/compute/ssh-remote');
+const { getHpcSshConfigFromEnv } = require('./src/compute/ssh-config');
 const { testRemoteComputeChannel } = require('./src/compute/ssh-channel');
 const { buildResultMetrics, collectWarnings } = require('./src/compute/parse-results');
 const {
     requireAgentAccess,
     requireAgentIdentity,
+    resolveAgentOwnerId,
     recordAgentUsage,
     handleAgentAccessCheck,
 } = require('./src/auth/agent-access');
+const { createConcurrencyLimit, createWindowRateLimit, requestIp } = require('./src/http/request-guards');
 const { isAdminUser } = require('./src/auth/admin');
 const {
     generateVerificationCode,
@@ -68,7 +75,7 @@ const {
     normalizePhoneNumber,
 } = require('./src/auth/phone-auth');
 const { sendLoginCode } = require('./src/auth/sms-service');
-const { generateAuthToken, verifyAuthToken } = require('./src/auth/token-auth');
+const { generateAuthToken, verifyAuthToken, readTokenIdentity } = require('./src/auth/token-auth');
 
 // --- Fail-fast: required environment variables ---
 const REQUIRED_ENV = [
@@ -78,6 +85,7 @@ const REQUIRED_ENV = [
     'TENCENT_SMS_SDK_APP_ID',
     'TENCENT_SMS_SIGN_NAME',
     'TENCENT_SMS_TEMPLATE_ID',
+    'ADMIN_SECRET',
 ];
 const missingEnv = REQUIRED_ENV.filter(k => !process.env[k]);
 if (missingEnv.length > 0) {
@@ -119,6 +127,41 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+
+const heavyUploadRateLimit = createWindowRateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 20,
+    message: '大型文件请求过于频繁，请稍后再试。',
+});
+const heavyUploadConcurrencyLimit = createConcurrencyLimit({ max: 2 });
+app.use([
+    '/api/video/stitch',
+    '/api/parse-structure',
+    '/api/parse-density',
+    '/api/parse-volumetric',
+    '/api/parse-xdatcar',
+    '/api/agent/parse-pdf',
+    '/api/agent/profile-figure-data',
+    '/api/agent/generate-figure',
+], heavyUploadRateLimit, heavyUploadConcurrencyLimit);
+
+const costlyAgentRateLimit = createWindowRateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 60,
+    message: '计算或 AI 请求过于频繁，请稍后再试。',
+});
+const costlyAgentConcurrencyLimit = createConcurrencyLimit({ max: 8 });
+app.use([
+    '/api/agent/chat',
+    '/api/agent/retrieve',
+    '/api/agent/research-stack/analyze',
+    '/api/agent/generate-image',
+    '/api/agent/edit-image',
+    '/api/modeling/build',
+    '/api/compute/submit',
+    '/api/video/generate',
+    '/api/video/generate-promo',
+], costlyAgentRateLimit, costlyAgentConcurrencyLimit);
 
 if (process.env.ENABLE_AGENT_RUNTIME_DEMO === '1') {
     app.use('/api/runtime-demo', createRuntimeDemoRouter());
@@ -175,7 +218,7 @@ function fallbackChatReply(message, memories) {
 async function loadChatSession(sessionId, ownerId) {
     if (sessionId) {
         try {
-            const existing = await ChatSession.findById(sessionId);
+            const existing = await ChatSession.findOne({ _id: sessionId, ownerId });
             if (existing) return existing.toObject ? existing.toObject() : existing;
         } catch (_error) {
             // Ignore stale mock ids or malformed ObjectIds and start a fresh session.
@@ -201,9 +244,9 @@ app.get('/api/agent/chat/status', (_req, res) => {
     });
 });
 
-app.post('/api/agent/chat', async (req, res) => {
+app.post('/api/agent/chat', requireAgentIdentity(), async (req, res) => {
     try {
-        const ownerId = String(req.body.ownerId || req.body.userId || 'anonymous-researcher').trim() || 'anonymous-researcher';
+        const ownerId = resolveAgentOwnerId(req);
         const message = String(req.body.message || '').trim();
         if (!message) return res.status(400).json({ success: false, error: 'message is required' });
 
@@ -267,7 +310,7 @@ app.post('/api/agent/chat', async (req, res) => {
         ].slice(-80);
 
         await ChatSession.findOneAndUpdate(
-            { _id: session._id },
+            { _id: session._id, ownerId },
             {
                 $set: {
                     ownerId,
@@ -290,7 +333,7 @@ app.post('/api/agent/chat', async (req, res) => {
             model: textChatConfig.model || null,
         });
     } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
+        return res.status(err.statusCode || 500).json({ success: false, error: err.message });
     }
 });
 
@@ -320,10 +363,10 @@ const verifyToken = (userId, token) => {
 
 // Auth middleware for privileged endpoints
 const authMiddleware = (req, res, next) => {
-    const token = String(req.headers.authorization || '');
-    const userId = String(req.body?.userId || '');
-    if (!verifyToken(userId, token)) return res.status(401).json({ error: 'Unauthorized' });
-    req.userId = userId;
+    const tokenIdentity = readTokenIdentity(req.headers.authorization, TOKEN_SECRET);
+    if (!tokenIdentity.valid) return res.status(401).json({ error: 'Unauthorized' });
+    req.userId = tokenIdentity.userId;
+    if (req.body && typeof req.body === 'object') req.body.userId = tokenIdentity.userId;
     next();
 };
 
@@ -506,7 +549,19 @@ Input: "${prompt}"`;
 app.get('/api/compute/profiles', async (_req, res) => {
     try {
         const profiles = listComputeProfiles();
-        res.json({ success: true, profiles });
+        const diagnostics = await getComputeRuntimeDiagnostics();
+        const profileReadiness = (profile) => {
+            if (profile.mode === 'local_demo') return { ready: true };
+            if (profile.mode === 'pbs_agent') return { ready: false, reason: 'runtime_agent_queue_only' };
+            if (profile.mode === 'server_local') return { ready: diagnostics.serverLocal.ready, reason: diagnostics.serverLocal.ready ? null : 'local_vasp_command_unavailable' };
+            if (profile.system === 'pbs') return { ready: diagnostics.pbs.ready, reason: diagnostics.pbs.ready ? null : 'pbs_channel_or_potcar_unavailable' };
+            if (profile.system === 'slurm') return { ready: diagnostics.slurm.ready, reason: diagnostics.slurm.ready ? null : 'slurm_channel_or_potcar_unavailable' };
+            return { ready: false, reason: 'unsupported_profile' };
+        };
+        res.json({
+            success: true,
+            profiles: profiles.map((profile) => toPublicComputeProfile(profile, profileReadiness(profile))),
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -539,9 +594,92 @@ app.post('/api/compute/compile', requireAgentAccess('compute'), async (req, res)
 // In-memory job registry for tracking submitted jobs across polling requests.
 const activeJobs = new Map();
 
-app.post('/api/compute/submit', requireAgentAccess('compute'), async (req, res) => {
+const COMPUTE_JOB_ID_PATTERN = /^vasp-[a-f0-9]{16}-[a-f0-9-]{8,64}$/;
+const COMPUTE_FILE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const VASP_HASHED_RESULT_FILES = ['OUTCAR', 'OSZICAR', 'vasprun.xml', 'CONTCAR', 'DOSCAR', 'EIGENVAL', 'PROCAR'];
+const VASP_LARGE_RESULT_FILES = ['CHGCAR', 'WAVECAR'];
+
+const sha256File = async (filePath) => new Promise((resolve, reject) => {
+    const hash = createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', reject);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+});
+
+const collectVaspResultProvenance = async ({ resultRoot, stages }) => {
+    const stageDirectories = Array.from(new Set(
+        (Array.isArray(stages) && stages.length ? stages : [{ directory: '.' }])
+            .map((stage) => String(stage?.directory || '.'))
+    ));
+    const hashedFiles = [];
+    const largeFiles = [];
+
+    for (const stageDirectory of stageDirectories) {
+        const stageRoot = stageDirectory === '.' ? resultRoot : path.join(resultRoot, stageDirectory);
+        for (const fileName of VASP_HASHED_RESULT_FILES) {
+            const absolutePath = path.join(stageRoot, fileName);
+            try {
+                const stats = await fs.promises.stat(absolutePath);
+                if (!stats.isFile()) continue;
+                hashedFiles.push({
+                    path: path.relative(resultRoot, absolutePath) || fileName,
+                    sizeBytes: stats.size,
+                    sha256: await sha256File(absolutePath),
+                });
+            } catch {}
+        }
+        for (const fileName of VASP_LARGE_RESULT_FILES) {
+            const absolutePath = path.join(stageRoot, fileName);
+            try {
+                const stats = await fs.promises.stat(absolutePath);
+                if (!stats.isFile()) continue;
+                largeFiles.push({
+                    path: path.relative(resultRoot, absolutePath) || fileName,
+                    sizeBytes: stats.size,
+                    sha256: null,
+                    note: 'Large restart artifact recorded by size; excluded from synchronous result hashing.',
+                });
+            } catch {}
+        }
+    }
+
+    return { hashedFiles, largeFiles };
+};
+
+const computeJobRecordPath = (jobId) => path.join(__dirname, 'data', 'compute-jobs', jobId, 'job-record.json');
+
+const loadComputeJob = async (jobId) => {
+    if (!COMPUTE_JOB_ID_PATTERN.test(String(jobId || ''))) return null;
+    if (activeJobs.has(jobId)) return activeJobs.get(jobId);
     try {
-        const { profileId, structure, intent, compiledFiles } = req.body;
+        const record = JSON.parse(await fs.promises.readFile(computeJobRecordPath(jobId), 'utf8'));
+        record.createdAt = new Date(record.createdAt);
+        activeJobs.set(jobId, record);
+        return record;
+    } catch {
+        return null;
+    }
+};
+
+app.post('/api/compute/submit', authMiddleware, requireAgentAccess('compute'), async (req, res) => {
+    try {
+        const { profileId, structure, intent, compiledFiles, auditToken } = req.body;
+        if (String(intent?.engine || '').toLowerCase() !== 'vasp') {
+            return res.status(409).json({ success: false, error: 'Only the validated VASP workflow can be submitted. Other engines are template-only.' });
+        }
+        const auditVerification = verifyComputeAudit({
+            files: compiledFiles,
+            token: auditToken,
+            secret: TOKEN_SECRET,
+        });
+        if (!auditVerification.ok) {
+            return res.status(409).json({
+                success: false,
+                error: `Input audit verification failed: ${auditVerification.reason}`,
+                blockingIssues: auditVerification.blockingIssues || [],
+            });
+        }
         const profile = getComputeProfile(profileId);
         if (!profile) {
             return res.status(400).json({ success: false, error: `Unknown profile '${profileId}'` });
@@ -549,9 +687,31 @@ app.post('/api/compute/submit', requireAgentAccess('compute'), async (req, res) 
         if (!profile.configured) {
             return res.status(400).json({ success: false, error: `Profile '${profile.id}' is not configured on this server` });
         }
+        if (profile.directSubmitSupported === false) {
+            return res.status(409).json({
+                success: false,
+                error: `Profile '${profile.id}' must be submitted through the runtime agent queue and is unavailable in the direct submission flow`,
+            });
+        }
+        if (profile.mode !== 'local_demo') {
+            const diagnostics = await getComputeRuntimeDiagnostics();
+            const environmentReady = profile.mode === 'server_local'
+                ? diagnostics.serverLocal.ready
+                : profile.system === 'pbs'
+                    ? diagnostics.pbs.ready
+                    : profile.system === 'slurm'
+                        ? diagnostics.slurm.ready
+                        : false;
+            if (!environmentReady) {
+                return res.status(409).json({
+                    success: false,
+                    error: `Profile '${profile.id}' failed the live execution readiness check`,
+                });
+            }
+        }
 
         // Build a workdir for the job
-        const idempotencyKey = `web-${Date.now().toString(36)}`;
+        const idempotencyKey = `vasp-${auditVerification.manifest.auditId.slice(0, 16)}-${randomUUID()}`;
         const jobStorageRoot = path.join(__dirname, 'data', 'compute-jobs');
         const workDir = path.join(jobStorageRoot, idempotencyKey);
         const executionDir = path.join(workDir, 'execution');
@@ -561,12 +721,41 @@ app.post('/api/compute/submit', requireAgentAccess('compute'), async (req, res) 
         // Write compiled input files
         const files = compiledFiles || {};
         for (const [name, content] of Object.entries(files)) {
-            if (typeof content === 'string' && name !== 'POTCAR.spec.json') {
+            if (!COMPUTE_FILE_NAME_PATTERN.test(name)) {
+                throw new Error(`Unsafe compiled file name '${name}'`);
+            }
+            if (typeof content === 'string') {
                 fs.writeFileSync(path.join(executionDir, name), content, 'utf8');
             }
         }
-        if (files['POTCAR.spec.json']) {
-            fs.writeFileSync(path.join(executionDir, 'POTCAR.spec.json'), files['POTCAR.spec.json'], 'utf8');
+
+        const isRealSubmission = profile.mode !== 'local_demo';
+        const materializesPotcarRemotely = profile.hpc?.accessMode === 'remote_ssh';
+        let potcarMaterialization = null;
+        if (isRealSubmission && !materializesPotcarRemotely) {
+            let potcarSpec = null;
+            try {
+                potcarSpec = JSON.parse(String(files['POTCAR.spec.json'] || ''));
+            } catch {
+                return res.status(409).json({ success: false, error: 'POTCAR specification is missing or invalid' });
+            }
+            potcarMaterialization = await materializePotcar({
+                inputDir: executionDir,
+                potcarSpec,
+            });
+            if (!potcarMaterialization.materialized) {
+                return res.status(409).json({
+                    success: false,
+                    error: `POTCAR materialization failed: ${potcarMaterialization.reason}`,
+                    potcar: {
+                        configured: potcarMaterialization.configured,
+                        symbols: potcarMaterialization.symbols,
+                        missingSymbols: potcarMaterialization.missingSymbols || [],
+                        requestedEncutEv: potcarMaterialization.requestedEncuts || null,
+                        maxEnmaxEv: potcarMaterialization.maxEnmaxEv || null,
+                    },
+                });
+            }
         }
 
         // Write job-spec for local runners
@@ -575,6 +764,12 @@ app.post('/api/compute/submit', requireAgentAccess('compute'), async (req, res) 
             command: profile.local?.command || profile.hpc?.executable || 'vasp_std',
             shell: profile.local?.shell || '/bin/bash',
             workDir: executionDir,
+            inputDir: executionDir,
+            ownerId: req.userId,
+            engine: 'vasp',
+            workflow: intent?.workflow || 'relax',
+            audit: auditVerification.manifest,
+            potcar: potcarMaterialization?.provenance || null,
         };
         fs.writeFileSync(path.join(workDir, 'job-spec.json'), JSON.stringify(jobSpec, null, 2), 'utf8');
 
@@ -602,21 +797,29 @@ app.post('/api/compute/submit', requireAgentAccess('compute'), async (req, res) 
             executionDir,
             createdAt: new Date(),
             idempotencyKey,
+            ownerId: req.userId,
+            audit: auditVerification.manifest,
+            potcar: potcarMaterialization?.provenance || null,
         };
         activeJobs.set(idempotencyKey, jobRecord);
+        await fs.promises.writeFile(
+            computeJobRecordPath(idempotencyKey),
+            JSON.stringify(jobRecord, null, 2),
+            'utf8',
+        );
 
-        res.json({ success: true, jobId: idempotencyKey, ...submission });
+        res.json({ success: true, jobId: idempotencyKey, auditId: auditVerification.manifest.auditId, ...submission });
     } catch (err) {
         console.error('[compute/submit]', err.message);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-app.get('/api/compute/job/:id/status', async (req, res) => {
+app.get('/api/compute/job/:id/status', authMiddleware, async (req, res) => {
     try {
         const jobId = req.params.id;
-        const job = activeJobs.get(jobId);
-        if (!job) {
+        const job = await loadComputeJob(jobId);
+        if (!job || job.ownerId !== req.userId) {
             return res.status(404).json({ success: false, error: `Job '${jobId}' not found` });
         }
 
@@ -646,15 +849,26 @@ app.get('/api/compute/job/:id/status', async (req, res) => {
     }
 });
 
-app.get('/api/compute/job/:id/results', async (req, res) => {
+app.get('/api/compute/job/:id/results', authMiddleware, async (req, res) => {
     try {
         const jobId = req.params.id;
-        const job = activeJobs.get(jobId);
-        if (!job) {
+        const job = await loadComputeJob(jobId);
+        if (!job || job.ownerId !== req.userId) {
             return res.status(404).json({ success: false, error: `Job '${jobId}' not found` });
         }
 
-        const dir = job.executionDir || job.workDir;
+        let resultRoot = job.executionDir || job.workDir;
+        if (job.remoteWorkDir && job.accessMode === 'remote_ssh') {
+            const sshConfig = getHpcSshConfigFromEnv();
+            const remoteResultsDir = path.join(job.workDir, 'remote-results');
+            await copyRemoteDirectoryToLocal(sshConfig, job.remoteWorkDir, remoteResultsDir);
+            resultRoot = remoteResultsDir;
+        }
+        const stages = Array.isArray(job.audit?.stages) ? job.audit.stages : [];
+        const finalStageDirectory = stages.length ? stages[stages.length - 1]?.directory : '.';
+        const dir = finalStageDirectory && finalStageDirectory !== '.'
+            ? path.join(resultRoot, finalStageDirectory)
+            : resultRoot;
         const readTail = (filename, lines = 200) => {
             const filePath = path.join(dir, filename);
             try {
@@ -674,6 +888,7 @@ app.get('/api/compute/job/:id/results', async (req, res) => {
             vaspOutTail: readTail('vasp.out', 200),
             runtimeStatus,
             jobRun: { createdAt: job.createdAt, submittedAt: job.createdAt, endedAt: new Date() },
+            workflow: job.audit?.workflow || null,
         });
 
         const warnings = collectWarnings({
@@ -692,7 +907,42 @@ app.get('/api/compute/job/:id/results', async (req, res) => {
             try { contcar = fs.readFileSync(contcarPath, 'utf8'); } catch {}
         }
 
-        res.json({ success: true, jobId, metrics, warnings, hasContcar, contcar });
+        let potcarProvenance = null;
+        try {
+            potcarProvenance = JSON.parse(fs.readFileSync(path.join(resultRoot, 'POTCAR.provenance.json'), 'utf8'));
+        } catch {
+            potcarProvenance = job.potcar || null;
+        }
+
+        const resultFiles = await collectVaspResultProvenance({ resultRoot, stages });
+        const resultAudit = {
+            schemaVersion: 'vasp-result-audit/v1',
+            inputAuditId: job.audit?.auditId || null,
+            jobId,
+            resultSource: job.submissionMode,
+            collectedAt: new Date().toISOString(),
+            potcarCombinedSha256: potcarProvenance?.combinedSha256 || null,
+            hashedFiles: resultFiles.hashedFiles,
+            largeFiles: resultFiles.largeFiles,
+        };
+        const resultAuditToken = createHmac('sha256', TOKEN_SECRET)
+            .update(JSON.stringify(resultAudit))
+            .digest('hex');
+
+        res.json({
+            success: true,
+            jobId,
+            metrics,
+            warnings,
+            hasContcar,
+            contcar,
+            resultSource: job.submissionMode,
+            isDemo: job.submissionMode === 'local_demo',
+            audit: job.audit || null,
+            potcarProvenance,
+            resultAudit,
+            resultAuditToken,
+        });
     } catch (err) {
         console.error('[compute/job/results]', err.message);
         res.status(500).json({ success: false, error: err.message });
@@ -1086,29 +1336,19 @@ const parseVolumetricDownsampleStream = async (filePath, maxTotalPoints) => {
 };
 
 // --- Auth Routes ---
-const smsSendAttemptsByIp = new Map();
-const SMS_IP_WINDOW_MS = 10 * 60 * 1000;
-const SMS_IP_MAX_ATTEMPTS = 10;
+const smsSendIpRateLimit = createWindowRateLimit({ windowMs: 10 * 60 * 1000, max: 10 });
+const loginIpRateLimit = createWindowRateLimit({ windowMs: 10 * 60 * 1000, max: 30 });
+const loginPhoneRateLimit = createWindowRateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 10,
+    key: (req) => `${requestIp(req)}:${normalizePhoneNumber(req.body?.phone) || 'invalid'}`,
+});
+const redeemRateLimit = createWindowRateLimit({ windowMs: 10 * 60 * 1000, max: 20 });
 
-const consumeSmsIpAttempt = (ip) => {
-    const now = Date.now();
-    const recent = (smsSendAttemptsByIp.get(ip) || [])
-        .filter(timestamp => now - timestamp < SMS_IP_WINDOW_MS);
-    if (recent.length >= SMS_IP_MAX_ATTEMPTS) return false;
-    recent.push(now);
-    smsSendAttemptsByIp.set(ip, recent);
-    return true;
-};
-
-app.post('/api/auth/send-phone-code', async (req, res) => {
+app.post('/api/auth/send-phone-code', smsSendIpRateLimit, async (req, res) => {
     const phone = normalizePhoneNumber(req.body?.phone);
     if (!phone) {
         return res.status(400).json({ error: '请输入有效的手机号；中国大陆号码可直接输入 11 位手机号。' });
-    }
-
-    const ip = getClientIp(req);
-    if (!consumeSmsIpAttempt(ip)) {
-        return res.status(429).json({ error: '请求过于频繁，请稍后再试。' });
     }
 
     const lastTime = await getLastCodeTime(phone);
@@ -1133,7 +1373,7 @@ app.post('/api/auth/send-phone-code', async (req, res) => {
     }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginIpRateLimit, loginPhoneRateLimit, async (req, res) => {
     const phone = normalizePhoneNumber(req.body?.phone);
     const code = String(req.body?.code || '').trim();
     const ip = getClientIp(req);
@@ -1164,11 +1404,11 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({ success: true, user, token });
 });
 
-app.post('/api/auth/redeem', async (req, res) => {
-    const { userId, code } = req.body;
+app.post('/api/auth/redeem', redeemRateLimit, authMiddleware, async (req, res) => {
+    const { code } = req.body;
     try {
-        await redeemCode(code, userId);
-        let user = await getUserFlexible(userId);
+        await redeemCode(code, req.userId);
+        let user = await getUserFlexible(req.userId);
         user = await enforceAdminPrivileges(user);
         res.json({ success: true, user });
     } catch (e) {
@@ -1324,7 +1564,7 @@ function calculateCost(user, type) {
 // =============================================
 // 🔑 Admin API - Password Protected
 // =============================================
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'CHANGE_THIS_TO_A_COMPLEX_SECRET_123456';
+const ADMIN_SECRET = process.env.ADMIN_SECRET;
 
 app.post('/api/admin/grant', async (req, res) => {
     try {
@@ -1403,7 +1643,8 @@ app.post('/api/admin/users', async (req, res) => {
 // =============================================
 let alipaySdk = null;
 try {
-    const AlipaySdk = require('alipay-sdk').default;
+    const alipayModule = require('alipay-sdk');
+    const AlipaySdk = alipayModule.AlipaySdk || alipayModule.default;
     if (process.env.ALIPAY_APP_ID && process.env.ALIPAY_PRIVATE_KEY && process.env.ALIPAY_PUBLIC_KEY) {
         alipaySdk = new AlipaySdk({
             appId: process.env.ALIPAY_APP_ID,
@@ -1417,7 +1658,7 @@ try {
         console.warn(`[Payment] ⚠️ Alipay not configured (missing: ${missing.join(', ')}) — payment disabled`);
     }
 } catch (e) {
-    console.warn('[Payment] ⚠️ alipay-sdk not installed — run: npm install alipay-sdk@3');
+    console.warn(`[Payment] ⚠️ Alipay SDK initialization failed: ${e.message}`);
 }
 
 // Auto-close expired pending orders every 10 minutes
@@ -1914,31 +2155,6 @@ app.post('/api/parse-xdatcar', upload.single('file'), async (req, res) => {
         res.status(500).json({ error: 'Failed to parse file', details: error.message });
     } finally {
         fs.unlink(filePath, () => {});
-    }
-});
-
-// TEMP DEPLOY API - Upload dist tar and extract to nginx html dir
-const deployUpload = multer({ dest: os.tmpdir() });
-app.post('/api/deploy-static', deployUpload.single('dist'), async (req, res) => {
-    const secret = req.headers['x-deploy-secret'];
-    if (secret !== 'vasp_deploy_2026_secret') {
-        return res.status(403).json({ error: 'Forbidden' });
-    }
-    if (!req.file) return res.status(400).json({ error: 'No file' });
-    try {
-        const { execSync } = require('child_process');
-        const tarPath = req.file.path;
-        // Extract to a temp location
-        const extractDir = path.join(os.tmpdir(), 'vasp_dist_new');
-        execSync(`rm -rf ${extractDir} && mkdir -p ${extractDir} && tar -xzf ${tarPath} -C ${extractDir}`);
-        // Copy dist into the nginx container
-        execSync(`docker cp ${extractDir}/dist/. vasp-visualizer-frontend-1:/usr/share/nginx/html/`);
-        // Reload nginx
-        execSync(`docker exec vasp-visualizer-frontend-1 nginx -s reload`);
-        fs.unlink(tarPath, () => {});
-        res.json({ ok: true, message: 'Deploy static done' });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
     }
 });
 

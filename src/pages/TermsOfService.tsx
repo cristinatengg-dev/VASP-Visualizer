@@ -6,7 +6,7 @@ const EFFECTIVE_DATE = 'April 6, 2026';
 const TermsOfService: React.FC = () => (
   <LegalDocumentLayout
     title="Terms of Service"
-    subtitle="服务条款"
+    subtitle="Terms of Service"
     effectiveDate={EFFECTIVE_DATE}
     currentPath="/terms-of-service"
     summary={
@@ -57,7 +57,7 @@ const TermsOfService: React.FC = () => (
     <LegalSection title="5. Intellectual Property">
       <p>5.1. The Service, including its software, algorithms, models, user interface, design, documentation, and branding, is and shall remain the exclusive property of the Company and its licensors. These Terms do not convey any ownership interest in or to the Service.</p>
       <p>5.2. Subject to these Terms and any applicable third-party rights, you may use Generated Output derived from your own User Content for your internal research, publication preparation, project communication, and other lawful purposes.</p>
-      <p>5.3. Generated Output may reflect model behavior, upstream data sources, or AI-generated content. You are solely responsible for reviewing and validating all Generated Output before relying on it for publication, patent filings, safety decisions, regulatory submissions, or production workflows.</p>
+      <p>5.3. Generated Output may reflect model behavior, upstream data sources, or AI-generated content. You are solely responsible for reviewing and validating all Generated Output before relying on it for publication, patent filings, safety decisions, regulatory submissions, or production Agent.</p>
     </LegalSection>
 
     <LegalSection title="6. Fees, Subscription Plans, and Payment">

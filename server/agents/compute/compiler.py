@@ -10,11 +10,41 @@ from typing import Any, Dict, Iterable, List, Tuple
 try:
     from pymatgen.core import Lattice, Structure
     from pymatgen.io.vasp.inputs import Incar, Kpoints, Poscar
+    from pymatgen.symmetry.bandstructure import HighSymmKpath
 except Exception as exc:
     PYMATGEN_IMPORT_ERROR = exc
-    Lattice = Structure = Incar = Kpoints = Poscar = None
+    Lattice = Structure = Incar = Kpoints = Poscar = HighSymmKpath = None
 else:
     PYMATGEN_IMPORT_ERROR = None
+
+
+COMPILER_VERSION = "2026.09.02-vasp-closed-loop-v1"
+MAGNETIC_MOMENT_DEFAULTS = {
+    "Ti": 2.0,
+    "V": 3.0,
+    "Cr": 5.0,
+    "Mn": 5.0,
+    "Fe": 5.0,
+    "Co": 3.0,
+    "Ni": 2.0,
+    "Cu": 1.0,
+    "Ce": 1.0,
+    "Pr": 2.0,
+    "Nd": 3.0,
+    "Sm": 5.0,
+    "Eu": 7.0,
+    "Gd": 7.0,
+}
+RESERVED_CUSTOM_PARAMS = {
+    "charge",
+    "multiplicity",
+    "fixed_atom_indices",
+    "fixed_atom_ids",
+    "potcar_family",
+    "potcar_symbols",
+    "kpath_line_density",
+    "system_type",
+}
 
 
 def require_pymatgen() -> None:
@@ -60,11 +90,33 @@ def structure_from_render_data(render_data: Dict[str, Any]) -> Structure:
     return Structure(lattice, species, coords, coords_are_cartesian=True)
 
 
-def build_incar_settings(intent: Dict[str, Any], is_slab: bool) -> Dict[str, Any]:
-    workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
+def normalized_incar_patch(custom_params: Dict[str, Any]) -> Dict[str, Any]:
+    patch: Dict[str, Any] = {}
+    for raw_key, value in custom_params.items():
+        key = str(raw_key or "").strip()
+        if not key or key.lower() in RESERVED_CUSTOM_PARAMS:
+            continue
+        normalized_key = key.upper()
+        if normalized_key.replace("_", "").isalnum():
+            patch[normalized_key] = value
+    return patch
+
+
+def initial_magnetic_moments(structure: Structure) -> List[float]:
+    return [MAGNETIC_MOMENT_DEFAULTS.get(str(site.specie), 0.6) for site in structure]
+
+
+def build_incar_settings(
+    intent: Dict[str, Any],
+    is_slab: bool,
+    structure: Structure,
+    workflow_override: str | None = None,
+) -> Dict[str, Any]:
+    workflow = str(workflow_override or intent.get("workflow") or "relax").strip().lower() or "relax"
     quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
     spin_mode = str(intent.get("spin_mode") or "auto").strip().lower() or "auto"
-    custom_params = intent.get("custom_params") or {}
+    custom_params = intent.get("custom_params") if isinstance(intent.get("custom_params"), dict) else {}
+    user_patch = normalized_incar_patch(custom_params)
 
     incar = {
         "PREC": "Accurate",
@@ -83,23 +135,27 @@ def build_incar_settings(intent: Dict[str, Any], is_slab: bool) -> Dict[str, Any
             "NSW": 200,
             "EDIFFG": -0.03,
         })
+        incar.update({"LCHARG": False, "LWAVE": False})
     elif workflow in {"static", "dos", "band"}:
         incar.update({
             "IBRION": -1,
             "ISIF": 2,
             "NSW": 0,
             "LCHARG": True,
-            "LWAVE": False,
+            "LWAVE": True if workflow == "static" else False,
         })
         if workflow == "dos":
             incar.update({
+                "ICHARG": 11,
                 "LORBIT": 11,
-                "NEDOS": 2000,
+                "NEDOS": 3001,
+                "ISMEAR": -5,
             })
         elif workflow == "band":
             incar.update({
+                "ICHARG": 11,
                 "LCHARG": False,
-                "LWAVE": True,
+                "LWAVE": False,
             })
     elif workflow == "neb":
         incar.update({
@@ -127,10 +183,33 @@ def build_incar_settings(intent: Dict[str, Any], is_slab: bool) -> Dict[str, Any
         })
 
     if bool(intent.get("vdw")):
-        incar["IVDW"] = 11
+        incar["IVDW"] = 12
 
-    incar["ISPIN"] = 1 if spin_mode == "none" else 2
-    incar.update(custom_params)
+    if bool(intent.get("u_correction")):
+        incar.update({
+            "LDAU": True,
+            "LDAUTYPE": 2,
+            "LDAUPRINT": 1,
+            "LMAXMIX": 4,
+        })
+
+    if is_slab:
+        incar.update({
+            "ISYM": 0,
+            "LDIPOL": True,
+            "IDIPOL": 3,
+        })
+
+    magnetic_species_present = any(str(site.specie) in MAGNETIC_MOMENT_DEFAULTS for site in structure)
+    spin_polarized = spin_mode in {"polarized", "collinear"} or (spin_mode == "auto" and magnetic_species_present)
+    if spin_mode == "non-collinear":
+        incar.update({"ISPIN": 1, "LNONCOLLINEAR": True})
+    else:
+        incar["ISPIN"] = 2 if spin_polarized else 1
+        if spin_polarized and "MAGMOM" not in user_patch:
+            incar["MAGMOM"] = initial_magnetic_moments(structure)
+
+    incar.update(user_patch)
     return incar
 
 
@@ -156,7 +235,7 @@ def choose_kpoint_grid(structure: Structure, intent: Dict[str, Any], is_slab: bo
     return grid
 
 
-def infer_is_slab(structure_meta: Dict[str, Any], structure: Structure, intent: Dict[str, Any]) -> bool:
+def infer_system_type(structure_meta: Dict[str, Any], structure: Structure, intent: Dict[str, Any]) -> str:
     system_hint = str(
         intent.get("system_hint")
         or structure_meta.get("system")
@@ -164,14 +243,62 @@ def infer_is_slab(structure_meta: Dict[str, Any], structure: Structure, intent: 
         or ""
     ).strip().lower()
 
-    if system_hint in {"slab", "surface", "surface_adsorption"}:
-        return True
-    if system_hint in {"bulk", "crystal"}:
-        return False
+    if system_hint in {"slab", "surface", "surface_adsorption", "interface"}:
+        return "interface" if system_hint == "interface" else "slab"
+    if system_hint in {"bulk", "crystal", "defect"}:
+        return "defect" if system_hint == "defect" else "bulk"
+    if system_hint in {"molecule", "gas", "non-periodic"}:
+        return "molecule"
 
     a, b, c = structure.lattice.abc
     max_in_plane = max(a, b)
-    return c > max_in_plane * 1.6 and c > 12.0
+    return "slab" if c > max_in_plane * 1.6 and c > 12.0 else "bulk"
+
+
+def choose_kpoints(structure: Structure, intent: Dict[str, Any], is_slab: bool, grid: List[int]) -> Kpoints:
+    mode = str(intent.get("kpoints_mode") or "auto").strip().lower()
+    if mode == "monkhorst" and not is_slab:
+        return Kpoints.monkhorst_automatic(grid)
+    return Kpoints.gamma_automatic(grid)
+
+
+def line_mode_kpoints(structure: Structure, line_density: int) -> str:
+    kpath = HighSymmKpath(structure)
+    lines = ["Band path generated by SCI Visualizer", str(line_density), "Line-mode", "Reciprocal"]
+    for segment in kpath.kpath["path"]:
+        for index in range(len(segment) - 1):
+            start_label = segment[index]
+            end_label = segment[index + 1]
+            start = kpath.kpath["kpoints"][start_label]
+            end = kpath.kpath["kpoints"][end_label]
+            lines.append(f"{start[0]:.8f} {start[1]:.8f} {start[2]:.8f} ! {start_label}")
+            lines.append(f"{end[0]:.8f} {end[1]:.8f} {end[2]:.8f} ! {end_label}")
+            lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def workflow_script(stages: List[Dict[str, Any]]) -> str:
+    lines = [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        'VASP_COMMAND="${VASP_COMMAND:-vasp_std}"',
+        "test -s POTCAR || { echo 'POTCAR is missing' >&2; exit 20; }",
+    ]
+    previous_stage = None
+    for stage in stages:
+        name = stage["directory"]
+        lines.extend([
+            f"mkdir -p {name}",
+            f"cp POSCAR POTCAR {name}/",
+            f"cp {stage['incarFile']} {name}/INCAR",
+            f"cp {stage['kpointsFile']} {name}/KPOINTS",
+        ])
+        if previous_stage:
+            lines.append(f"test -s {previous_stage}/CHGCAR || {{ echo 'SCF stage did not produce CHGCAR' >&2; exit 21; }}")
+            lines.append(f"cp {previous_stage}/CHGCAR {name}/CHGCAR")
+        lines.append(f"(cd {name} && eval \"$VASP_COMMAND\" > vasp.out 2> vasp.err)")
+        previous_stage = name
+    return "\n".join(lines) + "\n"
 
 
 def compile_vasp_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -181,55 +308,176 @@ def compile_vasp_inputs(request_data: Dict[str, Any]) -> Dict[str, Any]:
     intent = request_data.get("intent") or {}
 
     structure = structure_from_render_data(structure_data)
-    is_slab = infer_is_slab(structure_meta, structure, intent)
+    system_type = infer_system_type(structure_meta, structure, intent)
+    is_slab = system_type in {"slab", "interface"}
     workflow = str(intent.get("workflow") or "relax").strip().lower() or "relax"
     quality = str(intent.get("quality") or "standard").strip().lower() or "standard"
 
-    incar_settings = build_incar_settings(intent, is_slab)
-    kpoint_grid = choose_kpoint_grid(structure, intent, is_slab)
-    poscar = Poscar(structure)
-    incar = Incar(incar_settings)
-    kpoints = Kpoints.gamma_automatic(kpoint_grid)
-    potcar_symbols = list(poscar.site_symbols)
+    custom_params = intent.get("custom_params") if isinstance(intent.get("custom_params"), dict) else {}
+    incar_patch = normalized_incar_patch(custom_params)
+    fixed_indices_raw = custom_params.get("fixed_atom_indices") if isinstance(custom_params.get("fixed_atom_indices"), list) else []
+    fixed_indices = sorted({safe_int(value, -1) for value in fixed_indices_raw if safe_int(value, -1) >= 0})
+    invalid_fixed_indices = [index for index in fixed_indices if index >= len(structure)]
+    fixed_indices = [index for index in fixed_indices if index < len(structure)]
+    selective_dynamics = [
+        [False, False, False] if index in fixed_indices else [True, True, True]
+        for index in range(len(structure))
+    ] if fixed_indices else None
 
+    incar_settings = build_incar_settings(intent, is_slab, structure)
+    kpoint_grid = choose_kpoint_grid(structure, intent, is_slab)
+    poscar = Poscar(structure, selective_dynamics=selective_dynamics)
+    incar = Incar(incar_settings)
+    kpoints = choose_kpoints(structure, intent, is_slab, kpoint_grid)
+    potcar_symbols = list(poscar.site_symbols)
+    potcar_counts = list(poscar.natoms)
+
+    blocking_issues: List[str] = []
+    warnings: List[str] = []
+    charge = safe_int(custom_params.get("charge"), 0)
+    multiplicity = safe_int(custom_params.get("multiplicity"), 1, minimum=1)
+    if system_type == "molecule":
+        blocking_issues.append("VASP workflow requires an explicit periodic simulation cell")
+    if charge != 0 and "NELECT" not in incar_patch:
+        blocking_issues.append("Charged VASP cells require an explicit NELECT value derived from the selected POTCAR set")
+    if str(intent.get("spin_mode") or "").lower() == "non-collinear" and not {"SAXIS", "MAGMOM"}.issubset(incar_patch):
+        blocking_issues.append("Non-collinear magnetism requires explicit SAXIS and vector MAGMOM values")
+    if bool(intent.get("u_correction")) and not {"LDAUL", "LDAUU", "LDAUJ"}.issubset(incar_patch):
+        blocking_issues.append("DFT+U requires explicit LDAUL, LDAUU, and LDAUJ values")
+    elif bool(intent.get("u_correction")):
+        mismatched_ldau = [
+            key for key in ("LDAUL", "LDAUU", "LDAUJ")
+            if not isinstance(incar_patch.get(key), list) or len(incar_patch[key]) != len(potcar_symbols)
+        ]
+        if mismatched_ldau:
+            blocking_issues.append(
+                f"DFT+U arrays must contain one value per POSCAR species ({len(potcar_symbols)}); invalid: {', '.join(mismatched_ldau)}"
+            )
+    if workflow == "band" and is_slab:
+        blocking_issues.append("Slab band structures require an explicit two-dimensional k-path")
+    if workflow == "neb":
+        blocking_issues.append("NEB submission requires validated initial/final endpoints and interpolated image directories")
+    if invalid_fixed_indices:
+        blocking_issues.append(f"Fixed atom indices are outside the structure: {invalid_fixed_indices}")
+    if fixed_indices:
+        warnings.append(f"Selective dynamics fixes {len(fixed_indices)} of {len(structure)} atoms")
+    if incar_settings.get("ISPIN") == 2 and "MAGMOM" in incar_settings:
+        warnings.append("Initial MAGMOM values were generated from element defaults and should be reviewed")
+    warnings.append("POTCAR content and hashes are resolved only on the selected compute environment")
+
+    potcar_symbol_map = custom_params.get("potcar_symbols") if isinstance(custom_params.get("potcar_symbols"), dict) else {}
+    resolved_potcar_symbols = [str(potcar_symbol_map.get(symbol) or symbol) for symbol in potcar_symbols]
     potcar_spec = {
-        "symbols": potcar_symbols,
-        "note": "POTCAR content is not materialized in Phase 1. Resolve POTCAR from local pseudopotential library before submission.",
+        "symbols": resolved_potcar_symbols,
+        "elements": potcar_symbols,
+        "counts": potcar_counts,
+        "functional": "PBE",
+        "family": str(custom_params.get("potcar_family") or "deployment-default"),
+        "encutEv": incar_settings.get("ENCUT"),
+        "charge": charge,
+        "requestedNelect": incar_settings.get("NELECT"),
+        "note": "Licensed POTCAR content is resolved on the selected compute environment and fingerprinted after materialization.",
     }
 
     summary_formula = structure.composition.reduced_formula
-    generated_files = ["INCAR", "KPOINTS", "POSCAR", "POTCAR.spec.json"]
+    files = {
+        "INCAR": str(incar),
+        "KPOINTS": str(kpoints),
+        "POSCAR": poscar.get_str(),
+        "POTCAR.spec.json": json.dumps(potcar_spec, indent=2),
+    }
+    stages: List[Dict[str, Any]] = [{
+        "id": workflow,
+        "directory": ".",
+        "purpose": workflow,
+        "incarFile": "INCAR",
+        "kpointsFile": "KPOINTS",
+        "requiresChargeDensity": False,
+    }]
+
+    if workflow in {"dos", "band"}:
+        scf_incar_settings = build_incar_settings(intent, is_slab, structure, workflow_override="static")
+        scf_incar_settings.update({"LCHARG": True, "LWAVE": True})
+        final_grid = [min(21, max(1, int(math.ceil(value * 1.5)))) for value in kpoint_grid]
+        if is_slab:
+            final_grid[2] = 1
+        final_kpoints = choose_kpoints(structure, intent, is_slab, final_grid)
+        if workflow == "band" and not is_slab:
+            line_density = safe_int(custom_params.get("kpath_line_density"), 20, minimum=8, maximum=80)
+            final_kpoints_text = line_mode_kpoints(structure, line_density)
+        else:
+            final_kpoints_text = str(final_kpoints)
+        files["KPOINTS"] = final_kpoints_text
+        files.update({
+            "INCAR.scf": str(Incar(scf_incar_settings)),
+            f"INCAR.{workflow}": str(incar),
+            "KPOINTS.scf": str(kpoints),
+            f"KPOINTS.{workflow}": final_kpoints_text,
+        })
+        stages = [
+            {
+                "id": "scf",
+                "directory": "01_scf",
+                "purpose": "self-consistent charge density",
+                "incarFile": "INCAR.scf",
+                "kpointsFile": "KPOINTS.scf",
+                "requiresChargeDensity": False,
+            },
+            {
+                "id": workflow,
+                "directory": f"02_{workflow}",
+                "purpose": "density of states" if workflow == "dos" else "high-symmetry band path",
+                "incarFile": f"INCAR.{workflow}",
+                "kpointsFile": f"KPOINTS.{workflow}",
+                "requiresChargeDensity": True,
+            },
+        ]
+        files["run_vasp_workflow.sh"] = workflow_script(stages)
+
+    generated_files = list(files.keys())
+    validation = {
+        "submissionReady": len(blocking_issues) == 0 and workflow in {"relax", "static", "dos", "band", "adsorption"},
+        "maturity": "validated" if len(blocking_issues) == 0 and workflow in {"relax", "static", "dos", "band"} else "experimental",
+        "blockingIssues": blocking_issues,
+        "warnings": warnings,
+    }
 
     return {
         "success": True,
         "summary": f"Compiled VASP {workflow} input set for {summary_formula}",
-        "files": {
-            "INCAR": str(incar),
-            "KPOINTS": str(kpoints),
-            "POSCAR": poscar.get_str(),
-            "POTCAR.spec.json": json.dumps(potcar_spec, indent=2),
-        },
+        "files": files,
+        "validation": validation,
         "preview": {
             "artifactType": "compute_input_set",
             "formula": summary_formula,
             "workflow": workflow,
             "quality": quality,
             "isSlab": is_slab,
+            "systemType": system_type,
             "kpointGrid": kpoint_grid,
-            "potcarSymbols": potcar_symbols,
+            "potcarSymbols": resolved_potcar_symbols,
+            "fixedAtomIndices": fixed_indices,
+            "stages": stages,
+            "validation": validation,
             "generatedFiles": generated_files,
         },
         "meta": {
+            "compilerVersion": COMPILER_VERSION,
             "formula": summary_formula,
             "workflow": workflow,
             "quality": quality,
             "isSlab": is_slab,
+            "systemType": system_type,
+            "charge": charge,
+            "multiplicity": multiplicity,
+            "fixedAtomIndices": fixed_indices,
+            "stages": stages,
             "system": structure_meta.get("system") or structure_meta.get("taskType") or None,
             "databaseSource": structure_meta.get("databaseSource"),
             "databaseSourceLabel": structure_meta.get("databaseSourceLabel"),
             "providerPreferences": structure_meta.get("providerPreferences") or [],
             "providersTried": structure_meta.get("providersTried") or [],
-            "potcarSymbols": potcar_symbols,
+            "potcarSymbols": resolved_potcar_symbols,
             "kpointGrid": kpoint_grid,
             "generatedFiles": generated_files,
             "incarSummary": {

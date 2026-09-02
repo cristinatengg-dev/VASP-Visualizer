@@ -50,6 +50,9 @@ export interface ServerComputeProfile {
   system: 'local' | 'slurm' | 'pbs';
   mode: string;
   configured: boolean;
+  ready?: boolean;
+  readinessReason?: string | null;
+  directSubmitSupported?: boolean;
   requiresApproval: boolean;
   summary: string;
   schedulerRef?: string;
@@ -61,12 +64,15 @@ export interface ServerComputeProfile {
     ntasks_per_node?: number;
     ppn?: number;
     walltime: string;
-    executable: string;
+    executable?: string;
+    executableConfigured?: boolean;
     moduleLoad?: string | null;
+    moduleLoadConfigured?: boolean;
     accessMode: 'local_shell' | 'remote_ssh' | 'agent_http';
   };
   local?: {
-    command: string;
+    command?: string;
+    commandConfigured?: boolean;
     shell: string;
   };
 }
@@ -149,17 +155,54 @@ export interface JobStatus {
 export interface CompiledInputs {
   files: Record<string, string>;
   normalizedIntent?: Record<string, any>;
+  preview?: Record<string, any>;
+  validation?: {
+    submissionReady: boolean;
+    maturity: 'validated' | 'experimental' | string;
+    blockingIssues: string[];
+    warnings: string[];
+  };
+  audit?: {
+    auditId: string;
+    generatedAt: string;
+    compilerVersion?: string | null;
+    systemType?: string | null;
+    stages?: Array<Record<string, any>>;
+    validation?: Record<string, any>;
+  } | null;
+  auditToken?: string | null;
   success: boolean;
 }
 
 // Result metrics from VASP output parsing
 export interface ComputeResult {
   totalEnergyEv: number | null;
+  freeEnergyEv?: number | null;
+  energyWithoutEntropyEv?: number | null;
+  sigmaToZeroEnergyEv?: number | null;
+  fermiEnergyEv?: number | null;
+  totalMagnetizationMuB?: number | null;
   converged: boolean;
+  electronicConverged?: boolean;
+  ionicConverged?: boolean | null;
   ionicStepCount: number | null;
   electronicStepHints: number | null;
   maxForceEvPerA: number | null;
   rmsForceEvPerA: number | null;
   exitCode: number | null;
   elapsedSeconds: number;
+  stressKbar?: { xx: number; yy: number; zz: number; xy: number; yz: number; zx: number } | null;
+  resultSource?: string;
+  isDemo?: boolean;
+  audit?: Record<string, any> | null;
+  potcarProvenance?: Record<string, any> | null;
+  resultAudit?: {
+    inputAuditId?: string | null;
+    resultSource?: string;
+    collectedAt?: string;
+    potcarCombinedSha256?: string | null;
+    hashedFiles?: Array<{ path: string; sizeBytes: number; sha256: string }>;
+    largeFiles?: Array<{ path: string; sizeBytes: number; sha256: null; note?: string }>;
+  } | null;
+  resultAuditToken?: string | null;
 }

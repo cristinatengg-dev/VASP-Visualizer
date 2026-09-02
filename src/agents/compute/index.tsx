@@ -5,64 +5,63 @@ import {
   Settings2, Eye, Play, History, ChevronRight, AlertCircle, Loader2,
   Download, RefreshCw, Zap, XCircle
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../../store/useStore';
 import {
   ComputeIntent, ServerComputeProfile, JobStatus, ComputeResult,
   WorkflowType, QualityType, CompiledInputs,
-  RemoteComputeChannelInput, RemoteComputeChannelTestResult,
   EngineType
 } from './types';
 import { Scene3D } from '../../components/Scene3D';
+import { VisualizationErrorBoundary } from '../../components/VisualizationErrorBoundary';
 import { API_BASE_URL } from '../../config';
+import type { MolecularStructure } from '../../types';
 
 const STEPS = [
-  { id: 'structure', label: 'Structure', icon: Eye },
-  { id: 'intent', label: 'Compute Intent', icon: Settings2 },
-  { id: 'hpc', label: 'HPC Profile', icon: Server },
-  { id: 'preview', label: 'Review & Compile', icon: Play },
-  { id: 'monitor', label: 'Job Monitor', icon: History },
+  { id: 'structure', label: 'Confirm Structure', icon: Eye },
+  { id: 'intent', label: 'Compute Settings', icon: Settings2 },
+  { id: 'hpc', label: 'Runtime Environment', icon: Server },
+  { id: 'preview', label: 'Inspect Inputs', icon: Play },
+  { id: 'monitor', label: 'Compute Results', icon: History },
 ];
 
-const COMPUTE_ENGINES: Array<{ id: EngineType; label: string; summary: string }> = [
-  { id: 'vasp', label: 'VASP', summary: 'Periodic DFT for materials' },
-  { id: 'cp2k', label: 'CP2K', summary: 'DFT, MD, mixed Gaussian/plane-wave' },
-  { id: 'quantum_espresso', label: 'Quantum ESPRESSO', summary: 'Plane-wave DFT' },
-  { id: 'gaussian', label: 'Gaussian', summary: 'Quantum chemistry' },
-  { id: 'orca', label: 'ORCA', summary: 'Quantum chemistry' },
-  { id: 'lammps', label: 'LAMMPS', summary: 'Classical molecular dynamics' },
-  { id: 'gromacs', label: 'GROMACS', summary: 'Biomolecular / soft-matter MD' },
-  { id: 'namd', label: 'NAMD', summary: 'Large-scale molecular dynamics' },
-  { id: 'amber', label: 'AMBER', summary: 'Biomolecular MD suite' },
-  { id: 'openmm', label: 'OpenMM', summary: 'Python/GPU molecular simulation' },
-  { id: 'abinit', label: 'ABINIT', summary: 'DFT / many-body materials' },
-  { id: 'castep', label: 'CASTEP', summary: 'Plane-wave DFT' },
-  { id: 'siesta', label: 'SIESTA', summary: 'Localized-orbital DFT' },
-  { id: 'dftbplus', label: 'DFTB+', summary: 'Semi-empirical quantum methods' },
-  { id: 'xtb', label: 'xtb', summary: 'Fast semi-empirical chemistry' },
-  { id: 'nwchem', label: 'NWChem', summary: 'Quantum chemistry / materials' },
-  { id: 'qchem', label: 'Q-Chem', summary: 'Quantum chemistry' },
+const ENGINE_OPTIONS: Array<{ id: EngineType; label: string; description: string }> = [
+  { id: 'vasp', label: 'VASP', description: 'Periodic plane-wave DFT' },
+  { id: 'quantum_espresso', label: 'Quantum ESPRESSO', description: 'Open-source plane-wave DFT' },
+  { id: 'cp2k', label: 'CP2K', description: 'Gaussian and plane-wave DFT/MD' },
+  { id: 'lammps', label: 'LAMMPS', description: 'Classical molecular dynamics' },
+  { id: 'orca', label: 'ORCA', description: 'Molecular quantum chemistry' },
 ];
 
-const COMPILE_READY_ENGINES = new Set<EngineType>(COMPUTE_ENGINES.map(engine => engine.id));
+const COMPILE_READY_ENGINES = new Set<EngineType>(ENGINE_OPTIONS.map((engine) => engine.id));
 
 const WORKFLOW_OPTIONS: Array<{ id: WorkflowType; label: string }> = [
   { id: 'relax', label: 'Relax' },
   { id: 'static', label: 'Static' },
   { id: 'dos', label: 'DOS' },
   { id: 'band', label: 'Band' },
-  { id: 'adsorption', label: 'Adsorption' },
-  { id: 'irradiation_creep', label: 'Irradiation creep' },
 ];
+
+const LAMMPS_TASK_OPTIONS: Array<{ id: WorkflowType; label: string }> = [
+  { id: 'irradiation_creep', label: 'Irradiation Creep' },
+];
+
+type VaspSystemType = 'bulk' | 'slab' | 'interface' | 'defect';
+
+const inferVaspSystemType = (data: MolecularStructure | null): VaspSystemType => {
+  if (!data?.latticeVectors || data.latticeVectors.length !== 3) return 'bulk';
+  const lengths = data.latticeVectors.map((vector) => Math.hypot(...vector));
+  return lengths[2] > Math.max(lengths[0], lengths[1]) * 1.6 && lengths[2] > 12 ? 'slab' : 'bulk';
+};
 
 const ComputeAgent: React.FC = () => {
   const navigate = useNavigate();
-  const { molecularData, selectedAtomIds, user } = useStore();
+  const { molecularData, selectedAtomIds } = useStore();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
   // Step 1: Structure
   const [charge, setCharge] = useState(0);
   const [multiplicity, setMultiplicity] = useState(1);
+  const [systemType, setSystemType] = useState<VaspSystemType>(() => inferVaspSystemType(molecularData));
 
   // Step 2: Intent
   const [intent, setIntent] = useState<ComputeIntent>({
@@ -80,15 +79,6 @@ const ComputeAgent: React.FC = () => {
   const [profiles, setProfiles] = useState<ServerComputeProfile[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
-  const [remoteChannel, setRemoteChannel] = useState<RemoteComputeChannelInput>({
-    host: '',
-    user: 'root',
-    port: '22',
-    password: '',
-  });
-  const [isTestingChannel, setIsTestingChannel] = useState(false);
-  const [channelTest, setChannelTest] = useState<RemoteComputeChannelTestResult | null>(null);
-  const [channelError, setChannelError] = useState<string | null>(null);
 
   // Step 4: Compile
   const [compiledInputs, setCompiledInputs] = useState<CompiledInputs | null>(null);
@@ -105,17 +95,23 @@ const ComputeAgent: React.FC = () => {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const currentStep = STEPS[currentStepIndex];
+  const taskOptions = intent.engine === 'lammps' ? LAMMPS_TASK_OPTIONS : WORKFLOW_OPTIONS;
   const selectedProfile = profiles.find(p => p.id === selectedProfileId) || null;
+  const submissionReady = Boolean(compiledInputs?.validation?.submissionReady && compiledInputs?.auditToken);
+  const selectedProfileReady = Boolean(selectedProfile && (selectedProfile.ready ?? selectedProfile.configured) && selectedProfile.directSubmitSupported !== false);
+  const isDemoProfile = selectedProfile?.mode === 'local_demo';
 
-  const selectComputeEngine = (engineId: EngineType) => {
-    setIntent(prev => ({
-      ...prev,
-      engine: engineId,
-      workflow: engineId === 'lammps'
-        ? 'irradiation_creep'
-        : (prev.workflow === 'irradiation_creep' ? 'relax' : prev.workflow),
-    }));
-  };
+  const authHeaders = useCallback((contentType = false) => {
+    const token = localStorage.getItem('vasp_token');
+    return {
+      ...(contentType ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }, []);
+
+  useEffect(() => {
+    setSystemType(inferVaspSystemType(molecularData));
+  }, [molecularData?.id]);
 
   // ── Fetch HPC profiles ──────────────────────────────────────────────
   useEffect(() => {
@@ -126,7 +122,7 @@ const ComputeAgent: React.FC = () => {
         const data = await res.json();
         if (data.success && Array.isArray(data.profiles)) {
           setProfiles(data.profiles);
-          const firstConfigured = data.profiles.find((p: ServerComputeProfile) => p.configured);
+          const firstConfigured = data.profiles.find((p: ServerComputeProfile) => (p.ready ?? p.configured) && p.directSubmitSupported !== false);
           if (firstConfigured) setSelectedProfileId(firstConfigured.id);
         }
       } catch (err) {
@@ -138,47 +134,6 @@ const ComputeAgent: React.FC = () => {
     fetchProfiles();
   }, []);
 
-  const updateRemoteChannel = (key: keyof RemoteComputeChannelInput, value: string) => {
-    setRemoteChannel(prev => ({ ...prev, [key]: value }));
-    setChannelTest(null);
-    setChannelError(null);
-  };
-
-  const handleTestRemoteChannel = async () => {
-    setIsTestingChannel(true);
-    setChannelTest(null);
-    setChannelError(null);
-
-    try {
-      const token = localStorage.getItem('vasp_token') || '';
-      const res = await fetch(`${API_BASE_URL}/compute/channel/test`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          userId: user?.phone,
-          channel: {
-            host: remoteChannel.host.trim(),
-            user: remoteChannel.user.trim(),
-            port: Number(remoteChannel.port) || 22,
-            password: remoteChannel.password,
-          },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Remote channel test failed');
-      }
-      setChannelTest(data);
-    } catch (err) {
-      setChannelError(err instanceof Error ? err.message : 'Remote channel test failed');
-    } finally {
-      setIsTestingChannel(false);
-    }
-  };
-
   // ── Compile inputs ──────────────────────────────────────────────────
   const handleCompile = useCallback(async () => {
     if (!molecularData) return;
@@ -187,29 +142,28 @@ const ComputeAgent: React.FC = () => {
     setCompiledInputs(null);
 
     try {
-      if (!COMPILE_READY_ENGINES.has(intent.engine)) {
-        const engineLabel = COMPUTE_ENGINES.find(engine => engine.id === intent.engine)?.label || intent.engine;
-        throw new Error(`${engineLabel} channel detection is supported, but its input compiler template is not configured yet.`);
-      }
+      if (!COMPILE_READY_ENGINES.has(intent.engine)) throw new Error(`${intent.engine} input compilation is not available.`);
 
       const structurePayload = {
         data: {
           atoms: molecularData.atoms.map(a => ({
+            id: a.id,
             element: a.element,
             position: a.position,
+            fixed: selectedAtomIds.includes(a.id),
           })),
           latticeVectors: molecularData.latticeVectors,
         },
         meta: {
           formula: molecularData.filename,
-          system: 'slab',
+          system: systemType,
           taskType: intent.workflow,
         },
       };
 
       const res = await fetch(`${API_BASE_URL}/compute/compile`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(true),
         body: JSON.stringify({
           structure: structurePayload,
           intent: {
@@ -218,7 +172,17 @@ const ComputeAgent: React.FC = () => {
             quality: intent.quality,
             vdw: intent.vdw,
             spin_mode: intent.spin_mode,
-            custom_params: intent.custom_params || {},
+            kpoints_mode: intent.kpoints_mode,
+            u_correction: intent.u_correction,
+            system_hint: systemType,
+            custom_params: {
+              ...(intent.custom_params || {}),
+              charge,
+              multiplicity,
+              fixed_atom_indices: molecularData.atoms
+                .map((atom, index) => selectedAtomIds.includes(atom.id) ? index : -1)
+                .filter(index => index >= 0),
+            },
           },
         }),
       });
@@ -227,7 +191,15 @@ const ComputeAgent: React.FC = () => {
         const fileNames = Object.keys(data.files as Record<string, string>);
         const preferredPreview = fileNames.find(name => name.startsWith('in.')) || fileNames[0] || 'INCAR';
         setSelectedPreviewFile(preferredPreview);
-        setCompiledInputs({ files: data.files, normalizedIntent: data.normalizedIntent, success: true });
+        setCompiledInputs({
+          files: data.files,
+          normalizedIntent: data.normalizedIntent,
+          preview: data.preview,
+          validation: data.validation,
+          audit: data.audit,
+          auditToken: data.auditToken,
+          success: true,
+        });
       } else {
         setCompileError(data.error || 'Compilation failed');
       }
@@ -236,7 +208,7 @@ const ComputeAgent: React.FC = () => {
     } finally {
       setIsCompiling(false);
     }
-  }, [molecularData, intent]);
+  }, [authHeaders, charge, intent, molecularData, multiplicity, selectedAtomIds, systemType]);
 
   // Auto-compile when entering preview step
   useEffect(() => {
@@ -248,18 +220,23 @@ const ComputeAgent: React.FC = () => {
   // ── Submit job ──────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!compiledInputs || !selectedProfile) return;
+    if (!(selectedProfile.ready ?? selectedProfile.configured) || selectedProfile.directSubmitSupported === false) {
+      setSubmitError('The selected compute environment failed real-time checks and cannot submit real jobs.');
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
 
     try {
       const res = await fetch(`${API_BASE_URL}/compute/submit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(true),
         body: JSON.stringify({
           profileId: selectedProfile.id,
           structure: { meta: { formula: molecularData?.filename } },
           intent,
           compiledFiles: compiledInputs.files,
+          auditToken: compiledInputs.auditToken,
         }),
       });
       const data = await res.json();
@@ -292,7 +269,7 @@ const ComputeAgent: React.FC = () => {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/compute/job/${encodeURIComponent(jobId)}/status`);
+        const res = await fetch(`${API_BASE_URL}/compute/job/${encodeURIComponent(jobId)}/status`, { headers: authHeaders() });
         const data = await res.json();
         if (data.success && data.jobStatus) {
           setJobStatus(prev => prev ? {
@@ -315,10 +292,18 @@ const ComputeAgent: React.FC = () => {
 
   const fetchResults = async (jobId: string) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/compute/job/${encodeURIComponent(jobId)}/results`);
+      const res = await fetch(`${API_BASE_URL}/compute/job/${encodeURIComponent(jobId)}/results`, { headers: authHeaders() });
       const data = await res.json();
       if (data.success) {
-        setComputeResult(data.metrics);
+        setComputeResult({
+          ...data.metrics,
+          resultSource: data.resultSource,
+          isDemo: data.isDemo,
+          audit: data.audit,
+          potcarProvenance: data.potcarProvenance,
+          resultAudit: data.resultAudit,
+          resultAuditToken: data.resultAuditToken,
+        });
         setWarnings(data.warnings || []);
       }
     } catch (err) {
@@ -355,9 +340,9 @@ const ComputeAgent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F0] flex flex-col">
+    <div className="min-h-screen bg-[#F5F5F0] flex flex-col text-[#1d1d1f]">
       {/* Top Bar */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-30">
+      <header className="apple-nav sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -369,12 +354,12 @@ const ComputeAgent: React.FC = () => {
               <ArrowLeft size={20} className="text-gray-500" />
             </button>
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-[12px] bg-[#0A1128] flex items-center justify-center shadow-lg shadow-[#0A1128]/10">
+              <div className="w-9 h-9 rounded-[12px] bg-[#0A1128] flex items-center justify-center shadow-sm">
                 <Cpu size={18} className="text-white" />
               </div>
               <div>
-                <h1 className="text-base font-bold text-[#0A1128]">COMPUTE AGENT</h1>
-                <p className="text-[9px] text-gray-400 font-mono tracking-widest uppercase">Connected Pipeline</p>
+                <h1 className="text-base font-semibold tracking-tight text-[#1d1d1f]">Scientific Compute</h1>
+                <p className="text-[10px] text-[#6e6e73]">Reproducible · Auditable</p>
               </div>
             </div>
           </div>
@@ -388,10 +373,10 @@ const ComputeAgent: React.FC = () => {
               return (
                 <React.Fragment key={step.id}>
                   <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[16px] transition-all ${
-                    isActive ? 'bg-[#2E4A8E]/10 text-[#2E4A8E] ring-1 ring-[#2E4A8E]/20' : 'text-gray-400'
+                    isActive ? 'bg-[#0A1128]/10 text-[#0A1128]' : 'text-[#86868b]'
                   }`}>
                     <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      isActive ? 'bg-[#2E4A8E] text-white' : isCompleted ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'
+                      isActive ? 'bg-[#0A1128] text-white' : isCompleted ? 'bg-[#34c759] text-white' : 'bg-[#e8e8ed] text-[#86868b]'
                     }`}>
                       {isCompleted ? <CheckCircle2 size={12} /> : idx + 1}
                     </div>
@@ -404,86 +389,94 @@ const ComputeAgent: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono font-bold text-green-600 uppercase tracking-widest bg-green-50 border border-green-100 px-2 py-1 rounded-[16px]">LIVE</span>
+            <span className="rounded-full bg-[#e8f5ff] px-3 py-1 text-[10px] font-semibold text-[#0A1128]">Trusted Compute Chain</span>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-12">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentStep.id}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.3 }}
-            className="space-y-8"
-          >
+      <main className="flex-1 max-w-5xl mx-auto w-full px-5 py-10 md:py-14">
+        <div key={currentStep.id} className="space-y-8">
             {/* Step Header */}
             <div className="flex items-end justify-between">
               <div>
-                <h2 className="text-2xl font-black text-[#0A1128]">{currentStep.label}</h2>
-                <p className="text-gray-500 text-sm mt-1">
-                  {currentStep.id === 'structure' && 'Confirm the system structure and properties.'}
-                  {currentStep.id === 'intent' && 'Define your computational task and parameters.'}
-                  {currentStep.id === 'hpc' && 'Select the target high-performance computing environment.'}
-                  {currentStep.id === 'preview' && 'Review generated input files before submission.'}
-                  {currentStep.id === 'monitor' && 'Monitor the real-time status of your job.'}
+                <h2 className="text-3xl font-semibold tracking-[-0.03em] text-[#1d1d1f]">{currentStep.label}</h2>
+                <p className="text-[#6e6e73] text-sm mt-2">
+                  {currentStep.id === 'structure' && 'Confirm periodic system, fixed atoms, and charge state.'}
+                  {currentStep.id === 'intent' && 'Select a compute engine, calculation task, and precision.'}
+                  {currentStep.id === 'hpc' && 'Select a real cluster; demo environments will not produce scientific results.'}
+                  {currentStep.id === 'preview' && 'Inspect files, scientific warnings, and audit IDs before submission.'}
+                  {currentStep.id === 'monitor' && 'View real job status, convergence, and result provenance.'}
                 </p>
               </div>
-              <div className="text-xs font-mono text-gray-400">Step {currentStepIndex + 1} of 5</div>
+              <div className="text-xs text-[#86868b]">{currentStepIndex + 1} / 5</div>
             </div>
 
             {/* Step Content */}
-            <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_4px_30px_rgba(0,0,0,0.05)] ring-1 ring-black/5 overflow-hidden min-h-[400px]">
+            <div className="apple-surface overflow-hidden min-h-[400px]">
 
               {/* ── Step 1: Structure ─────────────────────────────── */}
               {currentStep.id === 'structure' && (
                 <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-6">
                     <div className="p-6 bg-gray-50 rounded-[24px] border border-gray-100">
-                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">TARGET SYSTEM</h3>
+                      <h3 className="apple-eyebrow mb-4">Current Structure</h3>
                       {molecularData ? (
                         <div className="space-y-2">
                           <p className="text-sm font-bold text-[#0A1128]">{molecularData.filename}</p>
                           <div className="flex gap-4">
                             <div className="text-[11px] text-gray-500">
-                              <span className="font-mono">{molecularData.atoms.length}</span> Atoms
+                              <span className="font-mono">{molecularData.atoms.length}</span> atoms
                             </div>
                             <div className="text-[11px] text-gray-500">
-                              Lattice: <span className="font-semibold text-[#2E4A8E]">{molecularData.latticeVectors ? 'Periodic' : 'Non-periodic'}</span>
+                              Lattice:<span className="font-semibold text-[#0A1128]">{molecularData.latticeVectors ? 'Periodic' : 'Non-periodic'}</span>
                             </div>
                           </div>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 text-amber-500 bg-amber-50 p-3 rounded-[16px]">
                           <AlertCircle size={14} />
-                          <span className="text-xs font-medium">No structure loaded. Go to Modeling Agent first.</span>
+                          <span className="text-xs font-medium">No structure loaded yet. Please select or import a structure in the modeling Agent first.</span>
                         </div>
                       )}
                     </div>
 
+                    <div className="space-y-3">
+                      <h3 className="apple-eyebrow">System Type</h3>
+                      <div className="grid grid-cols-2 gap-2 rounded-[18px] bg-[#F5F5F0] p-1.5">
+                        {(['bulk', 'slab', 'interface', 'defect'] as VaspSystemType[]).map(type => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setSystemType(type)}
+                            className={`rounded-[13px] px-3 py-2.5 text-xs font-medium transition ${systemType === type ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73]'}`}
+                          >
+                            {{ bulk: 'Bulk', slab: 'Surface', interface: 'Interface', defect: 'Defect' }[type]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="space-y-4">
-                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">PROPERTIES</h3>
+                      <h3 className="apple-eyebrow">Charge and Spin Multiplicity</h3>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="p-4 border border-gray-100 rounded-[24px]">
                           <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest font-semibold">Total Charge</label>
-                          <input type="number" value={charge} onChange={e => setCharge(Number(e.target.value))} className="w-full text-xs font-mono font-bold focus:outline-none" aria-label="Total charge" />
+                          <input type="number" value={charge} onChange={e => setCharge(Number(e.target.value))} className="apple-field font-mono text-sm" aria-label="Total charge" />
                         </div>
                         <div className="p-4 border border-gray-100 rounded-[24px]">
-                          <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest font-semibold">Multiplicity</label>
-                          <input type="number" value={multiplicity} onChange={e => setMultiplicity(Number(e.target.value))} className="w-full text-xs font-mono font-bold focus:outline-none" aria-label="Multiplicity" />
+                          <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-widest font-semibold">Spin Multiplicity</label>
+                          <input type="number" min={1} value={multiplicity} onChange={e => setMultiplicity(Math.max(1, Number(e.target.value)))} className="apple-field font-mono text-sm" aria-label="Multiplicity" />
                         </div>
                       </div>
                     </div>
 
-                    <div className="p-4 bg-[#2E4A8E]/5 rounded-[20px] border border-[#2E4A8E]/10">
-                      <h3 className="text-xs font-bold text-[#2E4A8E]/40 uppercase tracking-widest mb-2">Fixed Atoms</h3>
-                      <p className="text-xs text-[#2E4A8E]">
+                    <div className="apple-surface-muted p-4">
+                      <h3 className="apple-eyebrow mb-2">Fixed Atoms</h3>
+                      <p className="text-xs text-[#0A1128]">
                         {selectedAtomIds.length > 0
-                          ? `${selectedAtomIds.length} atoms selected for fixing (selective dynamics).`
-                          : 'No atoms selected for fixing. Full relaxation for all atoms.'}
+                          ? `Fixed ${selectedAtomIds.length} atoms (Selective Dynamics).`
+                          : 'No atoms currently fixed; all atoms will be relaxed.'}
                       </p>
                     </div>
                   </div>
@@ -491,11 +484,13 @@ const ComputeAgent: React.FC = () => {
                   <div className="bg-[#0A1128] rounded-[24px] overflow-hidden min-h-[300px] relative">
                     {molecularData ? (
                       <div className="w-full h-[300px]">
-                        <Scene3D />
+                        <VisualizationErrorBoundary>
+                          <Scene3D />
+                        </VisualizationErrorBoundary>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center h-[300px]">
-                        <p className="text-xs text-white/40 italic">No structure loaded</p>
+                        <p className="text-xs text-white/40">No Structure Loaded</p>
                       </div>
                     )}
                   </div>
@@ -506,56 +501,55 @@ const ComputeAgent: React.FC = () => {
               {currentStep.id === 'intent' && (
                 <div className="p-8 space-y-8">
                   <div className="space-y-4">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Compute Engine</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {COMPUTE_ENGINES.map(engine => (
-                        <button
-                          key={engine.id}
-                          onClick={() => selectComputeEngine(engine.id)}
-                          className={`p-4 rounded-[20px] border text-left transition-all ${
-                            intent.engine === engine.id
-                              ? 'bg-[#0A1128] border-[#0A1128] shadow-lg shadow-[#0A1128]/10'
-                              : 'bg-white border-gray-100 hover:border-[#2E4A8E]/30'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <p className={`text-sm font-bold ${intent.engine === engine.id ? 'text-white' : 'text-[#0A1128]'}`}>{engine.label}</p>
-                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
-                              intent.engine === engine.id
-                                ? 'bg-white/10 text-white/70'
-                                : COMPILE_READY_ENGINES.has(engine.id)
-                                  ? 'bg-green-50 text-green-600'
-                                  : 'bg-gray-50 text-gray-400'
-                            }`}>
-                              {COMPILE_READY_ENGINES.has(engine.id) ? 'compile' : 'detect'}
-                            </span>
-                          </div>
-                          <p className={`text-[10px] mt-1 leading-relaxed ${intent.engine === engine.id ? 'text-white/55' : 'text-gray-500'}`}>{engine.summary}</p>
-                        </button>
-                      ))}
+                    <h3 className="apple-eyebrow">Compute Engine</h3>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                      {ENGINE_OPTIONS.map((engine) => {
+                        const selected = intent.engine === engine.id;
+                        return (
+                          <button
+                            key={engine.id}
+                            type="button"
+                            onClick={() => setIntent((current) => ({
+                              ...current,
+                              engine: engine.id,
+                              workflow: engine.id === 'lammps'
+                                ? 'irradiation_creep'
+                                : current.workflow === 'irradiation_creep' ? 'relax' : current.workflow,
+                            }))}
+                            className={`rounded-[18px] border p-4 text-left transition-all ${
+                              selected
+                                ? 'border-[#0A1128] bg-[#0A1128] text-white shadow-sm'
+                                : 'border-gray-200 bg-white text-[#1d1d1f] hover:border-[#0A1128]'
+                            }`}
+                          >
+                            <p className="text-sm font-semibold">{engine.label}</p>
+                            <p className={`mt-1 text-[10px] leading-4 ${selected ? 'text-white/70' : 'text-[#6e6e73]'}`}>{engine.description}</p>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {WORKFLOW_OPTIONS.map(workflow => (
+                  <div className="grid grid-cols-2 gap-2 rounded-[18px] bg-[#F5F5F0] p-1.5 md:grid-cols-4">
+                    {taskOptions.map(workflow => (
                       <button
                         key={workflow.id}
                         onClick={() => setIntent({ ...intent, workflow: workflow.id })}
-                        className={`p-4 rounded-[20px] border text-left transition-all ${
+                        className={`rounded-[13px] px-4 py-3 text-left transition-all ${
                           intent.workflow === workflow.id
-                            ? 'bg-[#0A1128] border-[#0A1128] shadow-lg shadow-[#0A1128]/10'
-                            : 'bg-white border-gray-100 hover:border-[#2E4A8E]/30'
+                            ? 'bg-white shadow-sm'
+                            : 'text-[#6e6e73] hover:text-[#1d1d1f]'
                         }`}
                       >
-                        <p className={`text-[10px] font-bold uppercase tracking-widest ${intent.workflow === workflow.id ? 'text-white/60' : 'text-gray-400'}`}>Workflow</p>
-                        <p className={`text-sm font-bold mt-1 ${intent.workflow === workflow.id ? 'text-white' : 'text-[#0A1128]'}`}>{workflow.label}</p>
+                        <p className={`text-[10px] font-medium uppercase tracking-widest ${intent.workflow === workflow.id ? 'text-[#0A1128]' : 'text-[#86868b]'}`}>Agent</p>
+                        <p className="mt-1 text-sm font-semibold text-[#1d1d1f]">{workflow.label}</p>
                       </button>
                     ))}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                     <div className="space-y-4">
-                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Accuracy & Quality</h3>
+                      <h3 className="apple-eyebrow">Precision</h3>
                       <div className="flex gap-2 p-1 bg-gray-50 rounded-[16px] border border-gray-100">
                         {(['fast', 'standard', 'high'] as QualityType[]).map(q => (
                           <button
@@ -572,19 +566,34 @@ const ComputeAgent: React.FC = () => {
                     </div>
 
                     <div className="space-y-4">
-                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Core Settings</h3>
+                      <h3 className="apple-eyebrow">K-point Grid</h3>
+                      <div className="flex gap-1 bg-[#F5F5F0] p-1 rounded-[16px]">
+                        {(['auto', 'gamma', 'monkhorst'] as const).map(mode => (
+                          <button
+                            key={mode}
+                            onClick={() => setIntent({ ...intent, kpoints_mode: mode })}
+                            className={`flex-1 rounded-[12px] px-2 py-2 text-[10px] font-semibold transition ${intent.kpoints_mode === mode ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#86868b]'}`}
+                          >
+                            {mode === 'auto' ? 'Automatic' : mode === 'gamma' ? 'Γ-centered' : 'Monkhorst'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h3 className="apple-eyebrow">Core Settings</h3>
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           onClick={() => setIntent({ ...intent, vdw: !intent.vdw })}
-                          className={`flex items-center justify-between p-3 rounded-[16px] border text-xs font-medium transition-all ${intent.vdw ? 'border-[#2E4A8E]/30 bg-[#2E4A8E]/5 text-[#2E4A8E]' : 'border-gray-100 text-gray-500'}`}
+                          className={`flex items-center justify-between p-3 rounded-[16px] border text-xs font-medium transition-all ${intent.vdw ? 'border-[#0A1128]/20 bg-[#e8f3ff] text-[#0A1128]' : 'border-gray-100 text-gray-500'}`}
                         >
-                          vDW (D3) {intent.vdw ? 'ON' : 'OFF'}
+                          D3 Dispersion {intent.vdw ? 'On' : 'Off'}
                         </button>
                         <button
                           onClick={() => setIntent({ ...intent, spin_mode: intent.spin_mode === 'auto' ? 'none' : 'auto' })}
-                          className={`flex items-center justify-between p-3 rounded-[16px] border text-xs font-medium transition-all ${intent.spin_mode !== 'none' ? 'border-[#2E4A8E]/30 bg-[#2E4A8E]/5 text-[#2E4A8E]' : 'border-gray-100 text-gray-500'}`}
+                          className={`flex items-center justify-between p-3 rounded-[16px] border text-xs font-medium transition-all ${intent.spin_mode !== 'none' ? 'border-[#0A1128]/20 bg-[#e8f3ff] text-[#0A1128]' : 'border-gray-100 text-gray-500'}`}
                         >
-                          Spin {intent.spin_mode !== 'none' ? 'ON' : 'OFF'}
+                          Spin {intent.spin_mode !== 'none' ? 'Automatic' : 'Disabled'}
                         </button>
                       </div>
                     </div>
@@ -595,115 +604,14 @@ const ComputeAgent: React.FC = () => {
               {/* ── Step 3: HPC Profile ──────────────────────────── */}
               {currentStep.id === 'hpc' && (
                 <div className="p-8 space-y-6">
-                  <div className="rounded-[24px] border border-[#2E4A8E]/15 bg-[#2E4A8E]/5 p-5">
-                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div>
-                        <h3 className="text-xs font-bold text-[#2E4A8E] uppercase tracking-widest">Remote Channel</h3>
-                        <p className="mt-1 text-xs text-[#2E4A8E]/70">
-                          Enter an SSH channel and detect schedulers plus common compute engines on the machine.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleTestRemoteChannel}
-                        disabled={isTestingChannel || !remoteChannel.host.trim() || !remoteChannel.user.trim() || !remoteChannel.password}
-                        className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0A1128] px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-[#0A1128]/10 transition-all hover:bg-[#162044] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {isTestingChannel ? <Loader2 size={14} className="animate-spin" /> : <Server size={14} />}
-                        {isTestingChannel ? 'Testing...' : 'Test Channel'}
-                      </button>
+                  <div className="apple-surface-muted flex items-start gap-3 p-5">
+                    <Server size={18} className="mt-0.5 shrink-0 text-[#0A1128]" />
+                    <div>
+                      <h3 className="text-sm font-semibold text-[#1d1d1f]">Select a Verified Runtime Environment</h3>
+                      <p className="mt-1 text-xs leading-5 text-[#6e6e73]">
+                        Server addresses, SSH keys, executable paths, and software licenses are configured on the backend by administrators. The browser does not receive cluster passwords and only displays real-time check results.
+                      </p>
                     </div>
-
-                    <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-[1.5fr_1fr_0.6fr_1.3fr]">
-                      <div className="rounded-[18px] border border-white/70 bg-white px-4 py-3">
-                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">Host / IP</label>
-                        <input
-                          value={remoteChannel.host}
-                          onChange={e => updateRemoteChannel('host', e.target.value)}
-                          placeholder="10.10.104.62"
-                          className="mt-1 w-full bg-transparent text-sm font-bold text-[#0A1128] outline-none"
-                        />
-                      </div>
-                      <div className="rounded-[18px] border border-white/70 bg-white px-4 py-3">
-                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">User</label>
-                        <input
-                          value={remoteChannel.user}
-                          onChange={e => updateRemoteChannel('user', e.target.value)}
-                          placeholder="root"
-                          className="mt-1 w-full bg-transparent text-sm font-bold text-[#0A1128] outline-none"
-                        />
-                      </div>
-                      <div className="rounded-[18px] border border-white/70 bg-white px-4 py-3">
-                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">Port</label>
-                        <input
-                          value={remoteChannel.port}
-                          onChange={e => updateRemoteChannel('port', e.target.value)}
-                          inputMode="numeric"
-                          placeholder="22"
-                          className="mt-1 w-full bg-transparent text-sm font-bold text-[#0A1128] outline-none"
-                        />
-                      </div>
-                      <div className="rounded-[18px] border border-white/70 bg-white px-4 py-3">
-                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">Password</label>
-                        <input
-                          value={remoteChannel.password}
-                          onChange={e => updateRemoteChannel('password', e.target.value)}
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder="SSH password"
-                          className="mt-1 w-full bg-transparent text-sm font-bold text-[#0A1128] outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    {channelTest && (
-                      <div className="mt-4 rounded-[18px] border border-green-100 bg-green-50 px-4 py-3">
-                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                          <div className="flex items-center gap-2 text-green-700">
-                            <CheckCircle2 size={16} />
-                            <span className="text-xs font-bold">
-                              Connected as {channelTest.remote?.user || channelTest.target?.username || 'remote user'}
-                              {channelTest.remote?.hostname ? ` @ ${channelTest.remote.hostname}` : ''}
-                            </span>
-                          </div>
-                          <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase text-green-700">
-                            Scheduler: {channelTest.scheduler || 'none'}
-                          </span>
-                        </div>
-                        {channelTest.software && channelTest.software.length > 0 && (
-                          <div className="mt-3">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-green-700/70">Detected compute software</p>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {channelTest.software.map(item => (
-                                <span key={item.id} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-green-700">
-                                  {item.label}
-                                  <span className="ml-1 font-medium text-green-700/50">{item.category}</span>
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {channelTest.commands && Object.keys(channelTest.commands).length > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {Object.entries(channelTest.commands).slice(0, 12).map(([name, command]) => (
-                              <span key={name} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-mono text-green-700">
-                                {name}: {command}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {channelError && (
-                      <div className="mt-4 flex items-start gap-2 rounded-[18px] border border-red-100 bg-red-50 px-4 py-3 text-red-700">
-                        <XCircle size={16} className="mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-xs font-bold">Channel test failed</p>
-                          <p className="mt-1 text-[11px]">{channelError}</p>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   {loadingProfiles ? (
@@ -724,11 +632,11 @@ const ComputeAgent: React.FC = () => {
                         className={`w-full p-6 rounded-[24px] border-2 text-left transition-all flex items-center justify-between ${
                           selectedProfileId === profile.id
                             ? 'border-[#2E4A8E] bg-[#2E4A8E]/5'
-                            : profile.configured
+                            : (profile.ready ?? profile.configured) && profile.directSubmitSupported !== false
                               ? 'border-gray-100 hover:border-gray-200'
                               : 'border-gray-100 opacity-50 cursor-not-allowed'
                         }`}
-                        disabled={!profile.configured}
+                        disabled={!(profile.ready ?? profile.configured) || profile.directSubmitSupported === false}
                       >
                         <div className="flex items-center gap-6">
                           <div className={`w-12 h-12 rounded-[16px] flex items-center justify-center ${
@@ -740,9 +648,9 @@ const ComputeAgent: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <p className="text-sm font-bold text-[#0A1128]">{profile.label}</p>
                               <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                                profile.configured ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
+                                (profile.ready ?? profile.configured) && profile.directSubmitSupported !== false ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
                               }`}>
-                                {profile.configured ? profile.system.toUpperCase() : 'NOT CONFIGURED'}
+                                {!profile.configured ? 'NOT CONFIGURED' : profile.directSubmitSupported === false ? 'RUNTIME ONLY' : profile.ready === false ? 'CHECK FAILED' : profile.system.toUpperCase()}
                               </span>
                             </div>
                             <p className="text-[11px] text-gray-500 mt-1 max-w-md">{profile.summary}</p>
@@ -767,7 +675,7 @@ const ComputeAgent: React.FC = () => {
               {currentStep.id === 'preview' && (
                 <div className="p-8 space-y-6">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Compiled Compute Inputs</h3>
+                      <h3 className="apple-eyebrow">Compiled {ENGINE_OPTIONS.find((engine) => engine.id === intent.engine)?.label || intent.engine} Inputs</h3>
                     <div className="flex gap-2">
                       {isCompiling && <span className="flex items-center gap-1 text-[#2E4A8E] text-[10px] font-bold"><Loader2 size={12} className="animate-spin" /> COMPILING...</span>}
                       {compiledInputs && <span className="px-2 py-0.5 bg-green-50 text-green-600 text-[10px] font-bold rounded">COMPILED</span>}
@@ -790,6 +698,28 @@ const ComputeAgent: React.FC = () => {
 
                   {compiledInputs && (
                     <>
+                      <div className={`rounded-[20px] border p-5 ${compiledInputs.validation?.submissionReady ? 'border-[#34c759]/20 bg-[#f2fbf5]' : 'border-[#ff3b30]/20 bg-[#fff4f3]'}`}>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-[#1d1d1f]">
+                              {compiledInputs.validation?.submissionReady ? 'Scientific Validation Passed' : 'Currently Not Submittable'}
+                            </p>
+                            <p className="mt-1 text-xs text-[#6e6e73]">
+                              {compiledInputs.audit?.auditId ? `Audit ID ${compiledInputs.audit.auditId.slice(0, 16)}` : 'Missing Server-Signed Audit Manifest'}
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-white px-3 py-1 text-[10px] font-semibold text-[#6e6e73] shadow-sm">
+                            {compiledInputs.validation?.maturity || 'unknown'}
+                          </span>
+                        </div>
+                        {compiledInputs.validation?.blockingIssues?.map(issue => (
+                          <p key={issue} className="mt-3 text-xs text-[#d70015]">• {issue}</p>
+                        ))}
+                        {compiledInputs.validation?.warnings?.map(warning => (
+                          <p key={warning} className="mt-2 text-xs text-[#6e6e73]">• {warning}</p>
+                        ))}
+                      </div>
+
                       <div className="grid grid-cols-4 gap-3">
                         {Object.keys(compiledInputs.files)
                           .filter(file => file !== 'POTCAR.spec.json')
@@ -916,6 +846,12 @@ const ComputeAgent: React.FC = () => {
 
                       {/* Results (when completed) */}
                       {computeResult && (
+                        <div className="space-y-4">
+                          {computeResult.isDemo && (
+                            <div className="rounded-[20px] border border-[#ff9f0a]/25 bg-[#fff8ed] p-4 text-sm font-semibold text-[#9a5b00]">
+                              Demo results, not scientific compute data; cannot be used for papers or reports.
+                            </div>
+                          )}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                           <div className="p-5 border border-gray-100 rounded-[20px]">
                             <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Total Energy</p>
@@ -942,6 +878,20 @@ const ComputeAgent: React.FC = () => {
                               <span className="text-[10px] text-gray-400 ml-1">eV/A</span>
                             </p>
                           </div>
+                        </div>
+                          {computeResult.audit && (
+                            <div className="apple-surface-muted p-4 text-xs text-[#6e6e73]">
+                              Source:<span className="font-medium text-[#1d1d1f]">{computeResult.isDemo ? 'Demo Materialization (Non-scientific Compute)' : computeResult.resultSource || 'Real Compute Environment'}</span>
+                              <span className="mx-2">·</span>
+                              Audit ID:<span className="font-mono text-[#1d1d1f]">{String(computeResult.audit.auditId || '').slice(0, 24)}</span>
+                              {computeResult.potcarProvenance?.combinedSha256 && (
+                                <span className="ml-4">POTCAR：<span className="font-mono text-[#1d1d1f]">{String(computeResult.potcarProvenance.combinedSha256).slice(0, 16)}</span></span>
+                              )}
+                              {computeResult.resultAudit?.hashedFiles && (
+                                <span className="ml-4">Hashed Results:<span className="font-medium text-[#1d1d1f]">{computeResult.resultAudit.hashedFiles.length}</span></span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -975,15 +925,19 @@ const ComputeAgent: React.FC = () => {
               {currentStepIndex === 3 ? (
                 <button
                   onClick={handleSubmit}
-                  disabled={!compiledInputs || isSubmitting || !selectedProfile}
-                  className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold transition-all shadow-lg bg-green-600 text-white shadow-green-200 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!submissionReady || isSubmitting || !selectedProfileReady}
+                  className="apple-button-primary"
                 >
-                  {isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Submitting...</> : <>Submit to Cluster <Play size={16} /></>}
+                  {isSubmitting
+                    ? <><Loader2 size={16} className="animate-spin" /> Submitting...</>
+                    : isDemoProfile
+                      ? <>Create Demo Record <Play size={16} /></>
+                      : <>Submit Real Compute <Play size={16} /></>}
                 </button>
               ) : currentStepIndex === 4 ? (
                 <button
                   onClick={() => navigate('/')}
-                  className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold bg-[#0A1128] text-white shadow-lg shadow-[#0A1128]/10 hover:bg-[#162044]"
+                  className="apple-button-primary"
                 >
                   Back to Home
                 </button>
@@ -991,14 +945,13 @@ const ComputeAgent: React.FC = () => {
                 <button
                   onClick={handleNext}
                   disabled={currentStepIndex === 0 && !molecularData}
-                  className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold transition-all shadow-lg bg-[#0A1128] text-white shadow-[#0A1128]/10 hover:bg-[#162044] disabled:opacity-50"
+                  className="apple-button-primary disabled:opacity-50"
                 >
-                  Next: {STEPS[currentStepIndex + 1]?.label} <ChevronRight size={16} />
+                  Next Step:{STEPS[currentStepIndex + 1]?.label} <ChevronRight size={16} />
                 </button>
               )}
             </div>
-          </motion.div>
-        </AnimatePresence>
+        </div>
       </main>
     </div>
   );

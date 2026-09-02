@@ -44,7 +44,7 @@ export const useAllMaterials = () => {
                     roughness: 0.5, 
                     metalness: 0.1 
                 });
-            case 'toon':
+            case 'toon': {
                 const colors = new Uint8Array(toonSteps || 3);
                 for(let i=0; i<colors.length; i++) {
                 const val = Math.floor((i / (colors.length - 1)) * 255);
@@ -55,6 +55,7 @@ export const useAllMaterials = () => {
                 gradientMap.magFilter = THREE.NearestFilter;
                 gradientMap.needsUpdate = true;
                 return new THREE.MeshToonMaterial({ gradientMap });
+            }
             case 'publication':
                 return new THREE.MeshStandardMaterial({ 
                     roughness: 0.1, 
@@ -126,7 +127,7 @@ export const useAtomMaterial = () => {
             roughness: 0.5, 
             metalness: 0.1 
         });
-      case 'toon':
+      case 'toon': {
          // Generate Gradient Texture for Toon effect
          const colors = new Uint8Array(3);
          for(let i=0; i<colors.length; i++) {
@@ -141,6 +142,7 @@ export const useAtomMaterial = () => {
          return new THREE.MeshToonMaterial({
              gradientMap: gradientMap
          });
+      }
       case 'publication':
         return new THREE.MeshStandardMaterial({ 
             roughness: 0.1, 

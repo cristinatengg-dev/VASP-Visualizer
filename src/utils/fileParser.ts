@@ -348,17 +348,19 @@ export const parseVASPFile = async (file: File): Promise<MolecularStructure> => 
       }).finally(() => window.clearTimeout(timeoutId));
 
       if (!response.ok) {
-          let msg = '服务器端结构解析失败';
+          let msg = 'Server-side structure parsing failed';
           try {
               const errJson = await response.json();
               if (typeof errJson?.error === 'string' && errJson.error) msg = errJson.error;
-          } catch { }
+          } catch {
+              // Keep the generic parsing error when the response is not JSON.
+          }
           throw new Error(msg);
       }
 
       const result = await response.json();
       if (!(result?.success && result?.data)) {
-          throw new Error('服务器端结构解析失败');
+          throw new Error('Server-side structure parsing failed');
       }
 
       console.log(`[Parser] Server parsing successful for ${file.name}`);
@@ -418,7 +420,7 @@ export const parseVASPFile = async (file: File): Promise<MolecularStructure> => 
   } catch (err) {
       console.warn("[Parser] Server parsing failed.", err);
       if (err instanceof Error) throw err;
-      throw new Error('服务器端结构解析失败');
+      throw new Error('Server-side structure parsing failed');
   }
 };
 

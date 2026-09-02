@@ -6,7 +6,7 @@ const EFFECTIVE_DATE = 'April 6, 2026';
 const CookiePolicy: React.FC = () => (
   <LegalDocumentLayout
     title="Cookie Policy"
-    subtitle="Cookie 与浏览器存储政策"
+    subtitle="Cookie & Browser Storage Policy"
     effectiveDate={EFFECTIVE_DATE}
     currentPath="/cookie-policy"
     summary={
@@ -36,7 +36,7 @@ const CookiePolicy: React.FC = () => (
 
       <p>2.2. <strong>Functional Cookies.</strong> These Cookies enable enhanced functionality and personalization. They include:</p>
       <p className="pl-8">(a) Session storage flags (e.g., <code className="text-sm bg-gray-100 px-1 py-0.5 rounded">splash_shown</code>) that remember short-lived UI state within a single browser session;</p>
-      <p className="pl-8">(b) User preference settings for visualization parameters, editor state, and workflow configuration.</p>
+      <p className="pl-8">(b) User preference settings for visualization parameters, editor state, and Agent configuration.</p>
 
       <p>2.3. <strong>Performance and Analytics Cookies.</strong> We may use Cookies to monitor service performance, collect error reports, and understand aggregate usage patterns. As of the effective date of this Policy, the Service does not deploy third-party behavioral tracking or advertising cookies.</p>
     </LegalSection>
@@ -58,7 +58,7 @@ const CookiePolicy: React.FC = () => (
 
     <LegalSection title="5. Your Choices and Controls">
       <p>5.1. <strong>Browser Settings.</strong> Most web browsers allow you to manage Cookie preferences through their settings. You can typically: view and delete existing Cookies; block all or specific categories of Cookies; configure notifications when new Cookies are set.</p>
-      <p>5.2. <strong>Consequences of Disabling Cookies.</strong> If you disable or delete strictly necessary Cookies, you may experience the following effects: (a) automatic sign-out and inability to maintain authenticated sessions; (b) loss of saved preferences and workflow state; (c) impaired or unavailable Service features that depend on client-side storage.</p>
+      <p>5.2. <strong>Consequences of Disabling Cookies.</strong> If you disable or delete strictly necessary Cookies, you may experience the following effects: (a) automatic sign-out and inability to maintain authenticated sessions; (b) loss of saved preferences and Agent state; (c) impaired or unavailable Service features that depend on client-side storage.</p>
       <p>5.3. <strong>Do Not Track.</strong> The Service does not currently respond to "Do Not Track" browser signals, as there is no industry-wide standard for compliance. We will update this Policy if a uniform standard is adopted.</p>
     </LegalSection>
 

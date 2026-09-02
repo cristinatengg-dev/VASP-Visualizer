@@ -1,37 +1,36 @@
-import { ControlPanel } from './components/ControlPanel';
-import { Scene3D } from './components/Scene3D';
-import { LoginPage } from './components/LoginPage';
-import { AccountDropdown } from './components/AccountDropdown';
-import HeroSection from './components/HeroSection';
-import SplashScreen from './components/SplashScreen';
-import Explore from './pages/Explore';
-import AgentWorkspace from './pages/AgentWorkspace';
-import Manual from './pages/Manual';
-import TermsOfService from './pages/TermsOfService';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import CookiePolicy from './pages/CookiePolicy';
-import MaterialsExplorer from './pages/MaterialsExplorer';
-import NuclearMaterialsExplorer from './pages/NuclearMaterialsExplorer';
-import SupercapacitorMaterialsExplorer from './pages/SupercapacitorMaterialsExplorer';
-import HydrogenStorageMaterialsExplorer from './pages/HydrogenStorageMaterialsExplorer';
-import ThermalStorageMaterialsExplorer from './pages/ThermalStorageMaterialsExplorer';
-import FlowBatteryMaterialsExplorer from './pages/FlowBatteryMaterialsExplorer';
-import AerospaceMaterialsExplorer from './pages/AerospaceMaterialsExplorer';
-import MaterialsLibrary from './pages/MaterialsLibrary';
-import RenderingAgent from './agents/rendering';
-import ModelingAgent from './agents/modeling';
-import ComputeAgent from './agents/compute';
-import RuntimeInspector from './agents/runtime';
-import RetrievalAgent from './agents/retrieval';
-import VideoGenerator from './pages/VideoGenerator';
-import { useStore } from './store/useStore';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { API_BASE_URL, PHONE_AUTH_ENABLED } from './config';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { AgentGate } from './components/AgentGate';
+import { VisualizationErrorBoundary } from './components/VisualizationErrorBoundary';
 
 const GromacsTrajectoryViewer = lazy(() => import('./pages/GromacsTrajectoryViewer'));
+const LoginPage = lazy(() => import('./components/LoginPage').then((module) => ({ default: module.LoginPage })));
+const AccountDropdown = lazy(() => import('./components/AccountDropdown').then((module) => ({ default: module.AccountDropdown })));
+const AgentGate = lazy(() => import('./components/AgentGate').then((module) => ({ default: module.AgentGate })));
+const HeroSection = lazy(() => import('./components/HeroSection'));
+const ControlPanel = lazy(() => import('./components/ControlPanel').then((module) => ({ default: module.ControlPanel })));
+const Scene3D = lazy(() => import('./components/Scene3D').then((module) => ({ default: module.Scene3D })));
+const Explore = lazy(() => import('./pages/Explore'));
+const AgentWorkspace = lazy(() => import('./pages/AgentWorkspace'));
+const Manual = lazy(() => import('./pages/Manual'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const CookiePolicy = lazy(() => import('./pages/CookiePolicy'));
+const MaterialsExplorer = lazy(() => import('./pages/MaterialsExplorer'));
+const NuclearMaterialsExplorer = lazy(() => import('./pages/NuclearMaterialsExplorer'));
+const SupercapacitorMaterialsExplorer = lazy(() => import('./pages/SupercapacitorMaterialsExplorer'));
+const HydrogenStorageMaterialsExplorer = lazy(() => import('./pages/HydrogenStorageMaterialsExplorer'));
+const ThermalStorageMaterialsExplorer = lazy(() => import('./pages/ThermalStorageMaterialsExplorer'));
+const FlowBatteryMaterialsExplorer = lazy(() => import('./pages/FlowBatteryMaterialsExplorer'));
+const AerospaceMaterialsExplorer = lazy(() => import('./pages/AerospaceMaterialsExplorer'));
+const MaterialsLibrary = lazy(() => import('./pages/MaterialsLibrary'));
+const RenderingAgent = lazy(() => import('./agents/rendering'));
+const ModelingAgent = lazy(() => import('./agents/modeling'));
+const ComputeAgent = lazy(() => import('./agents/compute'));
+const RuntimeInspector = lazy(() => import('./agents/runtime'));
+const RetrievalAgent = lazy(() => import('./agents/retrieval'));
+const VideoGenerator = lazy(() => import('./pages/VideoGenerator'));
 
 const PageLoader: React.FC = () => (
   <div className="flex h-screen w-screen items-center justify-center bg-[#F5F5F0]">
@@ -39,53 +38,37 @@ const PageLoader: React.FC = () => (
   </div>
 );
 
+const hasAuthSession = () => Boolean(
+  localStorage.getItem('vasp_user_id') && localStorage.getItem('vasp_token'),
+);
+
 // Protected route when phone authentication is enabled.
 const AppRoute: React.FC = () => {
-  const { user } = useStore();
-  if (PHONE_AUTH_ENABLED && !user) return <Navigate to="/login" replace />;
+  if (PHONE_AUTH_ENABLED && !hasAuthSession()) return <Navigate to="/login" replace />;
   return (
     <div className="flex w-screen h-screen overflow-hidden bg-[#F5F5F0] p-6 gap-6">
       <ControlPanel />
       <div className="flex-1 h-full relative rounded-[24px] overflow-hidden shadow-[0_4px_30px_rgba(0,0,0,0.05)] bg-white ring-1 ring-black/5">
         <AccountDropdown />
-        <Scene3D />
+        <VisualizationErrorBoundary className="rounded-[24px]">
+          <Scene3D />
+        </VisualizationErrorBoundary>
       </div>
     </div>
   );
 };
 
 const AgentRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { user } = useStore();
-  if (PHONE_AUTH_ENABLED && !user) return <Navigate to="/login" replace />;
+  if (PHONE_AUTH_ENABLED && !hasAuthSession()) return <Navigate to="/login" replace />;
   return children;
 };
 
-const HomePage: React.FC = () => {
-  const [splashDone, setSplashDone] = useState(() => {
-    // Only show splash once per session
-    return sessionStorage.getItem('splash_shown') === '1';
-  });
-
-  const handleSplashComplete = () => {
-    sessionStorage.setItem('splash_shown', '1');
-    setSplashDone(true);
-  };
-
-  return (
-    <>
-      {!splashDone && <SplashScreen onComplete={handleSplashComplete} />}
-      <HeroSection />
-    </>
-  );
-};
+const HomePage: React.FC = () => <HeroSection />;
 
 function App() {
-  const { user, setUser } = useStore();
-  
   const [isAuthChecking, setIsAuthChecking] = useState(() => {
       if (!PHONE_AUTH_ENABLED) return false;
-      const hasToken = !!(localStorage.getItem('vasp_user_id') && localStorage.getItem('vasp_token'));
-      return hasToken && !user;
+      return hasAuthSession();
   });
 
   useEffect(() => {
@@ -94,18 +77,14 @@ function App() {
         const token = localStorage.getItem('vasp_token');
         
         if (userId && token) {
-            if (user) {
-                setIsAuthChecking(false);
-                return;
-            }
-
             try {
                 const res = await fetch(`${API_BASE_URL}/user/${encodeURIComponent(userId)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
                 if (data?.success && data?.user) {
-                    setUser(data.user);
+                    const { useStore } = await import('./store/useStore');
+                    useStore.getState().setUser(data.user);
                 } else {
                     localStorage.removeItem('vasp_token');
                     localStorage.removeItem('vasp_user_id');
@@ -121,7 +100,7 @@ function App() {
     if (isAuthChecking) {
         checkAuth();
     }
-  }, [isAuthChecking, setUser, user]);
+  }, [isAuthChecking]);
 
   if (isAuthChecking) {
       return (
@@ -132,14 +111,15 @@ function App() {
   }
 
   return (
-    <Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
       {/* 默认首页：HeroSection */}
       <Route path="/" element={<HomePage />} />
       {/* 登录页 */}
       <Route
         path="/login"
         element={
-          !PHONE_AUTH_ENABLED || user
+          !PHONE_AUTH_ENABLED || hasAuthSession()
             ? <Navigate to={PHONE_AUTH_ENABLED ? "/" : "/workspace"} replace />
             : <LoginPage />
         }
@@ -172,9 +152,7 @@ function App() {
         element={
           <AgentRoute>
             <AgentGate agent="modeling" label="Modeling Agent">
-              <Suspense fallback={<PageLoader />}>
-                <GromacsTrajectoryViewer />
-              </Suspense>
+              <GromacsTrajectoryViewer />
             </AgentGate>
           </AgentRoute>
         }
@@ -184,7 +162,8 @@ function App() {
       {/* 旧路由兼容 */}
       <Route path="/hero" element={<Navigate to="/" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }
 

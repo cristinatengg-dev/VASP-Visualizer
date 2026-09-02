@@ -282,13 +282,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
         )}
         <div className="bg-gray-50 border border-gray-200 rounded-[24px] p-6">
           <p className="text-sm text-gray-600">
-            你好！我是您的 AI 建模助手。您可以尝试输入：
+            Hello! I am your AI Modeling Agent assistant. You can try entering:
           </p>
           <div className="mt-3 flex flex-col gap-2">
             {[
-              '“帮我搭一个 Cu(111) 表面，4 层，3×3 超胞”',
-              '“在表面放一个 CO2 分子”',
-              '“把其中一个 Cu 换成 Zn”',
+              '"Build a Cu(111) surface for me, 4 layers, 3×3 supercell"',
+              '"Place a CO2 molecule on the surface"',
+              '"Replace one of the Cu with Zn"',
             ].map((t) => (
               <button
                 key={t}
@@ -307,7 +307,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Ready to Build</h3>
             <div className="rounded-[20px] border border-gray-100 bg-gray-50 p-4">
               <p className="text-sm font-medium text-[#0A1128] leading-relaxed">
-                {buildEditablePromptFromIntent(currentIntent) || '当前建模意图已解析完成，可以直接生成结构。'}
+                {buildEditablePromptFromIntent(currentIntent) || 'The current modeling intent has been parsed and the structure can be generated directly.'}
               </p>
             </div>
             <div className="mt-4 flex gap-2">
@@ -328,7 +328,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
                 disabled={isBuilding}
                 className="flex-1 px-4 py-3 bg-[#0A1128] text-white rounded-[32px] hover:bg-[#162044] transition-colors shadow-sm font-medium text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200 disabled:shadow-none disabled:cursor-not-allowed"
               >
-                {isBuilding ? '生成中...' : '确认生成'}
+                {isBuilding ? 'Generating...' : 'Confirm Generation'}
               </button>
               <button
                 type="button"
@@ -340,7 +340,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
                 }}
                 className="px-4 py-3 bg-gray-50 border border-gray-200 text-gray-700 rounded-[32px] hover:bg-gray-100 transition-colors text-sm font-medium"
               >
-                进入修改
+                Edit Parameters
               </button>
             </div>
           </div>
@@ -352,7 +352,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
               <div>
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Structured Edit</h3>
                 <p className="mt-2 text-sm text-gray-600">
-                  这组编辑会直接更新当前参数并重新生成结构，不再重复让模型猜参数。
+                  This set of edits will directly update current parameters and regenerate the structure without making the model guess parameters again.
                 </p>
               </div>
               <span className="rounded-[16px] px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-cyan-50 text-cyan-700 border border-cyan-200">
@@ -417,7 +417,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-700">Adsorbate Patch</p>
                   <p className="mt-1 text-xs text-cyan-800">
-                    第一版结构化编辑先支持一个主吸附体模板。清空 formula 即表示移除当前 adsorbate。
+                    The initial version of structured editing supports one primary adsorbate template. Clearing formula removes the current adsorbate.
                   </p>
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -450,7 +450,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700">Substitutional Doping</p>
                 <p className="mt-1 text-xs text-amber-800">
-                  第一版先支持 host 元素被 dopant 元素替代。清空 host 或 dopant 即表示移除当前 doping patch。
+                  The initial version supports host element substitution by a dopant element. Clearing host or dopant removes the current doping patch.
                 </p>
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -479,7 +479,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-rose-700">Vacancy Defect</p>
                 <p className="mt-1 text-xs text-rose-800">
-                  第一版 defect 先支持 vacancy。填 element 表示删除该元素的若干位点；清空 element 即表示移除 defect patch。
+                  The initial version of defect supports vacancy first. Entering element deletes several sites of that element; clearing element removes the defect patch.
                 </p>
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -522,7 +522,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
                 disabled={isBuilding}
                 className="px-4 py-3 bg-[#173B7A] text-white rounded-[32px] hover:bg-[#224A91] transition-colors shadow-sm font-medium text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200 disabled:shadow-none disabled:cursor-not-allowed"
               >
-                应用结构化编辑并生成
+                Apply Structured Edits and Generate
               </button>
               <button
                 type="button"
@@ -552,7 +552,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
                 disabled={isBuilding}
                 className="px-4 py-3 bg-gray-50 border border-gray-200 text-gray-700 rounded-[32px] hover:bg-gray-100 transition-colors text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                重置为当前 Intent
+                Reset to Current Intent
               </button>
             </div>
           </div>
@@ -656,14 +656,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
                 handleSend();
               }
             }}
-            placeholder="描述您想构建的体系..."
+            placeholder="Describe the system you want to build..."
             className="w-full p-3 text-xs border border-gray-100 rounded-[24px] font-mono focus:outline-none focus:border-gray-300 focus:shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition-all resize-none text-gray-600 disabled:bg-gray-50 disabled:text-gray-400"
             rows={5}
           />
           <button 
             onClick={() => handleSend()}
             type="button"
-            aria-label="发送"
+            aria-label="Send"
             className="absolute bottom-3 right-3 px-3 py-2 bg-[#0A1128] text-white rounded-[32px] hover:bg-[#162044] transition-colors shadow-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:border disabled:border-gray-200"
             disabled={isBuilding || !input.trim()}
           >
@@ -673,7 +673,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onIntentChange, currentIntent, pr
           </button>
         </div>
         <p className="mt-2 text-[10px] text-gray-400 text-center">
-          Shift + Enter 换行 | Enter 发送
+          Shift + Enter for new line | Enter to send
         </p>
       </div>
     </div>

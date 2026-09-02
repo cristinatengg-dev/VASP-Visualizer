@@ -7,16 +7,16 @@ import { clsx } from 'clsx';
 const PRICING_TABLE = [
     {
         tier: 'personal',
-        name: '个人端',
+        name: 'Personal',
         price: '¥99',
-        period: '/月/Agent',
+        period: '/month/Agent',
         features: [
-            '单个 Agent 调用订阅',
-            '目前开放 Rendering Agent',
-            '目前开放 Cover Agent',
+            'Single Agent Usage Subscription',
+            'Currently available: Rendering Agent',
+            'Currently available: Cover Agent',
         ],
-        quotaLabel: '按 Agent 订阅',
-        extraLabel: '每月每个 Agent ¥99',
+        quotaLabel: 'Per-Agent Subscription',
+        extraLabel: '¥99/month per Agent',
         color: 'bg-white/5',
         textColor: 'text-white',
         icon: User,
@@ -24,16 +24,16 @@ const PRICING_TABLE = [
     },
     {
         tier: 'academic',
-        name: '高校端',
-        price: '¥3万',
-        period: '/年',
+        name: 'Academic',
+        price: '¥30,000',
+        period: '/year',
         features: [
-            '全平台 Agent 访问',
-            '不包括基础算力调用',
-            '校园批量授权',
+            'Full Platform Agent Access',
+            'Base compute resources not included',
+            'Campus Volume License',
         ],
-        quotaLabel: '平台订阅',
-        extraLabel: '基础算力另计',
+        quotaLabel: 'Platform Subscription',
+        extraLabel: 'Base compute billed separately',
         recommended: true,
         color: 'bg-white/10',
         textColor: 'text-white',
@@ -44,16 +44,16 @@ const PRICING_TABLE = [
     },
     {
         tier: 'enterprise',
-        name: '企业端',
-        price: '全定制',
+        name: 'Enterprise',
+        price: 'Fully Customized',
         period: '',
         features: [
-            '全定制化交付',
-            '专属技术支持',
-            '每年 15% 后期运维费用',
+            'Fully Customized Delivery',
+            'Dedicated Technical Support',
+            '15% annual maintenance & operations fee',
         ],
-        quotaLabel: '定制化方案',
-        extraLabel: '联系工程师获取报价',
+        quotaLabel: 'Custom Plan',
+        extraLabel: 'Contact engineer for a quote',
         color: 'bg-white/5',
         textColor: 'text-amber-500',
         icon: Crown,
@@ -81,8 +81,8 @@ export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }
         // Parse price: "¥99" -> 99, "¥15万" -> 150000
         let priceStr = plan.price.replace(/[^0-9万]/g, '');
         let cost = 0;
-        if (priceStr.includes('万')) {
-            cost = parseInt(priceStr.replace('万', '')) * 10000;
+        if (priceStr.includes('10k')) {
+            cost = parseInt(priceStr.replace('10k', '')) * 10000;
         } else {
             cost = parseInt(priceStr) || 0;
         }
@@ -115,8 +115,8 @@ export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }
             <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[9999] w-[960px] max-w-[95vw] max-h-[90vh] bg-[#0f172a]/90 border border-white/10 rounded-[32px] shadow-2xl overflow-hidden flex flex-col text-slate-200">
                 <div className="p-8 border-b border-white/5 flex justify-between items-center">
                     <div>
-                        <h2 className="text-2xl font-bold text-white tracking-tight">订阅方案</h2>
-                        <p className="text-slate-400 text-sm mt-1">选择适合您的订阅方案</p>
+                        <h2 className="text-2xl font-bold text-white tracking-tight">Subscription Plans</h2>
+                        <p className="text-slate-400 text-sm mt-1">Choose the right subscription plan for you</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white">
                         <X className="w-6 h-6" />
@@ -142,7 +142,7 @@ export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }
                                 >
                                     {plan.recommended && (
                                         <div className="absolute top-4 right-4 bg-white/10 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wide border border-white/10 backdrop-blur-sm shadow-sm">
-                                            推荐
+                                            Recommended
                                         </div>
                                     )}
                                     
@@ -185,7 +185,7 @@ export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }
                                                 onClick={() => toggleExpand(plan.tier)}
                                                 className="flex items-center justify-between w-full text-xs text-slate-500 hover:text-slate-300 transition-colors group"
                                             >
-                                                <span>查看详情</span>
+                                                <span>View Details</span>
                                                 {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                                             </button>
                                             
@@ -195,11 +195,11 @@ export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }
                                             )}>
                                                 <div className="space-y-3 text-xs bg-black/20 p-3 rounded-lg border border-white/5">
                                                     <div className="flex justify-between">
-                                                        <span className="text-slate-400">订阅模式</span>
+                                                        <span className="text-slate-400">Subscription Mode</span>
                                                         <span className="text-slate-200 font-mono">{plan.quotaLabel}</span>
                                                     </div>
                                                     <div className="flex justify-between">
-                                                        <span className="text-slate-400">费用说明</span>
+                                                        <span className="text-slate-400">Pricing Details</span>
                                                         <span className="text-slate-200 font-mono">{plan.extraLabel}</span>
                                                     </div>
                                                 </div>
@@ -214,7 +214,7 @@ export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }
                                                 className="w-full py-3.5 rounded-[24px] font-semibold transition-all flex items-center justify-center gap-2 text-sm border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:border-amber-400/50"
                                             >
                                                 <Phone className="w-4 h-4" />
-                                                联系工程师: {(plan as any).contactPhone}
+                                                Contact Engineer: {(plan as any).contactPhone}
                                             </a>
                                         ) : (
                                         <button
@@ -232,9 +232,9 @@ export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }
                                             {processingTier === plan.tier ? (
                                                 <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                             ) : isCurrent ? (
-                                                "当前方案"
+                                                "Current Plan"
                                             ) : (
-                                                "立即订阅"
+                                                "Subscribe Now"
                                             )}
                                         </button>
                                         )}
@@ -248,7 +248,7 @@ export const SubscriptionPanel: React.FC<{ onClose: () => void }> = ({ onClose }
                 <div className="p-4 border-t border-white/5 bg-black/20 text-center">
                     <p className="text-xs text-slate-500 flex items-center justify-center gap-2">
                         <Shield className="w-3 h-3" />
-                        安全支付 · 随时取消 · 专属客服
+                        Secure Payment · Cancel Anytime · Dedicated Support
                     </p>
                 </div>
             </div>

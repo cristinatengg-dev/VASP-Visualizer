@@ -35,7 +35,7 @@ export const AccountWidget: React.FC = () => {
                user.tier === 'academic' ? "bg-yellow-100 text-yellow-700" :
                "bg-gray-100 text-gray-600"
              )}>
-               {user.tier === 'enterprise' ? '企业端' : user.tier === 'academic' ? '高校端' : '个人端'}
+               {user.tier === 'enterprise' ? 'Enterprise' : user.tier === 'academic' ? 'Academic' : 'Personal'}
              </span>
           </div>
         </div>
