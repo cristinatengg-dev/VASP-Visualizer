@@ -84,6 +84,7 @@ const { app } = createProductApp({
   dist: path.join(root, "dist"),
   secure: !preview,
   smsReady,
+  trustProxy: preview ? false : 1,
 });
 const server = app.listen(port, host, () =>
   console.log("EliangMat AI listening on port " + port),

@@ -185,3 +185,22 @@ test("product refuses local verification configuration", (t) => {
     /disable development/,
   );
 });
+
+test('production proxy keeps SMS rate limits per client and direct instances ignore spoofed forwarding', async t => {
+  for (const trustProxy of [false, 1]) {
+    const dir = root(t);
+    const auth = new PlatformAuth(path.join(dir, 'auth'), {
+      mode:'tencent', development:false, deliver:async()=>{ throw new Error('Must not send SMS in this test'); },
+    });
+    const server = require('node:http').createServer().listen(0, '127.0.0.1');
+    await new Promise(resolve=>server.once('listening', resolve));
+    t.after(()=>server.close());
+    const origin = 'http://127.0.0.1:' + server.address().port;
+    const {app} = createProductApp({auth,root:path.join(dir,'data'),origins:[origin],smsReady:true,trustProxy});
+    server.on('request',app);
+    const send = ip => fetch(origin+'/api/auth/send-phone-code', {method:'POST',headers:{'Content-Type':'application/json','X-EliangMat-Client':'knowledge-v1','X-Forwarded-For':ip},body:JSON.stringify({phone:'invalid'})});
+    for(let n=0;n<10;n++) assert.equal((await send('192.0.2.1')).status,400);
+    assert.equal((await send('192.0.2.1')).status,429);
+    assert.equal((await send('192.0.2.2')).status,trustProxy?400:429);
+  }
+});

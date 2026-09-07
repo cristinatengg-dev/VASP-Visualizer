@@ -1,6 +1,6 @@
 services:
   platform:
-    image: eliangmat-platform
+    image: ${ELIANGMAT_IMAGE:-eliangmat-platform}
     build:
       context: .
       dockerfile: Dockerfile.platform

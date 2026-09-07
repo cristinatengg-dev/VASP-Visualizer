@@ -21,6 +21,7 @@ function createProductApp({
   dist,
   secure = true,
   smsReady = false,
+  trustProxy = false,
 }) {
   if (auth.development)
     throw new Error("Product authentication must disable development access");
@@ -28,6 +29,7 @@ function createProductApp({
   if (!allowed.size) throw new Error("Explicit application origins required");
   const app = express();
   app.disable("x-powered-by");
+  app.set("trust proxy", trustProxy);
   app.use((req, res, next) => {
     const origin = req.get("origin");
     const hostAllowed = [...allowed].some(

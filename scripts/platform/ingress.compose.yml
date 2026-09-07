@@ -1,0 +1,6 @@
+# Use with docker-compose.yml and docker-compose.platform.yml from the repo root.
+# Reuses the existing Nginx image and TLS mount; legacy backend and Mongo stay up.
+services:
+  frontend:
+    volumes:
+      - ./.config/platform-nginx.conf:/etc/nginx/conf.d/default.conf:ro
