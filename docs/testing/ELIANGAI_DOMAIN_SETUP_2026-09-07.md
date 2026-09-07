@@ -6,9 +6,18 @@
 
 - 2026-09-07 权威 DNS：`dns9.hichina.com` / `dns10.hichina.com`，主域 A 查询无答案，www 为 NXDOMAIN；尚未指向现有生产服务器。
 - 现有平台运行于腾讯云上海 `118.25.15.120`，版本 `eliangmat-platform:9c9e77bb8f76`，旧站继续运行。
-- Chrome 已打开阿里云 DNS 控制台登录页；尚无可用登录会话，等待用户登录并说明新域名备案/腾讯云接入状态。
+- 阿里云 DNS 控制台之前停在登录页，尚未代配置解析；腾讯云已登录并提交新域名备案，当前审核中。
 - 现有证书只覆盖旧域名，不能用于新域名。不能先把新域名指向旧证书并声称 HTTPS 可用。
 - 准备代码已推送 GitHub，服务器现有 Git 检出已同步；ACME 准备配置在生产同款 Nginx 镜像的隔离容器中通过 `nginx -t`。正式激活配置仍须拿到新域名证书后验证。没有重启生产容器、没有执行旧部署脚本，旧站 `/api/health` 仍为 200。
+
+## 备案办理进展（2026-09-07）
+
+- 用户已登录腾讯云，并授权为新域名办理备案。控制台确认公司主体及旧域名 `scivisualizer.com` 备案状态正常；腾讯云域名校验显示 `eliangai.com` 尚无备案号，应办理浙江省“新增服务”。
+- 已创建本次新增服务申请，沿用既有公司主体、营业执照及负责人材料完成主体步骤。网站名称填写“易量芯材材料研发平台”，备注如实描述 EliangMat AI 的资料整理、研发项目管理、研究辅助问答和实验数据记录/分析业务；使用原轻量服务器。
+- 用户完成负责人核验后，网站服务状态为“正常”。已推进补充材料步骤（无新增必填材料）并核对最终预览中的主体、网站名、域名、业务说明与服务器。
+- 提交前读取实时页面，必选声明与可选公安联网备案信息同步均已由用户勾选；代理未操作这两个复选框，沿用用户选择提交。页面实际返回“提交成功”“提交初审 已提交”“腾讯云审核 审核中”。**备案申请已提交，尚未取得新域名备案号，不能视为审核通过。**
+- 当前页面提示 1–2 个工作日内电话审核，后续还有工信部短信核验（24 小时内）及管局审核。公安联网备案仅显示同步授权完成，待管局通过后获取数据码，仍需单独完成公安联网备案。
+- 私有订单与续办状态保存在本机 Git 忽略的 `.config/eliangai-filing-progress.json`，不把证件号码、照片、手机号、验证码或私有订单地址写入仓库。继续时查看现有审核订单，勿重复新建或撤单；未创建自动监控任务。
 
 ## 解析目标
 
@@ -31,4 +40,4 @@
 
 目前仅完成配置准备；未修改 DNS、申请证书或切换生产入口。下次继续前以实际 DNS、浏览器登录状态和服务器配置为准，避免重复操作。
 
-参考：[阿里云网站解析说明](https://help.aliyun.com/zh/dns/pubz-add-website-parsing)、[Certbot Docker 方式](https://eff-certbot.readthedocs.io/en/stable/install.html)、[Certbot Webroot 与续期](https://eff-certbot.readthedocs.io/en/stable/using.html)。现有服务器在中国内地，新域名须确认备案及服务商接入状态；尚未得知用户办理情况。
+参考：[阿里云网站解析说明](https://help.aliyun.com/zh/dns/pubz-add-website-parsing)、[Certbot Docker 方式](https://eff-certbot.readthedocs.io/en/stable/install.html)、[Certbot Webroot 与续期](https://eff-certbot.readthedocs.io/en/stable/using.html)。新域名现已提交腾讯云新增服务备案，正式上线前仍须核对审核结果。
