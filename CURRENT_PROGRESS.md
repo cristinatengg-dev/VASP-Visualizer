@@ -2,6 +2,13 @@
 
 > 本文档供新 Claude Code 会话快速了解当前工作状态。
 
+## 2026-09-07：准备接入新域名 eliangai.com
+
+- 用户要求在新购 `eliangai.com` 上提供现有平台，授权域名接入。权威 DNS 为阿里云 hichina，检查时根域无 A 记录、www 为 NXDOMAIN；现有上海服务器与旧站继续运行。
+- Chrome 已打开阿里云登录页，等待用户登录并回复新域名 ICP 备案/腾讯云接入状态。内置浏览器工具超时，改用 Computer Use 控制 Chrome 成功到达登录页；未获取密码、未修改账号权限。
+- 新增 `scripts/platform/render-domain-ingress.cjs`，可生成保留旧站的 ACME 准备配置，以及新域 HTTPS / www 跳转配置。此阶段不切换生产，不用旧证书假冒新域 TLS；维持同一平台数据与身份目录。
+- DNS、证书、来源配置、验证与回退步骤见 [新域名接入记录](docs/testing/ELIANGAI_DOMAIN_SETUP_2026-09-07.md)。接入尚未完成，不能把准备代码已推送视为新域名已上线。
+
 ## 2026-09-07：EliangMat AI 正式平台已部署
 
 - 用户授权发布。`main` 已推送，现有生产 Git 检出 fast-forward 到 `9c9e77bb8f76`，新版 `scripts/platform/deploy-server.sh` 首次切换成功，正式网址 https://scivisualizer.com/ 。未 bootstrap、未执行旧 `deploy_to_tencent.sh`，镜像固定为 `eliangmat-platform:9c9e77bb8f76`。
