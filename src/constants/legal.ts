@@ -4,7 +4,7 @@ export interface LegalLink {
 }
 
 export const LEGAL_LINKS: LegalLink[] = [
-  { label: 'Terms of Service', path: '/terms-of-service' },
-  { label: 'Privacy Policy', path: '/privacy-policy' },
-  { label: 'Cookie Policy', path: '/cookie-policy' },
+  { label: '服务条款', path: '/terms-of-service' },
+  { label: '隐私政策', path: '/privacy-policy' },
+  { label: 'Cookie 政策', path: '/cookie-policy' },
 ];

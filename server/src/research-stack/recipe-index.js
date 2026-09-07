@@ -28,7 +28,7 @@ const DATASET_SOURCES = {
   },
   ceder_seed: {
     label: 'Ceder recipe seed index',
-    project: 'VASP-Visualizer normalized Ceder seed',
+    project: 'EliangMat AI normalized Ceder seed',
     url: 'https://github.com/CederGroupHub/text-mined-synthesis_public',
     citation: 'Normalized examples from the Ceder open synthesis datasets',
     doi: '',

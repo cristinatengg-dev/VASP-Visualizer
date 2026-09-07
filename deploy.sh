@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SCI Visualizer — One-command deploy
+# EliangMat AI — One-command deploy
 #
 # Flow: local commit → git push → server git pull → docker build → restart
 #

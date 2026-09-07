@@ -1,4 +1,4 @@
-# SCI Visualizer 智能体平台差距审计
+# EliangMat AI 智能体平台差距审计
 
 更新日期：2026-08-10
 

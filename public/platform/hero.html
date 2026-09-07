@@ -1,0 +1,161 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EliangMat AI · 材料研发</title><style>html,body{margin:0;background:#f4f4f0}#eliangmat-hero{min-height:100dvh;border-radius:0!important}#eliangmat-hero .em-stage{min-height:max(590px,calc(100dvh - 245px))}#eliangmat-hero .em-workspace{display:none!important}@media(max-width:600px){#eliangmat-hero .em-stage{min-height:710px}}</style></head><body><div id="eliangmat-hero" aria-label="EliangMat AI 材料研发平台首页">
+<style>
+ #eliangmat-hero{--em-bg:light-dark(#f4f4f0,#151719);--em-surface:light-dark(#fafaf7,#1c1f21);--em-text:light-dark(#232725,#eceee9);--em-muted:light-dark(#686e68,#a0a8a2);--em-line:light-dark(#d7dbd4,#3b403d);--em-ink:light-dark(#2b332f,#dce3dc);--em-button:light-dark(#27332d,#e0e7e0);--em-on:light-dark(#f5f7f2,#222b26);color-scheme:light dark;color:var(--em-text);background:var(--em-bg);font:400 14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;border-radius:12px;overflow:clip;isolation:isolate;}
+ #eliangmat-hero *{box-sizing:border-box;min-width:0;} #eliangmat-hero [hidden]{display:none!important;} #eliangmat-hero button,#eliangmat-hero input,#eliangmat-hero textarea{font:inherit;color:inherit;} #eliangmat-hero button{cursor:pointer;} #eliangmat-hero h1,#eliangmat-hero h2,#eliangmat-hero h3,#eliangmat-hero p{margin:0;} #eliangmat-hero svg{width:16px;height:16px;flex-shrink:0;}
+ #eliangmat-hero .em-top{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:22px 32px;border-bottom:1px solid var(--em-line);}
+ #eliangmat-hero .em-wordmark{font-size:21px;font-weight:500;letter-spacing:-.8px;white-space:nowrap;} #eliangmat-hero .em-wordmark span{font-weight:400;margin-left:3px;}
+ #eliangmat-hero .em-topnav{display:flex;align-items:center;gap:25px;} #eliangmat-hero .em-textbutton{display:inline-flex;align-items:center;gap:9px;border:0;padding:5px 0;background:transparent;} #eliangmat-hero .em-entry{border:1px solid var(--em-line);border-radius:5px;padding:8px 12px;display:inline-flex;align-items:center;gap:16px;background:transparent;}
+ #eliangmat-hero .em-stage{position:relative;min-height:592px;touch-action:pan-y;}
+ #eliangmat-hero .em-art{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;} #eliangmat-hero .em-art:focus-visible{outline-offset:-4px;}
+ #eliangmat-hero .em-copy{position:relative;z-index:2;width:48%;padding:44px 0 0 32px;pointer-events:none;} #eliangmat-hero .em-copy button{pointer-events:auto;}
+ #eliangmat-hero .em-eyebrow{font-size:11px;letter-spacing:1.8px;display:flex;gap:10px;align-items:center;color:var(--em-muted);margin-bottom:27px;} #eliangmat-hero .em-eyebrow::before{content:"";width:5px;height:5px;background:var(--em-ink);}
+ #eliangmat-hero h1{font-size:clamp(38px,5.5vw,60px);letter-spacing:-2.8px;font-weight:500;line-height:1.18;white-space:pre-line;}
+ #eliangmat-hero .em-description{font-size:14px;line-height:1.85;color:var(--em-muted);margin-top:24px;max-width:300px;min-height:78px;}
+ #eliangmat-hero .em-primary{display:inline-flex;align-items:center;gap:26px;background:var(--em-button);color:var(--em-on);border:1px solid var(--em-button);border-radius:5px;padding:12px 16px;margin-top:24px;}
+ #eliangmat-hero .em-primary:hover{filter:brightness(1.13);} #eliangmat-hero .em-entry:hover{background:var(--em-surface);}
+ #eliangmat-hero .em-object-label{position:absolute;z-index:2;right:32px;top:32px;text-align:right;display:grid;gap:3px;pointer-events:none;} #eliangmat-hero .em-object-label span:first-child{font:400 11px/1.5 ui-monospace,SFMono-Regular,monospace;letter-spacing:.7px;color:var(--em-muted);} #eliangmat-hero .em-object-label span:last-child{font-size:12px;}
+ #eliangmat-hero .em-material-label{position:absolute;right:32px;bottom:72px;display:grid;gap:6px;z-index:2;text-align:right;max-width:48%;pointer-events:none;} #eliangmat-hero .em-material-label span{font-size:11px;letter-spacing:.5px;color:var(--em-muted);} #eliangmat-hero .em-material-label strong{font-size:13px;font-weight:400;}
+ #eliangmat-hero .em-caption{position:absolute;bottom:24px;left:32px;right:32px;display:flex;gap:16px;align-items:center;justify-content:space-between;color:var(--em-muted);font-size:11px;letter-spacing:.5px;z-index:2;pointer-events:none;} #eliangmat-hero .em-caption span:first-child{display:inline-flex;align-items:center;gap:8px;} #eliangmat-hero .em-caption svg{width:13px;height:13px;} #eliangmat-hero .em-gesture-mobile{display:none;}
+ #eliangmat-hero .em-journey{padding:0 32px 24px;position:relative;} #eliangmat-hero .em-chapters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;border-top:1px solid var(--em-line);}
+ #eliangmat-hero .em-chapter{border:0;background:transparent;text-align:left;display:flex;align-items:baseline;gap:10px;padding:18px 0 12px;color:var(--em-muted);position:relative;} #eliangmat-hero .em-chapter::before{content:"";position:absolute;top:-1px;left:0;width:0;height:2px;background:var(--em-ink);transition:width .22s ease;} #eliangmat-hero .em-chapter[aria-current="step"]{color:var(--em-text);} #eliangmat-hero .em-chapter[aria-current="step"]::before{width:100%;} #eliangmat-hero .em-chapter span{font:400 11px/1.5 ui-monospace,SFMono-Regular,monospace;color:var(--em-muted);} #eliangmat-hero .em-chapter strong{font-size:13px;font-weight:400;}
+ #eliangmat-hero .em-trackrow{display:flex;align-items:center;gap:15px;margin-top:6px;} #eliangmat-hero .em-trackrow input{appearance:none;width:100%;height:20px;background:transparent;cursor:ew-resize;margin:0;accent-color:var(--em-ink);border-radius:0;} #eliangmat-hero .em-trackrow input::-webkit-slider-runnable-track{height:2px;background:linear-gradient(to right,var(--em-ink) 0%,var(--em-ink) var(--em-progress,0%),var(--em-line) var(--em-progress,0%),var(--em-line) 100%);} #eliangmat-hero .em-trackrow input::-webkit-slider-thumb{appearance:none;width:10px;height:10px;margin-top:-4px;border-radius:50%;background:var(--em-ink);border:2px solid var(--em-bg);} #eliangmat-hero .em-trackrow input::-moz-range-track{height:2px;background:var(--em-line);} #eliangmat-hero .em-trackrow input::-moz-range-thumb{width:8px;height:8px;border-radius:50%;background:var(--em-ink);border:2px solid var(--em-bg);} #eliangmat-hero .em-trackrow output{font:400 11px/1.5 ui-monospace,SFMono-Regular,monospace;white-space:nowrap;color:var(--em-muted);}
+ #eliangmat-hero .em-bottom{padding:18px 32px;background:var(--em-surface);display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1px solid var(--em-line);} #eliangmat-hero .em-bottom p{font-size:12px;color:var(--em-muted);} #eliangmat-hero .em-bottom .em-motto{color:var(--em-text);font-size:14px;} #eliangmat-hero .em-bottom small{font-size:11px;color:var(--em-muted);}
+ #eliangmat-hero .em-workspace{padding:30px 32px 34px;border-top:1px solid var(--em-line);background:var(--em-surface);} #eliangmat-hero .em-workspace-top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;} #eliangmat-hero .em-workspace h2{font-size:25px;letter-spacing:-.6px;font-weight:500;} #eliangmat-hero .em-form{max-width:710px;margin:0 auto;} #eliangmat-hero .em-form label{display:block;font-size:12px;color:var(--em-muted);margin-bottom:10px;} #eliangmat-hero .em-form textarea{width:100%;display:block;resize:vertical;min-height:100px;background:var(--em-bg);border:1px solid var(--em-line);border-radius:10px;padding:16px;line-height:1.7;} #eliangmat-hero .em-form-footer{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;margin-top:13px;} #eliangmat-hero .em-form-footer small{font-size:12px;color:var(--em-muted);} #eliangmat-hero .em-form-footer .em-primary{margin:0;} #eliangmat-hero .em-plan{margin-top:24px;display:grid;gap:0;border-top:1px solid var(--em-line);} #eliangmat-hero .em-plan-row{padding:16px 0;border-bottom:1px solid var(--em-line);display:grid;grid-template-columns:27px 1fr;gap:12px;} #eliangmat-hero .em-plan-row small{display:block;color:var(--em-muted);font-size:12px;margin-top:4px;} #eliangmat-hero .em-plan-row span{font:400 11px/1.5 ui-monospace,monospace;color:var(--em-muted);padding-top:2px;} #eliangmat-hero .em-plan-note{font-size:12px;color:var(--em-muted);padding-top:18px;}
+ #eliangmat-hero .em-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+ @media(max-width:800px) and (min-width:601px){#eliangmat-hero .em-copy{width:49%;padding-left:24px;} #eliangmat-hero h1{font-size:42px;letter-spacing:-2px;} #eliangmat-hero .em-description{max-width:250px;} #eliangmat-hero .em-stage{min-height:565px;} #eliangmat-hero .em-top,#eliangmat-hero .em-bottom{padding-left:24px;padding-right:24px;} #eliangmat-hero .em-journey{padding-left:24px;padding-right:24px;}}
+ @media(max-width:600px){#eliangmat-hero .em-top{padding:17px 20px;gap:12px;} #eliangmat-hero .em-wordmark{font-size:19px;} #eliangmat-hero .em-topnav{gap:0;} #eliangmat-hero .em-topnav>.em-textbutton{display:none;} #eliangmat-hero .em-entry{font-size:12px;gap:9px;padding:7px 9px;} #eliangmat-hero .em-stage{min-height:710px;} #eliangmat-hero .em-copy{width:100%;padding:29px 20px 0;pointer-events:none;} #eliangmat-hero .em-eyebrow{font-size:10px;letter-spacing:1.2px;margin-bottom:17px;} #eliangmat-hero h1{font-size:42px;letter-spacing:-2px;line-height:1.17;} #eliangmat-hero .em-description{font-size:13px;line-height:1.8;max-width:310px;margin-top:18px;min-height:50px;} #eliangmat-hero .em-primary{margin-top:17px;padding:10px 13px;gap:24px;font-size:13px;} #eliangmat-hero .em-object-label{right:20px;top:351px;} #eliangmat-hero .em-object-label span:last-child{display:none;} #eliangmat-hero .em-art{top:313px;height:365px;} #eliangmat-hero .em-material-label{right:20px;bottom:48px;max-width:90%;} #eliangmat-hero .em-caption{left:20px;right:20px;bottom:17px;font-size:10px;} #eliangmat-hero .em-caption>span:last-child{display:none;} #eliangmat-hero .em-gesture-mobile{display:inline;} #eliangmat-hero .em-gesture-desktop{display:none;} #eliangmat-hero .em-journey{padding:0 20px 17px;} #eliangmat-hero .em-chapters{gap:8px;} #eliangmat-hero .em-chapter{display:grid;gap:5px;padding:14px 0 9px;} #eliangmat-hero .em-chapter strong{font-size:12px;} #eliangmat-hero .em-chapter span{font-size:10px;} #eliangmat-hero .em-bottom{padding:17px 20px;align-items:flex-start;gap:12px;} #eliangmat-hero .em-bottom p{font-size:11px;} #eliangmat-hero .em-bottom .em-motto{font-size:13px;} #eliangmat-hero .em-bottom>small{max-width:92px;text-align:right;} #eliangmat-hero .em-workspace{padding:25px 20px;} #eliangmat-hero .em-workspace h2{font-size:23px;} #eliangmat-hero .em-form textarea{font-size:16px;}}
+ @media(max-width:359px){#eliangmat-hero h1{font-size:37px;} #eliangmat-hero .em-description{font-size:12px;} #eliangmat-hero .em-copy{padding-left:18px;padding-right:18px;} #eliangmat-hero .em-top{padding:17px 18px;} #eliangmat-hero .em-entry{gap:6px;} #eliangmat-hero .em-wordmark{font-size:18px;}}
+ @media(pointer:coarse){#eliangmat-hero button{min-height:44px;} #eliangmat-hero .em-trackrow input{height:32px;}}
+ @media(prefers-reduced-motion:reduce){#eliangmat-hero .em-chapter::before{transition:none;}}
+</style>
+<header class="em-top">
+ <div class="em-wordmark">EliangMat <span>AI</span></div>
+ <nav class="em-topnav" aria-label="官网导航"><button type="button" class="em-textbutton" data-em-link="/knowledge">材料与证据</button><button type="button" class="em-textbutton" data-em-link="/login" id="em-login-link">登录</button><button type="button" class="em-textbutton" data-em-action="explore">研发闭环</button><button type="button" class="em-entry" data-em-action="workspace">进入工作区 <span aria-hidden="true">↗</span></button></nav>
+</header>
+<section class="em-stage" aria-label="可滚动的材料研发场景">
+ <canvas class="em-art" aria-label="银灰色多孔材料结构，随滚动变为晶格、计算场、实验样品与迭代闭环" role="img"></canvas>
+ <div class="em-copy">
+  <div class="em-eyebrow">AI FOR MATERIALS · 从计算到真实世界</div>
+  <h1>让下一种材料，
+成为现实。</h1>
+  <p class="em-description">用一个研发智能体，连接材料设计、多尺度仿真与实验。让研究从目标出发，在真实反馈中不断向前。</p>
+  <button class="em-primary" type="button" data-em-action="next"><span class="em-cta-text">探索研发闭环</span><span aria-hidden="true">→</span></button>
+ </div>
+ <div class="em-object-label"><span class="em-code">E / 001</span><span class="em-object-kind">材料的可能性</span></div>
+ <div class="em-material-label"><span class="em-method">STRUCTURE · PROCESS · PROPERTY</span><strong class="em-specimen">结构、工艺与性能，由同一个目标连接。</strong></div>
+ <div class="em-caption"><span><span aria-hidden="true">↓</span><span class="em-gesture-desktop">在画面上滚动，探索研发过程</span><span class="em-gesture-mobile">横向滑动画面，或点选下方阶段</span></span><span>材料与设备均为过程示意</span></div>
+</section>
+<nav class="em-journey" aria-label="材料研发阶段">
+ <div class="em-chapters">
+  <button type="button" class="em-chapter" data-em-stage="0" aria-current="step"><span>01</span><strong>研究目标</strong></button>
+  <button type="button" class="em-chapter" data-em-stage="1"><span>02</span><strong>材料设计</strong></button>
+  <button type="button" class="em-chapter" data-em-stage="2"><span>03</span><strong>多尺度仿真</strong></button>
+  <button type="button" class="em-chapter" data-em-stage="3"><span>04</span><strong>实验验证</strong></button>
+  <button type="button" class="em-chapter" data-em-stage="4"><span>05</span><strong>反馈迭代</strong></button>
+ </div>
+ <div class="em-trackrow"><label for="em-progress" class="em-sr">滑动探索材料研发过程</label><input id="em-progress" type="range" min="0" max="1000" step="1" value="0" aria-valuetext="研究目标"><output for="em-progress">01 / 05</output></div>
+</nav>
+<footer class="em-bottom"><div><p class="em-motto">软件理解材料。实验验证想法。</p><p>一个连续的研发闭环。</p></div><small>EliangMat AI<br>材料研发平台</small></footer>
+
+<div class="em-sr em-announcement" aria-live="polite"></div>
+<script>
+(()=>{
+ const root=document.getElementById('eliangmat-hero');
+ const $=s=>root.querySelector(s),all=s=>[...root.querySelectorAll(s)];
+ const stages=[
+  {title:'让下一种材料，\n成为现实。',desc:'用一个研发智能体，连接材料设计、多尺度仿真与实验。让研究从目标出发，在真实反馈中不断向前。',kind:'材料的可能性',method:'STRUCTURE · PROCESS · PROPERTY',specimen:'结构、工艺与性能，由同一个目标连接。',cta:'探索研发闭环',name:'研究目标'},
+  {title:'从原子，\n理解可能性。',desc:'把性能目标变成成分、结构与工艺空间。结合材料知识与已有证据，提出值得验证的候选。',kind:'从目标到候选',method:'COMPOSITION · CRYSTAL · CANDIDATES',specimen:'晶格与成分空间 · 原子结构示意',cta:'进入仿真阶段',name:'材料设计'},
+  {title:'让每个假设，\n经受计算。',desc:'按材料问题组织 DFT、CALPHAD、分子动力学或流体仿真。让不同尺度的结果，共同支撑下一步决策。',kind:'多尺度协同',method:'DFT · CALPHAD · MD · CFD',specimen:'从微观机制到工艺条件 · 计算场示意',cta:'走进实验验证',name:'多尺度仿真'},
+  {title:'走出计算，\n走进实验。',desc:'把研究计划落到样品制备、组织表征与性能测试。软件连接设备与研究人员，让每一份结果都有来处。',kind:'软件 × 实验硬件',method:'SYNTHESIS · CHARACTERIZATION · TESTING',specimen:'样品、夹具与测量 · 拉伸实验示意',cta:'查看反馈闭环',name:'实验验证'},
+  {title:'每一次验证，\n都推动下一轮。',desc:'复核实验质量与计算偏差，更新项目判断，选择下一批候选。客户授权的数据，才用于共享模型优化。',kind:'从证据到下一轮',method:'EVIDENCE · LEARNING · NEXT EXPERIMENT',specimen:'让真实反馈，回到材料设计。',cta:'开始你的研究',name:'反馈迭代'}
+ ];
+ const design={material:'silver',follow:true};
+ const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
+ let target=0,progress=0,current=0,frame=0,px=0,py=0,tx=0,ty=0,width=0,height=0,palette=[.957,.957,.941],dark=false;
+ let canvas=$('.em-art'),gl=null,fallback=null,program=null,uniforms={};
+ const vertex='attribute vec2 position; void main(){gl_Position=vec4(position,0.,1.);}';
+ const fragment=`
+ precision highp float;
+ uniform vec2 resolution;
+ uniform float progress;
+ uniform vec2 pointer;
+ uniform vec3 background;
+ uniform float darkMode;
+ uniform float graphite;
+ uniform float mobile;
+ float box(vec3 p,vec3 b){vec3 q=abs(p)-b;return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.);}
+ float roundBox(vec3 p,vec3 b,float r){return box(p,b)-r;}
+ float capsule(vec3 p,vec3 a,vec3 b,float r){vec3 pa=p-a,ba=b-a;return length(pa-ba*clamp(dot(pa,ba)/dot(ba,ba),0.,1.))-r;}
+ float sphere(vec3 p,float r){return length(p)-r;}
+ mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+ vec3 turn(vec3 p){p.xz=rot(.58+progress*.18+pointer.x*.13)*p.xz;p.yz=rot(-.32+pointer.y*.10)*p.yz;return p;}
+ float porous(vec3 p){vec3 q=p*5.8;float g=dot(sin(q),cos(q.yzx));float outer=roundBox(p,vec3(.84),.13);return max(outer,(abs(g)-.37)/6.9);}
+ float atoms(vec3 p){float a=.61;vec3 q=mod(p+a*.5,a)-a*.5;vec3 q1=mod(p-vec3(0.,a*.5,a*.5)+a*.5,a)-a*.5;vec3 q2=mod(p-vec3(a*.5,0.,a*.5)+a*.5,a)-a*.5;vec3 q3=mod(p-vec3(a*.5,a*.5,0.)+a*.5,a)-a*.5;float d=min(min(length(q),length(q1)),min(length(q2),length(q3)))-.102;return max(d,box(p,vec3(1.035)));}
+ float frameBox(vec3 p){vec3 q=abs(abs(p)-1.05);return max(min(min(length(q.xy),length(q.xz)),length(q.yz))-.007,box(p,vec3(1.065)));}
+ float testRig(vec3 p){float w=.135+.23*smoothstep(.40,.94,abs(p.x));float specimen=roundBox(p,vec3(1.12,w,.045),.035);float jaws=roundBox(vec3(abs(p.x)-1.36,p.y,p.z),vec3(.25,.33,.22),.06);float rails=capsule(p,vec3(-1.8,-.43,-.24),vec3(1.8,-.43,-.24),.05);float probe=capsule(p,vec3(0.,.75,-.25),vec3(0.,.40,-.10),.04);float head=roundBox(p-vec3(0.,.87,-.30),vec3(.14,.14,.16),.04);return min(min(specimen,jaws),min(rails,min(probe,head)));}
+ float ring(vec3 p){p.yz=rot(.45)*p.yz;return length(vec2(length(p.xz)-1.5,p.y))-.013;}
+ float geometry(vec3 p,float id){if(id<.5)return porous(p);if(id<1.5)return atoms(p);if(id<2.5)return min(porous(p),frameBox(p));if(id<3.5)return testRig(p);return min(porous(p*.83)/.83,ring(p));}
+ float map(vec3 p){p=turn(p);float a=min(floor(progress),3.);float blend=smoothstep(.05,.95,progress-a);return mix(geometry(p,a),geometry(p,a+1.),blend);}
+ vec3 normal(vec3 p){vec2 e=vec2(.0016,0.);return normalize(vec3(map(p+e.xyy)-map(p-e.xyy),map(p+e.yxy)-map(p-e.yxy),map(p+e.yyx)-map(p-e.yyx)));}
+ float ao(vec3 p,vec3 n){float result=0.,weight=1.;for(int i=1;i<=4;i++){float h=.035*float(i);result+=(h-map(p+n*h))*weight;weight*=.55;}return clamp(1.-result*3.7,.20,1.);}
+ void main(){
+  vec2 uv=(gl_FragCoord.xy-.5*resolution)/resolution.y;
+  uv.x-=mix(.235,0.,mobile)*resolution.x/resolution.y;uv.y-=mix(.04,.04,mobile);
+  float aspect=resolution.x/resolution.y;float scale=mix(max(5.0,6.7/aspect),max(4.8,4.5/aspect),mobile);scale+=.85*smoothstep(3.,4.,progress);scale*=1.-.08*sin(fract(progress)*3.14159265);vec3 ro=vec3(0.,.07,5.4);vec3 rd=normalize(vec3(uv*scale,-5.4));
+  float vignette=exp(-dot(uv,uv)*2.8);vec3 bg=background+mix(vec3(.015),vec3(.017),darkMode)*vignette;
+  float floorShade=exp(-pow(uv.x/0.62,2.)-pow((uv.y+.41)/.055,2.))*.115;
+  bg-=floorShade*mix(1.,.14,darkMode);
+  float distance=0.;vec3 p=ro;bool hit=false;
+  for(int i=0;i<92;i++){p=ro+rd*distance;float d=map(p);if(d<.0017){hit=true;break;}distance+=max(d*.76,.001);if(distance>8.)break;}
+  vec3 color=bg;
+  if(hit){
+   vec3 n=normal(p),l=normalize(vec3(-.7,1.5,1.6)),l2=normalize(vec3(1.3,.3,-.5)),v=-rd;
+   vec3 local=turn(p);float occ=ao(p,n);float diffuse=max(dot(n,l),0.);float fill=max(dot(n,l2),0.);float fres=pow(1.-max(dot(n,v),0.),3.);
+   float spec=pow(max(dot(n,normalize(l+v)),0.),54.);float spec2=pow(max(dot(n,normalize(l2+v)),0.),20.);
+   vec3 reflected=reflect(rd,n);float strip=pow(max(0.,1.-abs(reflected.y-.55)),12.);float side=pow(max(0.,1.-abs(reflected.x+.45)),25.);
+   float tone=.20+.39*diffuse+.09*fill+.29*strip+.12*side;
+   color=vec3(tone*.98,tone,tone*.99)*occ;
+   color+=vec3(.53)*spec+vec3(.22)*spec2+mix(vec3(.05),vec3(.12),darkMode)*fres;
+   color=mix(color,color*.44,graphite);color+=spec*.12;
+   float simulation=1.-smoothstep(.0,.83,abs(progress-2.));
+   float band=.5+.5*sin(local.y*22.+local.x*9.);
+   color=mix(color,mix(vec3(.19,.26,.27),vec3(.68,.73,.69),smoothstep(.15,.9,band))*(.48+.5*diffuse)*occ+spec*.3,simulation*.79);
+   float grid=min(abs(sin(local.x*22.)),min(abs(sin(local.y*22.)),abs(sin(local.z*22.))));
+   color+=vec3(.22)*simulation*(1.-smoothstep(.015,.07,grid));
+   float lab=1.-smoothstep(.0,.7,abs(progress-3.));
+   float brushed=sin(local.x*730.+sin(local.y*140.))*.022;
+   color+=brushed*lab;
+   if(lab>.4&&abs(local.x)>1.10){float grooves=1.-smoothstep(.02,.06,abs(sin(local.y*45.)));color*=1.-grooves*.25*lab;}
+   color=mix(color,bg,1.-exp(-.009*distance*distance));
+   color=clamp(color,0.,1.);
+  }
+  gl_FragColor=vec4(color,1.);
+ }`;
+ function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error('Material shader compilation failed');return s;}
+ function init(){try{gl=canvas.getContext('webgl',{alpha:false,antialias:false,preserveDrawingBuffer:true,powerPreference:'low-power'});if(!gl)throw new Error('No WebGL');program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,vertex));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fragment));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error('Material shader linking failed');gl.useProgram(program);const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);const pos=gl.getAttribLocation(program,'position');gl.enableVertexAttribArray(pos);gl.vertexAttribPointer(pos,2,gl.FLOAT,false,0,0);['resolution','progress','pointer','background','darkMode','graphite','mobile'].forEach(n=>uniforms[n]=gl.getUniformLocation(program,n));root.dataset.renderer='webgl';}catch(e){const alt=document.createElement('canvas');alt.className=canvas.className;alt.setAttribute('role','img');alt.setAttribute('aria-label',canvas.getAttribute('aria-label'));canvas.replaceWith(alt);canvas=alt;gl=null;fallback=canvas.getContext('2d');root.dataset.renderer='canvas';}}
+ function colors(){const s=getComputedStyle(root),raw=s.backgroundColor.match(/[\d.]+/g);if(raw&&raw.length>=3)palette=raw.slice(0,3).map(Number).map(v=>v/255);dark=palette[0]<.5;}
+ function resize(){const rect=canvas.getBoundingClientRect();width=rect.width;height=rect.height;const dpr=Math.min(window.devicePixelRatio||1,1.35);canvas.width=Math.max(1,Math.round(width*dpr));canvas.height=Math.max(1,Math.round(height*dpr));colors();draw();}
+ function point(x,y,z){const a=.65+progress*.27+px*.1,c=Math.cos(a),s=Math.sin(a);let X=x*c+z*s,Z=-x*s+z*c,Y=y;const b=-.31;let Y2=Y*Math.cos(b)-Z*Math.sin(b);Z=Y*Math.sin(b)+Z*Math.cos(b);const f=3.5/(4+Z);return {x:width*(width<601?.5:.735)+X*f*height*.235,y:height*.49+Y2*f*height*.235,z:Z,r:f};}
+ function drawFallback(){const c=fallback;if(!c)return;const ratio=canvas.width/width;c.setTransform(ratio,0,0,ratio,0,0);c.clearRect(0,0,width,height);const dots=[];for(let x=-3;x<=3;x++)for(let y=-3;y<=3;y++)for(let z=-3;z<=3;z++){const g=Math.sin(x)*Math.cos(y)+Math.sin(y)*Math.cos(z)+Math.sin(z)*Math.cos(x);if(Math.abs(g)<.95||current===1)dots.push(point(x*.29,y*.29,z*.29));}dots.sort((a,b)=>b.z-a.z);for(const p of dots){const r=(current===1?5.5:9)*p.r;const g=c.createRadialGradient(p.x-r*.35,p.y-r*.45,0,p.x,p.y,r);g.addColorStop(0,dark?'#d0d7d3':'#f7f9f6');g.addColorStop(.45,dark?'#78817b':'#8e9990');g.addColorStop(1,dark?'#333b36':'#3f4c43');c.fillStyle=g;c.beginPath();c.arc(p.x,p.y,r,0,Math.PI*2);c.fill();}}
+ function draw(){if(!width||!height)return;if(gl){gl.viewport(0,0,canvas.width,canvas.height);gl.uniform2f(uniforms.resolution,canvas.width,canvas.height);gl.uniform1f(uniforms.progress,progress);gl.uniform2f(uniforms.pointer,px,py);gl.uniform3fv(uniforms.background,palette);gl.uniform1f(uniforms.darkMode,dark?1:0);gl.uniform1f(uniforms.graphite,design.material==='graphite'?1:0);gl.uniform1f(uniforms.mobile,width<=600?1:0);gl.drawArrays(gl.TRIANGLES,0,6);}else drawFallback();root.dataset.progress=progress.toFixed(3);}
+ function updateText(index){current=index;const s=stages[index];$('h1').textContent=s.title;$('.em-description').textContent=s.desc;$('.em-code').textContent='E / 00'+(index+1);$('.em-object-kind').textContent=s.kind;$('.em-method').textContent=s.method;$('.em-specimen').textContent=s.specimen;$('.em-cta-text').textContent=s.cta;$('.em-trackrow output').textContent='0'+(index+1)+' / 05';$('#em-progress').setAttribute('aria-valuetext',s.name);$('.em-art').setAttribute('aria-label',s.kind+'，'+s.specimen+'。使用下方阶段按钮或进度条探索。');all('.em-chapter').forEach((b,i)=>{if(i===index)b.setAttribute('aria-current','step');else b.removeAttribute('aria-current');});$('.em-announcement').textContent=s.name+'。'+s.desc;}
+ function animate(){frame=0;if(!root.isConnected)return;const speed=reduced.matches?1:.13;progress+=(target-progress)*speed;px+=(tx-px)*.12;py+=(ty-py)*.12;if(Math.abs(target-progress)<.0005)progress=target;const active=Math.min(4,Math.max(0,Math.floor(progress+.5)));if(active!==current)updateText(active);$('#em-progress').value=String(Math.round(progress*250));$('#em-progress').style.setProperty('--em-progress',progress*25+'%');draw();if(Math.abs(target-progress)>.0005||Math.abs(tx-px)>.005||Math.abs(ty-py)>.005)frame=requestAnimationFrame(animate);}
+ function request(){if(!frame)frame=requestAnimationFrame(animate);}
+ function move(value){target=Math.max(0,Math.min(4,value));request();}
+ const authLink=document.getElementById('em-login-link');
+ if(new URLSearchParams(window.location.search).get('authenticated')==='1'){authLink.textContent='账号与用量';authLink.dataset.emLink='/account/privacy';}
+ function workspace(){window.parent.postMessage({type:'eliangmat:navigate',path:'/workspace'},window.location.origin);}
+ root.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.emLink){window.parent.postMessage({type:'eliangmat:navigate',path:b.dataset.emLink},window.location.origin);return;}if(b.dataset.emStage!==undefined){move(Number(b.dataset.emStage));return;}switch(b.dataset.emAction){case 'explore':move(1);break;case 'next':current<4?move(current+1):workspace();break;case 'workspace':workspace();break;}});
+ $('#em-progress').addEventListener('input',e=>move(Number(e.target.value)/250));
+ $('.em-stage').addEventListener('wheel',e=>{if(e.ctrlKey||e.target.closest('button'))return;const delta=(Math.abs(e.deltaY)>Math.abs(e.deltaX)?e.deltaY:e.deltaX)*(e.deltaMode===1?16:1);if((target<=0&&delta<0)||(target>=4&&delta>0))return;e.preventDefault();move(target+delta*.0018);},{passive:false});
+ let drag=null;
+ canvas.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,start:target,type:e.pointerType};if(e.pointerType==='mouse')canvas.setPointerCapture(e.pointerId);});
+ canvas.addEventListener('pointermove',e=>{const r=canvas.getBoundingClientRect();if(drag){const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(drag.type==='mouse'||Math.abs(dx)>Math.abs(dy)*1.2){move(drag.start-dx/Math.max(160,r.width*.38));}}else if(design.follow&&!reduced.matches){tx=(e.clientX-r.left)/r.width*2-1;ty=(e.clientY-r.top)/r.height*2-1;request();}});
+ canvas.addEventListener('pointerup',()=>drag=null);canvas.addEventListener('pointercancel',()=>drag=null);canvas.addEventListener('pointerleave',()=>{if(!drag){tx=ty=0;request();}});
+ init();new ResizeObserver(resize).observe(canvas);resize();updateText(0);
+ const theme=window.matchMedia('(prefers-color-scheme: dark)');theme.addEventListener('change',()=>{colors();draw();});reduced.addEventListener('change',()=>{tx=ty=0;request();});
+ if(false&&globalThis.Tweak){const tweak=new Tweak({container:root,onChange:()=>{if(!design.follow)tx=ty=0;colors();request();}});tweak.addSelect(design,'material',{label:'材料质感',options:[{label:'银灰金属',value:'silver'},{label:'深色石墨',value:'graphite'}]});tweak.addToggle(design,'follow',{label:'镜头轻微跟随指针'});}
+})();
+</script>
+</div>
+</body></html>

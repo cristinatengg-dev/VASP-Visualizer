@@ -1,5 +1,5 @@
 /**
- * Cloudflare Worker: full-site reverse proxy for SCI Visualizer.
+ * Cloudflare Worker: full-site reverse proxy for EliangMat AI.
  *
  * Use this as a temporary fallback entrypoint when the primary domain
  * is blocked on some networks. The worker terminates TLS at Cloudflare

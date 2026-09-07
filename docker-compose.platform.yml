@@ -1,0 +1,16 @@
+services:
+  platform:
+    image: eliangmat-platform
+    build:
+      context: .
+      dockerfile: Dockerfile.platform
+    env_file: .config/platform.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      ELIANGMAT_STORAGE_DIR: /app/.data/platform
+    ports:
+      - "127.0.0.1:4320:3000"
+    volumes:
+      - ./.data/platform:/app/.data/platform
+    restart: unless-stopped

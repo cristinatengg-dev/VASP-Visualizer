@@ -23,7 +23,7 @@ const Manual: React.FC = () => {
       <div className="max-w-4xl mx-auto space-y-12 print:w-full print:max-w-none">
         {/* Header */}
         <header className="border-b-2 border-gray-800 pb-6 mb-12">
-          <h1 className="text-4xl font-bold mb-4">SCI Visualizer 1.0 User Manual</h1>
+          <h1 className="text-4xl font-bold mb-4">EliangMat AI 1.0 User Manual</h1>
           <p className="text-xl text-gray-600 italic">User Manual</p>
         </header>
 
@@ -31,7 +31,7 @@ const Manual: React.FC = () => {
         <section>
           <h2 className="text-2xl font-bold border-b border-gray-200 pb-2 mb-4">1. Product Introduction</h2>
           <p className="mb-4 leading-relaxed">
-            SCI Visualizer 1.0 is a high-performance web-based structure visualization platform built for researchers and HPC platforms <strong>Web-based High-Performance Structure Visualization Platform</strong>. Leveraging WebGL and WebCodecs hardware acceleration without requiring any plugins, it achieves second-level rendering and export of structures and trajectories directly in the browser.
+            EliangMat AI 1.0 is a high-performance web-based structure visualization platform built for researchers and HPC platforms <strong>Web-based High-Performance Structure Visualization Platform</strong>. Leveraging WebGL and WebCodecs hardware acceleration without requiring any plugins, it achieves second-level rendering and export of structures and trajectories directly in the browser.
           </p>
           <p className="mb-4 leading-relaxed">
             The platform features five intelligent Agents, covering the complete scientific Agent from <strong>Research Idea → Modeling → Compute → Visualization Rendering → Cover Generation</strong> .
@@ -350,7 +350,7 @@ const Manual: React.FC = () => {
 
         {/* Footer */}
         <footer className="mt-12 pt-6 border-t border-gray-200 text-center text-gray-500 text-sm">
-          <p>&copy; 2026 SCI Visualizer. All rights reserved.</p>
+          <p>&copy; 2026 EliangMat AI. All rights reserved.</p>
           <p className="mt-1">
             Support: <a href={SUPPORT_MAILTO} className="hover:text-gray-700 underline underline-offset-2">{SUPPORT_EMAIL}</a>
           </p>

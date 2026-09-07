@@ -1,4 +1,4 @@
-# UI_STYLE.md — SCI Visualizer 界面风格规范
+# UI_STYLE.md — EliangMat AI 界面风格规范
 
 > 本文件记录项目的 UI 设计语言规则，所有新组件必须严格遵守。
 

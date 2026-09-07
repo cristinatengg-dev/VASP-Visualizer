@@ -128,6 +128,24 @@ app.use(cors({
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
+// Pilot only; stays off in production until user acceptance and storage review.
+// Unlike anonymous agent endpoints, knowledge access always requires a verified token.
+if (process.env.ENABLE_KNOWLEDGE_PILOT === '1') {
+    const { KnowledgeStore } = require('./src/knowledge/store');
+    const { KnowledgeService } = require('./src/knowledge/service');
+    const { createKnowledgeRouter } = require('./src/knowledge/router');
+    const knowledgeIdentity = (req, res, next) => {
+        const identity = readTokenIdentity(req.headers.authorization, TOKEN_SECRET);
+        if (!identity.valid) return res.status(401).json({ error: '请先登录' });
+        req.knowledgeOwner = identity.userId;
+        next();
+    };
+    const knowledgeRoot = process.env.KNOWLEDGE_STORAGE_DIR || path.join(__dirname, 'runtime-storage/knowledge-pilot');
+    app.use('/api/knowledge', createKnowledgeRouter(
+        new KnowledgeService(new KnowledgeStore(knowledgeRoot), process.env), knowledgeIdentity,
+    ));
+}
+
 const heavyUploadRateLimit = createWindowRateLimit({
     windowMs: 10 * 60 * 1000,
     max: 20,
@@ -285,7 +303,7 @@ app.post('/api/agent/chat', requireAgentIdentity(), async (req, res) => {
                     {
                         role: 'system',
                         content: [
-                            '你是 SCI Visualizer 的科研工作台对话助手。',
+                            '你是 EliangMat AI 的科研工作台对话助手。',
                             '你可以像通用大语言模型一样自然对话，但要诚实地区分聊天、材料数据库检索、建模、计算输入和部署操作。',
                             '如果用户只是闲聊或问概念，直接回答；如果用户明确要求检索、建模、计算、提交或生成PPT，提醒系统会进入对应工作流。',
                             '回答用用户使用的语言，默认中文，简洁但有帮助。',
@@ -1699,18 +1717,18 @@ app.post('/api/payment/create', authMiddleware, async (req, res) => {
             const tierConfig = PRICING[tier?.toUpperCase()];
             if (!tierConfig) return res.status(400).json({ error: 'Invalid tier' });
             amount = tierConfig.price;
-            subject = `SCI Visualizer ${tierConfig.label}订阅`;
+            subject = `EliangMat AI ${tierConfig.label}订阅`;
         } else if (type === 'batch') {
             const unitPrice = (PRICING[user.tier?.toUpperCase()] || PRICING.PERSONAL).unitPrice.img;
             amount = (count || 1) * unitPrice;
-            subject = `SCI Visualizer ${count} 张图片额度`;
+            subject = `EliangMat AI ${count} 张图片额度`;
         } else if (type === 'img' || type === 'vid') {
             const costResult = calculateCost(user, type);
             if (costResult.cost === 0) {
                 return res.json({ success: true, free: true });
             }
             amount = costResult.cost;
-            subject = `SCI Visualizer ${type === 'img' ? '高清图片' : '视频'}导出`;
+            subject = `EliangMat AI ${type === 'img' ? '高清图片' : '视频'}导出`;
         } else {
             return res.status(400).json({ error: 'Invalid payment type' });
         }
@@ -1725,7 +1743,7 @@ app.post('/api/payment/create', authMiddleware, async (req, res) => {
             return res.status(503).json({ error: '支付服务暂未开通，请联系管理员' });
         }
 
-        const orderId = `SCI-${Date.now()}-${randomUUID().slice(0, 8)}`;
+        const orderId = `ELIANGMAT-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
         await Order.create({
             orderId,

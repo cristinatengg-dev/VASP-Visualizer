@@ -44,8 +44,8 @@ export const Sidebar: React.FC = () => {
   return (
     <div className="w-20 h-full bg-snap-nav flex flex-col items-center py-8 gap-8 border-r border-white/50 z-20">
       {/* Logo */}
-      <div className="w-10 h-10 bg-snap-text rounded-xl flex items-center justify-center mb-4">
-        <span className="text-white font-bold text-lg tracking-tighter">SS</span>
+      <div className="w-10 h-10 bg-snap-text rounded-xl flex items-center justify-center mb-4" aria-label="EliangMat AI" title="EliangMat AI">
+        <span className="text-white font-bold text-lg tracking-tighter" aria-hidden="true">EM</span>
       </div>
 
       <div className="flex flex-col gap-6">

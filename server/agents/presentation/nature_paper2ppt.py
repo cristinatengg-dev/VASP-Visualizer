@@ -106,7 +106,7 @@ def generate(payload, out_path):
 
     # 1 Title
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    add_textbox(slide, 0.65, 0.8, 8.7, 0.7, "SCI Agent AI Research Report", size=30, bold=True, color=NAVY)
+    add_textbox(slide, 0.65, 0.8, 8.7, 0.7, "EliangMat AI Research Report", size=30, bold=True, color=NAVY)
     add_textbox(slide, 0.68, 1.55, 10.8, 0.7, truncate(prompt, 150), size=16, color=GRAY)
     add_metric(slide, 0.7, 3.0, "Papers", str(len(papers)), GREEN)
     add_metric(slide, 3.35, 3.0, "Model atoms", str(model.get("atomCount") or 0), BLUE)

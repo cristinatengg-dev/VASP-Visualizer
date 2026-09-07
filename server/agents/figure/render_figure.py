@@ -228,7 +228,7 @@ CONTRACT = {compact}
 
 print("Generated figure contract:")
 print(json.dumps(CONTRACT, indent=2))
-print("\\nThis script is the exact planning artifact used by SCI Visualizer's Data Figure mode.")
+print("\\nThis script is the exact planning artifact used by EliangMat AI's Data Figure mode.")
 print("Use the contract together with your source dataset to reproduce or customize the figure.")
 Path("figure_spec.json").write_text(json.dumps(CONTRACT, indent=2), encoding="utf-8")
 '''

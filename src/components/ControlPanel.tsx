@@ -404,7 +404,7 @@ C/H/1.2`
       
       try {
         const link = document.createElement('a');
-        link.download = `SCI_Visualizer_${Date.now()}.png`;
+        link.download = `EliangMat_AI_${Date.now()}.png`;
         link.href = canvas.toDataURL('image/png', 1.0);
         link.click();
       } catch (err) {
@@ -827,7 +827,7 @@ C/H/1.2`
     <div className="w-80 bg-white flex flex-col h-full overflow-hidden shadow-[0_4px_30px_rgba(0,0,0,0.05)] z-10 rounded-[24px] ring-1 ring-black/5">
       
       <div className="px-6 py-4 border-b border-gray-100">
-        <h1 className="text-sm font-bold text-[#0A1128] uppercase tracking-widest">SCI VISUALIZER</h1>
+        <h1 className="text-sm font-bold text-[#0A1128] tracking-wide">EliangMat AI</h1>
       </div>
       
       <div className="flex-1 overflow-y-auto p-6 space-y-8">

@@ -1,5 +1,5 @@
 /**
- * Explore.tsx — SCI Visualizer 平台介绍页
+ * Explore.tsx — EliangMat AI 平台介绍页
  *
  * 内容：
  *   1. 宣传视频（视频嵌入占位区，待替换真实 URL）
@@ -55,7 +55,7 @@ const VideoPlayer: React.FC = () => {
         {isEmbed ? (
           <iframe
             src={VIDEO_URL}
-            title="SCI Visualizer Platform Demo"
+            title="EliangMat AI Platform Demo"
             className="w-full h-full"
             allow="autoplay; fullscreen"
             allowFullScreen
@@ -235,7 +235,7 @@ const Explore: React.FC = () => {
             </button>
 
             <span className="text-xs text-gray-400 font-semibold uppercase tracking-widest">
-              SCI Visualizer — Platform Overview
+              EliangMat AI — Platform Overview
             </span>
           </motion.div>
 

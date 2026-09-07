@@ -199,6 +199,7 @@ async function textChat(messages, jsonMode = false, {
 }
 
 module.exports = {
+  fetchWithTimeout,
   buildHeaders,
   getTextChatConfig,
   isTextChatConfigured,

@@ -19,7 +19,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: process.env.ELIANGMAT_DATA_DEV === '1' ? 'http://127.0.0.1:4318' : 'http://localhost:3000',
         changeOrigin: true
       }
     }

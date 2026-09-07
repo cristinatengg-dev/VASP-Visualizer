@@ -1,6 +1,20 @@
-# SCI Visualizer (scivisualizer.com)
+# EliangMat AI (scivisualizer.com)
 
-SCI Visualizer 是一个面向“原子结构与材料模拟结果”的网页可视化工具：把科研/工程里常见的结构文件与计算输出，变成浏览器里可交互的 3D 画面，并支持测量与导出，方便沟通、检查与展示。
+## 材料研发平台
+
+默认生产构建进入 EliangMat AI 完整平台：账号对话与自动记忆、研发计划与协作、候选与样品、结果复核、文献与专利、设备与工具、数据用途和模型用量。
+
+本地查看正式界面：先运行 npm run build，再运行 npm run preview:platform:start，打开 http://127.0.0.1:4317/ 。它直接提供生产构建，不运行 Vite。数据独立保存在 .preview/platform；停止与状态命令分别为 preview:platform:stop、preview:platform:status。
+
+正式运行入口为 npm run start:platform，需要独立 HTTPS 域名与腾讯云短信配置；默认数据目录 .data/platform，禁止使用开发或预览数据目录。配置模板、Docker 打包方式、当前服务范围及迁移要求见 [正式版说明](docs/PRODUCT_RELEASE.md)。**本轮未部署线上。**
+
+演练回归仍可使用 npm run dev:platform:start；它与正式预览占用同一端口，切换前先停止当前服务。既有 .dev 项目、记忆与虚拟账务保留，正式预览不导入这些资料。npm run test:platform 运行自动化验证；历史验收记录在 docs/testing/。
+
+旧可视化页面保存在 src/LegacyApp.tsx，只有显式设置 VITE_LEGACY_APP=true 时启用，对应旧后台与认证体系。
+
+以下为此前可视化模块的使用说明。
+
+EliangMat AI 是一个面向“原子结构与材料模拟结果”的网页可视化工具：把科研/工程里常见的结构文件与计算输出，变成浏览器里可交互的 3D 画面，并支持测量与导出，方便沟通、检查与展示。
 
 你可以把它理解成：
 
@@ -12,7 +26,7 @@ SCI Visualizer 是一个面向“原子结构与材料模拟结果”的网页�
 
 很多材料/化学/能源相关研究会在计算机里模拟材料的原子结构与性质（例如 VASP 这类第一性原理计算、分子动力学等）。这些结果通常是一堆结构文件或大体量数据文件，传统上需要安装专业软件才能查看。
 
-SCI Visualizer 的目标是：
+EliangMat AI 的目标是：
 
 - 让你在浏览器里直接打开、旋转、缩放查看结构
 - 用可视化方式快速回答“结构长什么样”“关键原子间距离/角度是多少”“电子云大概分布在哪里”

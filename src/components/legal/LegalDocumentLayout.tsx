@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import ComplianceFooter from '../ComplianceFooter';
-import { COMPANY_NAME, SUPPORT_EMAIL, SUPPORT_MAILTO } from '../../constants/contact';
+import { COMPANY_NAME, SUPPORT_MAILTO } from '../../constants/contact';
 import { LEGAL_LINKS } from '../../constants/legal';
 
 interface LegalDocumentLayoutProps {
@@ -21,7 +21,7 @@ interface LegalSectionProps {
 
 export const LegalSection: React.FC<LegalSectionProps> = ({ title, children }) => (
   <section className="mb-10">
-    <h2 className="text-lg font-bold text-[#111] mb-4 uppercase tracking-wide">{title}</h2>
+    <h2 className="text-lg font-bold text-[#111] mb-4 tracking-wide">{title}</h2>
     <div className="space-y-3 text-[15px] leading-[1.8] text-[#333]">
       {children}
     </div>
@@ -39,7 +39,7 @@ const LegalDocumentLayout: React.FC<LegalDocumentLayoutProps> = ({
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-white text-[#333] p-8 md:p-16 print:p-0" style={{ fontFamily: "'Times New Roman', 'Noto Serif SC', Georgia, serif" }}>
+    <div className="min-h-screen bg-white text-[#333] p-8 md:p-16 print:p-0" style={{ fontFamily: 'system-ui, sans-serif' }}>
       <div className="max-w-3xl mx-auto mb-8 print:hidden">
         <button
           onClick={() => navigate('/')}
@@ -47,7 +47,7 @@ const LegalDocumentLayout: React.FC<LegalDocumentLayoutProps> = ({
           style={{ fontFamily: 'system-ui, sans-serif' }}
         >
           <ArrowLeft className="w-4 h-4" />
-          Back
+          返回首页
         </button>
       </div>
 
@@ -55,11 +55,11 @@ const LegalDocumentLayout: React.FC<LegalDocumentLayoutProps> = ({
         {/* Document Header */}
         <header className="mb-12 text-center border-b border-gray-300 pb-8">
           <p className="text-xs uppercase tracking-[0.3em] text-gray-400 mb-6" style={{ fontFamily: 'system-ui, sans-serif' }}>
-            SCI Visualizer
+            EliangMat AI
           </p>
-          <h1 className="text-3xl font-bold text-[#111] mb-2 uppercase tracking-wider">{title}</h1>
-          <p className="text-base text-gray-500 italic mb-6">{subtitle}</p>
-          <p className="text-sm text-gray-500">Effective Date: {effectiveDate}</p>
+          <h1 className="text-3xl font-bold text-[#111] mb-2 tracking-wider">{title}</h1>
+          <p className="text-base text-gray-500 mb-6">{subtitle}</p>
+          <p className="text-sm text-gray-500">更新日期： {effectiveDate}</p>
         </header>
 
         {/* Document Navigation */}
@@ -71,7 +71,7 @@ const LegalDocumentLayout: React.FC<LegalDocumentLayoutProps> = ({
                 key={link.path}
                 to={link.path}
                 className={[
-                  'inline-flex items-center px-4 py-2 rounded-sm text-xs uppercase tracking-wider transition-colors border',
+                  'inline-flex items-center px-4 py-2 rounded-lg text-sm tracking-wider transition-colors border',
                   isActive
                     ? 'bg-[#111] text-white border-[#111]'
                     : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400',
@@ -84,7 +84,7 @@ const LegalDocumentLayout: React.FC<LegalDocumentLayoutProps> = ({
         </div>
 
         {/* Summary */}
-        <div className="mb-10 p-6 border-l-4 border-gray-800 bg-gray-50">
+        <div className="mb-10 p-6 border border-gray-200 rounded-xl bg-gray-50">
           <div className="text-[15px] leading-[1.8] text-gray-700">
             {summary}
           </div>
@@ -97,16 +97,15 @@ const LegalDocumentLayout: React.FC<LegalDocumentLayoutProps> = ({
 
         {/* Footer */}
         <footer className="mt-16 pt-6 border-t border-gray-300 text-center text-gray-400 text-xs" style={{ fontFamily: 'system-ui, sans-serif' }}>
-          <p>&copy; {new Date().getFullYear()} SCI Visualizer. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} EliangMat AI. All rights reserved.</p>
           <p className="mt-1">
-            Support: <a href={SUPPORT_MAILTO} className="hover:text-gray-600 underline underline-offset-2">{SUPPORT_EMAIL}</a>
+            <a href={SUPPORT_MAILTO} className="hover:text-gray-600 underline underline-offset-2">联系 EliangMat AI 客服</a>
           </p>
           <p className="mt-1">{COMPANY_NAME}</p>
           <ComplianceFooter
             className="mt-1"
             linkClassName="hover:text-gray-600 underline underline-offset-2"
           />
-          <p className="mt-1">This document constitutes a legally binding agreement between you and SCI Visualizer.</p>
         </footer>
       </div>
     </div>

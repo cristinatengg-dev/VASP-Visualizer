@@ -76,7 +76,7 @@ const VisualReferenceInput: React.FC<VisualReferenceInputProps> = ({
           B · Visual Reference
         </p>
         <p className="text-xs text-gray-500">
-          Upload reference images, style guides, or structure base images from SciVisualizer.
+          Upload reference images, style guides, or structure base images from EliangMat AI.
         </p>
       </div>
 
@@ -158,7 +158,7 @@ const VisualReferenceInput: React.FC<VisualReferenceInputProps> = ({
             <Layers size={18} className="text-gray-300 group-hover:text-gray-400" strokeWidth={1.5} />
             <div className="text-left">
               <p className="text-xs font-medium text-gray-400 group-hover:text-gray-500">
-                Upload white-model / skeleton from SciVisualizer
+                Upload white-model / skeleton from EliangMat AI
               </p>
               <p className="text-[10px] text-gray-300 mt-0.5">
                 PNG / JPG · This constrains the base composition

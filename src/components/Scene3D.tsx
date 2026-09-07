@@ -175,7 +175,7 @@ const ExportHandler = () => {
        captureHighResSquare(true).then(async (dataUrl) => {
          if (dataUrl) {
             const link = document.createElement('a');
-            link.download = `SCI_Square_${Date.now()}.png`;
+            link.download = `EliangMat_AI_Square_${Date.now()}.png`;
             link.href = dataUrl;
             link.click();
             await deductExport('img');
@@ -269,7 +269,7 @@ const ExportHandler = () => {
              
              setBatchProgress('Zipping...');
              const content = await zip.generateAsync({ type: "blob" });
-             saveAs(content, `SCI_Batch_Square_${Date.now()}.zip`);
+             saveAs(content, `EliangMat_AI_Batch_Square_${Date.now()}.zip`);
              
              setIsBatchExporting(false);
              setBatchProgress('');

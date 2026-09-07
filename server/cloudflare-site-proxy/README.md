@@ -1,6 +1,6 @@
 # Cloudflare Site Proxy
 
-This worker provides a temporary full-site fallback entrypoint for SCI Visualizer.
+This worker provides a temporary full-site fallback entrypoint for EliangMat AI.
 
 Use it when `scivisualizer.com` is blocked on some networks but the new origin server at `118.25.15.120` is healthy.
 

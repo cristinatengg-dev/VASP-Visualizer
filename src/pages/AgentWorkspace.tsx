@@ -480,6 +480,7 @@ const navItems = [
   { id: 'explore', label: 'Data Exploration', icon: Search },
   { id: 'connectors', label: 'Connectors', icon: Link2 },
   { id: 'library', label: 'Library', icon: Library },
+  { id: 'knowledge', label: '文献与专利', icon: Database },
   { id: 'automation', label: 'Automation', icon: Activity },
 ];
 
@@ -3722,6 +3723,10 @@ ${attachmentContext}` : '',
   };
 
   const handleNavItem = (itemId: string) => {
+    if (itemId === 'knowledge') {
+      navigate('/knowledge');
+      return;
+    }
     if (itemId === 'home') {
       navigate('/');
       return;

@@ -1,101 +1,42 @@
-import React from 'react';
-import LegalDocumentLayout, { LegalSection } from '../components/legal/LegalDocumentLayout';
+import LegalDocumentLayout, { LegalSection } from "../components/legal/LegalDocumentLayout";
 
-const EFFECTIVE_DATE = 'April 6, 2026';
-
-const PrivacyPolicy: React.FC = () => (
-  <LegalDocumentLayout
-    title="Privacy Policy"
-    subtitle="Privacy Policy"
-    effectiveDate={EFFECTIVE_DATE}
-    currentPath="/privacy-policy"
-    summary={
-      <p>
-        This Privacy Policy ("<strong>Policy</strong>") describes how SCI Visualizer
-        ("<strong>Company</strong>," "<strong>we</strong>," "<strong>us</strong>," or
-        "<strong>our</strong>") collects, uses, stores, shares, and protects information
-        obtained from users ("<strong>User</strong>," "<strong>you</strong>," or
-        "<strong>your</strong>") of the SCI Visualizer platform and all related services
-        (the "<strong>Service</strong>"). By accessing or using the Service, you consent to
-        the collection and use of information as described in this Policy. If you do not
-        agree with this Policy, you must not use the Service.
-      </p>
-    }
-  >
-    <LegalSection title="1. Information We Collect">
-      <p>1.1. <strong>Account Information.</strong> When you register for an account, we collect your mobile phone number and generate account identifiers. We use SMS verification codes for authentication.</p>
-      <p>1.2. <strong>User Content.</strong> We collect and process files, data, and materials that you upload to or create through the Service, including but not limited to: POSCAR, CONTCAR, CIF, XYZ, and XDATCAR structure files; prompts and agent instructions; calculation parameters and configuration settings; generated images, videos, and reports.</p>
-      <p>1.3. <strong>Usage Data.</strong> We automatically collect information about your interaction with the Service, including: IP address and approximate geographic location; device type, operating system, and browser information; pages visited, features used, and timestamps; export history and quota usage.</p>
-      <p>1.4. <strong>Payment Information.</strong> If you purchase a Subscription Plan or make other payments, our authorized payment processors may collect payment-related information. We store order records and transaction metadata but do not directly store payment card numbers or payment account credentials.</p>
-      <p>1.5. <strong>Communication Data.</strong> When you contact us for support or provide feedback, we collect the contents of your communications and any associated metadata.</p>
-    </LegalSection>
-
-    <LegalSection title="2. How We Use Your Information">
-      <p>2.1. We use the information we collect for the following purposes:</p>
-      <p className="pl-8">(a) <strong>Service Operation:</strong> to authenticate users, process requests, execute agent Agent, generate outputs, and deliver core Service functionality;</p>
-      <p className="pl-8">(b) <strong>Account Management:</strong> to manage your account, enforce access controls, track quota usage, and process subscriptions and payments;</p>
-      <p className="pl-8">(c) <strong>Security and Integrity:</strong> to detect, prevent, and respond to fraud, abuse, security incidents, and technical issues;</p>
-      <p className="pl-8">(d) <strong>Service Improvement:</strong> to monitor performance, diagnose errors, analyze usage patterns, and improve the quality, reliability, and functionality of the Service;</p>
-      <p className="pl-8">(e) <strong>Legal Compliance:</strong> to comply with applicable laws, regulations, legal processes, or enforceable governmental requests;</p>
-      <p className="pl-8">(f) <strong>Communication:</strong> to send service-related notices, verification codes, security alerts, and support responses.</p>
-    </LegalSection>
-
-    <LegalSection title="3. Information Sharing and Disclosure">
-      <p>3.1. We do not sell, rent, or trade your personal information to third parties for marketing purposes.</p>
-      <p>3.2. We may share information with third parties only in the following circumstances:</p>
-      <p className="pl-8">(a) <strong>Service Providers:</strong> with hosting providers, SMS delivery providers, infrastructure vendors, payment processors, and other service providers who assist in operating the Service, subject to confidentiality obligations;</p>
-      <p className="pl-8">(b) <strong>Legal Requirements:</strong> when required by law, regulation, legal process, or governmental request, or when we believe disclosure is necessary to protect our rights, your safety, or the safety of others;</p>
-      <p className="pl-8">(c) <strong>Business Transfers:</strong> in connection with a merger, acquisition, financing, reorganization, bankruptcy, or sale of all or a portion of our assets;</p>
-      <p className="pl-8">(d) <strong>Institutional Administrators:</strong> if your access is provided through an institution, laboratory, or enterprise deployment, your administrator may have access to account and usage information as defined by your institutional agreement;</p>
-      <p className="pl-8">(e) <strong>With Your Consent:</strong> with your explicit consent or at your direction.</p>
-    </LegalSection>
-
-    <LegalSection title="4. Data Retention">
-      <p>4.1. We retain your information for as long as reasonably necessary to fulfill the purposes described in this Policy, including to provide the Service, comply with legal obligations, resolve disputes, and enforce our agreements.</p>
-      <p>4.2. Specific retention periods may vary by data category:</p>
-      <p className="pl-8">(a) Account information: retained for the duration of your account and a commercially reasonable period thereafter;</p>
-      <p className="pl-8">(b) User Content and Generated Output: retained for the duration of your account unless earlier deletion is requested or required;</p>
-      <p className="pl-8">(c) Usage and technical logs: retained for up to twenty-four (24) months for security, debugging, and service improvement purposes;</p>
-      <p className="pl-8">(d) Payment records: retained as required by applicable tax and financial regulations.</p>
-      <p>4.3. Upon account termination, we will delete or anonymize your personal information within a commercially reasonable timeframe, except where retention is required by law.</p>
-    </LegalSection>
-
-    <LegalSection title="5. Data Security">
-      <p>5.1. We implement commercially reasonable technical and organizational measures designed to protect information against unauthorized access, alteration, disclosure, or destruction. These measures include but are not limited to: encryption of data in transit (TLS/SSL); access controls and authentication mechanisms; rate limiting and abuse prevention systems; infrastructure monitoring and incident response procedures.</p>
-      <p>5.2. Despite our efforts, no method of electronic transmission or storage is completely secure. We cannot guarantee absolute security of your information. You are responsible for maintaining the confidentiality of your account credentials and for restricting access to your devices.</p>
-      <p>5.3. If you become aware of any unauthorized access to your account or any security breach, you must notify us immediately.</p>
-    </LegalSection>
-
-    <LegalSection title="6. Your Rights and Choices">
-      <p>6.1. Depending on your jurisdiction, you may have the following rights regarding your personal information:</p>
-      <p className="pl-8">(a) <strong>Access:</strong> the right to request a copy of the personal information we hold about you;</p>
-      <p className="pl-8">(b) <strong>Correction:</strong> the right to request correction of inaccurate or incomplete personal information;</p>
-      <p className="pl-8">(c) <strong>Deletion:</strong> the right to request deletion of your personal information, subject to legal retention requirements;</p>
-      <p className="pl-8">(d) <strong>Portability:</strong> the right to receive your personal information in a structured, commonly used, machine-readable format;</p>
-      <p className="pl-8">(e) <strong>Restriction:</strong> the right to request restriction of processing of your personal information under certain circumstances;</p>
-      <p className="pl-8">(f) <strong>Objection:</strong> the right to object to processing of your personal information under certain circumstances.</p>
-      <p>6.2. To exercise any of these rights, please contact us using the information provided in Section 9. We will respond to your request within the timeframe required by applicable law.</p>
-      <p>6.3. You may control certain browser-side storage through your browser settings, although doing so may affect sign-in persistence and core Service functionality.</p>
-    </LegalSection>
-
-    <LegalSection title="7. International Data Transfers">
-      <p>7.1. The Service is primarily operated from servers located in the People's Republic of China. If you access the Service from outside this jurisdiction, you acknowledge and consent to the transfer of your information to, and processing of your information in, the People's Republic of China and any other jurisdiction where our service providers operate.</p>
-      <p>7.2. When transferring data across borders, we implement appropriate safeguards to ensure an adequate level of protection for your personal information in compliance with applicable data protection laws.</p>
-    </LegalSection>
-
-    <LegalSection title="8. Children's Privacy">
-      <p>8.1. The Service is not directed to individuals under the age of eighteen (18). We do not knowingly collect personal information from children under 18. If we become aware that we have collected personal information from a child under 18, we will take steps to delete such information promptly.</p>
-    </LegalSection>
-
-    <LegalSection title="9. Contact Information">
-      <p>9.1. If you have questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us through the Service or at the email address provided on our website.</p>
-    </LegalSection>
-
-    <LegalSection title="10. Changes to This Policy">
-      <p>10.1. We may update this Privacy Policy from time to time to reflect changes in our practices, technology, legal requirements, or other factors. When we make material changes, we will post the revised Policy on this page with an updated effective date.</p>
-      <p>10.2. Your continued use of the Service after the posting of changes constitutes your acceptance of such changes. We encourage you to review this Policy periodically.</p>
-    </LegalSection>
-  </LegalDocumentLayout>
-);
-
-export default PrivacyPolicy;
+export default function PrivacyPolicy() {
+  return (
+    <LegalDocumentLayout
+      title="隐私政策"
+      subtitle="你的账号、研究资料与模型选择"
+      effectiveDate="2026 年 9 月 7 日"
+      currentPath="/privacy-policy"
+      summary={<p>本政策说明 EliangMat AI 当前的数据处理方式。账号记忆、外部模型推理和公司模型训练是三个独立用途，分别受权限和你的设置控制。</p>}
+    >
+      <LegalSection title="1. 我们处理哪些信息">
+        <p>登录时处理手机号与验证码，用于验证身份、防止滥用和恢复同一账号。账号身份记录保存手机号的受保护摘要和脱敏显示；验证码和登录凭证以摘要校验，不以明文保存在身份记录中。</p>
+        <p>研发服务处理你提供的目标、候选配方、样品和批次、任务参数、原始文件、结果与复核记录、对话及资料。为追溯服务，还保存权限、授权、调用状态、供应商返回的 Token 用量和操作时间等记录。</p>
+      </LegalSection>
+      <LegalSection title="2. 自动记忆">
+        <p>开启账号记忆后，平台从同一账号内有权限的对话和业务记录中自动检索相关内容，帮助后续对话衔接。记忆保存在平台账号空间，不因更换浏览器而变成另一个账号。不会检索其他账号的数据。</p>
+        <p>你可在“账号与用量 → 账号记忆”中关闭、排除项目、停止引用或管理保存的条目。停止引用后，该来源不再带入后续自动检索；依赖已更新或撤回来源的模型回复会失效提示。原始项目记录仍按业务记录保留。</p>
+      </LegalSection>
+      <LegalSection title="3. 私密与参与优化">
+        <p>私密项目不进入公司模型训练候选。选择参与优化表示允许按该用途审查资料；还需逐份检查数据许可与用途权限，并不等于资料已被训练或模型已经更新。</p>
+        <p>你可以更改项目模式或撤回相关授权。设置改变会限制后续候选导出；已经导出的副本或已经完成的训练，无法仅靠切换设置从外部系统自动撤回，可联系客服处理。平台不会把外部模型推理确认当作公司训练授权。</p>
+      </LegalSection>
+      <LegalSection title="4. 外部接收方与模型推理">
+        <p>短信验证由腾讯云短信处理目标手机号、验证码和短信模板参数，用于验证码投递。网站托管服务处理提供平台所需的数据。</p>
+        <p>使用 Gemini 时，确认框会显示当前模型与网关地址。确认后，网关及其模型服务接收当前问题、允许的当前对话和相关账号记忆；其他项目内容还需该项目确认同一网关。发送内容、目的和范围以确认框为准。选择账号记忆检索时不调用外部模型。</p>
+        <p>外部推理服务的数据处理安排与公司训练授权不同。需要核实供应商的保存期限、部署地区或其他处理条件时，请在提交敏感内容前通过客服获取相应说明；平台不会承诺未经核实的第三方保存或删除行为。</p>
+      </LegalSection>
+      <LegalSection title="5. 保存与安全">
+        <p>为提供持续研发和追溯功能，业务记录在账号使用期间保留，直至按你的请求或适用规则处理。保存期限以实现服务目的所必需的时间为限；需要依法保留或技术上暂无法删除的部分，只用于必要的保存与保护。</p>
+        <p>平台使用账号与角色权限隔离记录，校验来源可用性，并保护登录凭证。请同时做好原始实验数据备份和设备安全管理。我们不将你的研究内容用于广告营销。</p>
+      </LegalSection>
+      <LegalSection title="6. 查看、更正与删除">
+        <p>你可在对应项目页面查看或更正记录，在账号记忆设置中控制引用，并在提供导出功能的页面导出数据。原始记录与复核记录可能保留版本以满足追溯。</p>
+        <p>如需注销账号、删除数据、获取更完整的资料副本或询问第三方处理情况，请使用页脚客服入口。我们将在核验账号权限后处理，并说明适用的保留范围；关闭记忆本身不会删除整个账号。</p>
+      </LegalSection>
+      <LegalSection title="7. 更新与联系">
+        <p>服务运营主体为 Hangzhou Yiliang Xincailiao Technology Co., Ltd.。本政策如发生实质变化，将在平台更新说明；新增训练或外部处理用途需要按相应范围另行确认。隐私请求可通过页脚客服联系。</p>
+      </LegalSection>
+    </LegalDocumentLayout>
+  );
+}

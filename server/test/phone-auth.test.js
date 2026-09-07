@@ -42,14 +42,14 @@ test('sends the expected Tencent SMS template parameters', async () => {
   };
   const config = {
     sdkAppId: '1400000000',
-    signName: 'SCI Visualizer',
+    signName: 'EliangMat AI',
     templateId: '123456',
   };
 
   await sendLoginCode('+8613800000000', '123456', { client, config });
   assert.deepEqual(request, {
     SmsSdkAppId: '1400000000',
-    SignName: 'SCI Visualizer',
+    SignName: 'EliangMat AI',
     TemplateId: '123456',
     TemplateParamSet: ['123456', '5'],
     PhoneNumberSet: ['+8613800000000'],

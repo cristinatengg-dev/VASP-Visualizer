@@ -1,203 +1,233 @@
-import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/useStore';
-import { Phone, Lock, ArrowRight, Loader2, ShieldCheck } from 'lucide-react';
-import { API_BASE_URL } from '../config';
-import { COMPANY_NAME, SUPPORT_EMAIL, SUPPORT_MAILTO } from '../constants/contact';
-import { useNavigate } from 'react-router-dom';
-import { normalizePhoneNumber } from '../utils/phone';
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowRight, Loader2, ShieldCheck } from "lucide-react";
+import { useStore } from "../store/useStore";
+import { API_BASE_URL } from "../config";
+import { normalizePhoneNumber } from "../utils/phone";
+import { SUPPORT_MAILTO } from "../constants/contact";
+import "../pages/platform/login.css";
 
-export const LoginPage: React.FC = () => {
-    const { login } = useStore();
-    const navigate = useNavigate();
-    const [phone, setPhone] = useState('');
-    const [code, setCode] = useState('');
-    const [isSending, setIsSending] = useState(false);
-    const [isLoggingIn, setIsLoggingIn] = useState(false);
-    const [countdown, setCountdown] = useState(0);
-    const [error, setError] = useState('');
-    const [successMessage, setSuccessMessage] = useState('');
-
-    useEffect(() => {
-        let timer: NodeJS.Timeout;
-        if (countdown > 0) {
-            timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-        }
-        return () => clearTimeout(timer);
-    }, [countdown]);
-
-    const handleSendCode = async () => {
-        const normalizedPhone = normalizePhoneNumber(phone);
-        if (!normalizedPhone) {
-            setError('Please enter a valid phone number');
-            return;
-        }
-        
-        setError('');
-        setIsSending(true);
-        try {
-            const res = await fetch(`${API_BASE_URL}/auth/send-phone-code`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: normalizedPhone })
-            });
-            const contentType = res.headers.get('content-type') || '';
-            const isJson = contentType.includes('application/json');
-            const data = isJson ? await res.json() : null;
-            if (!res.ok) {
-                if (isJson) throw new Error(data?.error || `HTTP ${res.status}`);
-                const text = await res.text().catch(() => '');
-                throw new Error(text || `HTTP ${res.status}`);
-            }
-            
-            if (data.success) {
-                setCountdown(60);
-                setSuccessMessage(data.message || 'Verification code sent via SMS.');
-            } else {
-                setError(data.error || 'Failed to send verification code');
-            }
-        } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : 'Network connection failed');
-        } finally {
-            setIsSending(false);
-        }
-    };
-
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const normalizedPhone = normalizePhoneNumber(phone);
-        if (!normalizedPhone || !/^\d{6}$/.test(code)) {
-            setError('Please enter a valid phone number and 6-digit verification code');
-            return;
-        }
-        
-        setError('');
-        setIsLoggingIn(true);
-        try {
-            await login(normalizedPhone, code);
-            // Login successful — return to the main landing page
-            navigate('/', { replace: true });
-        } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : 'Login failed');
-        } finally {
-            setIsLoggingIn(false);
-        }
-    };
-
-    return (
-        <div className="min-h-screen bg-[#F5F5F0] flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-[32px] shadow-[0_4px_30px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col ring-1 ring-black/5">
-                <div className="p-8 text-center bg-white border-b border-gray-50">
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <ShieldCheck className="w-8 h-8 text-[#0A1128]" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-[#0A1128] mb-1">SCI Visualizer</h1>
-                    <p className="text-gray-400 text-sm">Available after phone number verification</p>
-                </div>
-
-                <div className="p-10">
-                    <form onSubmit={handleLogin} className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">Phone Number</label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                                        <Phone className="h-4 w-4 text-gray-500" />
-                                    </div>
-                                </div>
-                                <input
-                                    type="tel"
-                                    inputMode="tel"
-                                    autoComplete="tel"
-                                    className="block w-full pl-14 pr-4 py-3.5 border border-gray-200 rounded-[24px] bg-gray-50 focus:ring-2 focus:ring-[#0A1128]/20 focus:border-[#0A1128] transition-all outline-none text-gray-800 placeholder-gray-400"
-                                    placeholder="138 0000 0000"
-                                    value={phone}
-                                    onChange={(e) => {
-                                        setPhone(e.target.value);
-                                        setError('');
-                                        setSuccessMessage('');
-                                    }}
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">SMS Verification Code</label>
-                            <div className="flex gap-3">
-                                <div className="relative flex-1">
-                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                                            <Lock className="h-4 w-4 text-gray-500" />
-                                        </div>
-                                    </div>
-                                    <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        autoComplete="one-time-code"
-                                        className="block w-full pl-14 pr-4 py-3.5 border border-gray-200 rounded-[24px] bg-gray-50 focus:ring-2 focus:ring-[#0A1128]/20 focus:border-[#0A1128] transition-all outline-none text-gray-800 placeholder-gray-400"
-                                        placeholder="6-Digit Code"
-                                        value={code}
-                                        onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                        maxLength={6}
-                                    />
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleSendCode}
-                                    disabled={countdown > 0 || isSending || !phone}
-                                    className={`px-5 py-3 rounded-[32px] text-sm font-semibold transition-all w-36 flex items-center justify-center shadow-sm
-                                        ${countdown > 0 
-                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                                            : 'bg-white border border-gray-200 text-[#0A1128] hover:bg-gray-50 hover:border-gray-300'
-                                        }`}
-                                >
-                                    {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : 
-                                     countdown > 0 ? `${countdown}s` : 'Get Code'}
-                                </button>
-                            </div>
-                        </div>
-
-                        {successMessage && (
-                            <div className="p-4 bg-green-50 text-green-700 text-sm rounded-[20px] flex items-start gap-3 border border-green-100">
-                                <span className="mt-1.5 block w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
-                                {successMessage}
-                            </div>
-                        )}
-
-                        {error && (
-                            <div className="p-4 bg-red-50 text-red-600 text-sm rounded-[20px] flex items-start gap-3 border border-red-100">
-                                <span className="mt-1.5 block w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                                {error}
-                            </div>
-                        )}
-
-                        <button
-                            type="submit"
-                            disabled={isLoggingIn || !phone || code.length !== 6}
-                            className="w-full flex items-center justify-center gap-2 py-4 px-6 border border-transparent rounded-[32px] shadow-lg shadow-[#0A1128]/20 text-sm font-bold text-white bg-[#0A1128] hover:bg-[#162044] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0A1128] disabled:opacity-70 disabled:cursor-not-allowed transition-all active:scale-95"
-                        >
-                            {isLoggingIn ? (
-                                <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    Verifying...
-                                </>
-                            ) : (
-                                <>
-                                    Verify &amp; Log In
-                                    <ArrowRight className="w-5 h-5" />
-                                </>
-                            )}
-                        </button>
-                    </form>
-                    
-                    <p className="mt-8 text-center text-xs text-gray-400 leading-relaxed">
-                        Mainland China mobile numbers can be entered directly as 11 digits. For other regions, please include the country/region code.<br/>
-                        Each account can be bound to a maximum of 3 active devices.<br/>
-                        Supports:<a href={SUPPORT_MAILTO} className="hover:text-gray-600 underline underline-offset-2">{SUPPORT_EMAIL}</a> <br/>
-                        {COMPANY_NAME} <br/>
-                        &copy; {new Date().getFullYear()} SCI Visualizer. All rights reserved.
-                    </p>
-                </div>
-            </div>
+export interface CodeDelivery {
+  success: boolean;
+  delivery?: "local" | "tencent";
+  developmentCode?: string;
+  retryAfter?: number;
+  message?: string;
+}
+export function PhoneLoginPanel({
+  sendCode,
+  login,
+  localVerification = false,
+  children,
+}: {
+  sendCode: (phone: string) => Promise<CodeDelivery>;
+  login: (phone: string, code: string) => Promise<unknown>;
+  localVerification?: boolean;
+  children?: ReactNode;
+}) {
+  const id = useId();
+  const [phone, setPhone] = useState(""),
+    [code, setCode] = useState(""),
+    [sending, setSending] = useState(false),
+    [logging, setLogging] = useState(false),
+    [seconds, setSeconds] = useState(0),
+    [error, setError] = useState(""),
+    [sent, setSent] = useState(false),
+    [developmentCode, setDevelopmentCode] = useState("");
+  const busy = sending || logging;
+  useEffect(() => {
+    if (seconds <= 0) return;
+    const timer = setTimeout(() => setSeconds((n) => n - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [seconds]);
+  async function send() {
+    const normalized = normalizePhoneNumber(phone);
+    if (!normalized) {
+      setError("请输入有效手机号；中国大陆号码可直接输入 11 位。");
+      return;
+    }
+    setSending(true);
+    setError("");
+    setSent(false);
+    setDevelopmentCode("");
+    try {
+      const response = await sendCode(normalized);
+      setSeconds(response.retryAfter || 60);
+      setSent(true);
+      setDevelopmentCode(
+        localVerification && response.delivery === "local"
+          ? response.developmentCode || ""
+          : "",
+      );
+    } catch (e) {
+      const err = e as Error & { retryAfter?: number };
+      setError(err.message || "发送失败，请重试。");
+      if (err.retryAfter) setSeconds(err.retryAfter);
+    } finally {
+      setSending(false);
+    }
+  }
+  return (
+    <section className="ep-login-card">
+      <header>
+        <div className="ep-login-symbol">
+          <ShieldCheck size={25} />
         </div>
-    );
+        <h1>EliangMat AI</h1>
+        <p>登录，继续你的材料研究</p>
+      </header>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const normalized = normalizePhoneNumber(phone);
+          if (!normalized || !/^\d{6}$/.test(code)) {
+            setError("请输入有效手机号和六位验证码。");
+            return;
+          }
+          setLogging(true);
+          setError("");
+          try {
+            await login(normalized, code);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "登录失败，请重试。");
+          } finally {
+            setLogging(false);
+          }
+        }}
+      >
+        <label htmlFor={id + "phone"}>手机号</label>
+        <input
+          id={id + "phone"}
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="请输入手机号"
+          value={phone}
+          disabled={busy}
+          onChange={(e) => {
+            setPhone(e.target.value);
+            setCode("");
+            setError("");
+            setSent(false);
+            setDevelopmentCode("");
+            setSeconds(0);
+          }}
+          required
+        />
+        <small>中国大陆号码直接输入 11 位，其他地区请带国家或地区代码。</small>
+        <label htmlFor={id + "code"}>验证码</label>
+        <div className="ep-login-code">
+          <input
+            id={id + "code"}
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="六位验证码"
+            value={code}
+            disabled={busy}
+            onChange={(e) => {
+              setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+              setError("");
+            }}
+            maxLength={6}
+            required
+          />
+          <button
+            type="button"
+            disabled={busy || seconds > 0 || !phone.trim()}
+            onClick={send}
+          >
+            {sending ? (
+              <Loader2 size={15} className="ep-spin" />
+            ) : seconds > 0 ? (
+              `${seconds} 秒后重发`
+            ) : (
+              "获取验证码"
+            )}
+          </button>
+        </div>
+        {sent && (
+          <p className="ep-login-status" role="status">
+            {developmentCode ? (
+              <>
+                本机测试验证码：<strong>{developmentCode}</strong>
+                <button type="button" onClick={() => setCode(developmentCode)}>
+                  填入
+                </button>
+                <span>仅用于当前开发环境，不发送短信。</span>
+              </>
+            ) : (
+              "验证码已发送，5 分钟内有效。"
+            )}
+          </p>
+        )}
+        {error && (
+          <p className="ep-login-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button
+          className="ep-login-submit"
+          disabled={busy || !normalizePhoneNumber(phone) || code.length !== 6}
+        >
+          {logging ? (
+            <>
+              <Loader2 size={16} className="ep-spin" />
+              正在验证
+            </>
+          ) : (
+            <>
+              登录并继续
+              <ArrowRight size={16} />
+            </>
+          )}
+        </button>
+        <p className="ep-login-caption">
+          首次验证自动创建账号。项目默认私密，历史记录会随账号保留。
+        </p>
+      </form>
+      {localVerification && (
+        <p className="ep-login-environment">本机开发环境 · 测试验证码模式</p>
+      )}
+      {children}
+      <footer>
+        <p>
+          继续即表示同意<Link to="/terms-of-service">服务条款</Link>和
+          <Link to="/privacy-policy">隐私政策</Link>。
+        </p>
+        <a href={SUPPORT_MAILTO}>联系 EliangMat AI 客服</a>
+      </footer>
+    </section>
+  );
+}
+export const LoginPage = () => {
+  const { login } = useStore(),
+    navigate = useNavigate();
+  return (
+    <div className="ep-login-page">
+      <Link className="ep-login-back" to="/">
+        ← 返回首页
+      </Link>
+      <PhoneLoginPanel
+        sendCode={async (phone) => {
+          const response = await fetch(API_BASE_URL + "/auth/send-phone-code", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone }),
+          });
+          const data = await response.json();
+          if (!response.ok || !data.success)
+            throw Object.assign(new Error(data.error || "验证码发送失败。"), {
+              retryAfter:
+                Number(response.headers.get("Retry-After")) || undefined,
+            });
+          return data;
+        }}
+        login={async (phone, code) => {
+          await login(phone, code);
+          navigate("/", { replace: true });
+        }}
+      />
+    </div>
+  );
 };

@@ -27,6 +27,7 @@ server/.env
 server/.env.local
 
 # Local runtime / generated data
+.dev/
 core_code_bundle.txt
 ffmpeg
 server/db.json
@@ -51,3 +52,8 @@ ssl/*
 *.njsproj
 *.sln
 *.sw?
+
+# Product configuration, preview and customer storage
+.config/
+.data/
+.preview/

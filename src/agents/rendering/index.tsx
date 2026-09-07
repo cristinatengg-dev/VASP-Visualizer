@@ -985,7 +985,7 @@ const RenderingAgent: React.FC = () => {
 
     const link = document.createElement('a');
     link.href = dataUrl;
-    link.download = `sci-cover-${Date.now()}.png`;
+    link.download = `EliangMat_AI_Cover_${Date.now()}.png`;
     link.click();
   };
 

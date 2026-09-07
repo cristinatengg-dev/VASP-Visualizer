@@ -1,6 +1,6 @@
 'use strict';
 
-// ─── 8-shot storyboard: Battery Materials SCI Visualizer concept promo ───────
+// ─── 8-shot storyboard: Battery Materials EliangMat AI concept promo ───────
 //
 // Each prompt is optimized for Seedance 2.0 text-to-video generation.
 // Style: cinematic concept film, deep space / microscopic aesthetic,

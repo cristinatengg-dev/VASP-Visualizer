@@ -1,5 +1,5 @@
 /**
- * HeroSection.tsx — SCI Visualizer 首屏英雄区 v3 (Premium Light)
+ * HeroSection.tsx — EliangMat AI 首屏英雄区 v3 (Premium Light)
  *
  * 主题：科研全链路 AI 自动化平台（建模 → 计算 → 可视化）
  *
@@ -448,7 +448,7 @@ const CopyrightStrip: React.FC = () => (
   <div className="flex flex-col items-center gap-2 pt-2">
     <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-100/80 to-transparent mb-2" />
     <p className="text-[11px] text-gray-400 font-mono">
-      © {new Date().getFullYear()} SCI Visualizer. All rights reserved.
+      © {new Date().getFullYear()} EliangMat AI. All rights reserved.
     </p>
     <p className="text-[11px] text-gray-400 font-mono text-center">
       {COMPANY_NAME}
@@ -502,7 +502,7 @@ const HeroSection: React.FC = () => {
         px-4 py-16
         overflow-hidden
       "
-      aria-label="SCI Visualizer Hero"
+      aria-label="EliangMat AI Hero"
     >
       {/* 右上角 Sign In / Go to App 按钮 */}
       <div className="absolute top-6 right-8 z-30">

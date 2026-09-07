@@ -1,7 +1,7 @@
-# SCI Visualizer - User Manual
+# EliangMat AI - User Manual
 
 ## 1. Introduction
-SCI Visualizer is a high-performance, web-based visualization tool designed for materials science data. It enables researchers to view, edit, analyze, and export publication-quality images and videos from VASP structure files (`.vasp`, `POSCAR`, `CONTCAR`) and trajectory data (`XDATCAR`), as well as CIF files.
+EliangMat AI is a high-performance, web-based visualization tool designed for materials science data. It enables researchers to view, edit, analyze, and export publication-quality images and videos from VASP structure files (`.vasp`, `POSCAR`, `CONTCAR`) and trajectory data (`XDATCAR`), as well as CIF files.
 
 ---
 

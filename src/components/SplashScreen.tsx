@@ -3,7 +3,7 @@
  *
  * Flow:
  *   1. Particles converge from void → breathing lattice forms
- *   2. "SciVisualizer" caustic-reveals (blur → focus), no metallic sweep
+ *   2. "EliangMat AI" caustic-reveals (blur → focus), no metallic sweep
  *   3. Breathing continues indefinitely, waiting for user
  *   4. On click: text dissolves into particles that scatter outward
  *      with the breathing field, then the whole layer fades to white seamlessly
@@ -281,7 +281,7 @@ const SplashScreen: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
     }, 300);
   }, []);
 
-  const brand = 'SciVisualizer';
+  const brand = 'EliangMat AI';
 
   return (
     <AnimatePresence>
@@ -311,9 +311,9 @@ const SplashScreen: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
           <div className="relative z-10 flex flex-col items-center gap-5">
 
             {/* Brand title — caustic reveal, dissolve on exit */}
-            <div className="flex items-baseline" aria-label="SciVisualizer">
+            <div className="flex items-baseline" aria-label="EliangMat AI">
               {brand.split('').map((char, i) => {
-                const isSci = i < 3;
+                const isBrandName = i < 'EliangMat'.length;
                 const delay = i * 0.045;
 
                 // Dissolve: each letter blurs out and drifts in a random direction
@@ -355,7 +355,8 @@ const SplashScreen: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
                     className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter"
                     style={{
                       display: 'inline-block',
-                      color: isSci ? '#7A879E' : 'rgba(230, 232, 238, 0.95)',
+                      whiteSpace: 'pre',
+                      color: isBrandName ? '#7A879E' : 'rgba(230, 232, 238, 0.95)',
                     }}
                   >
                     {char}

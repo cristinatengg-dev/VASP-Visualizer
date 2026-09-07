@@ -1,4 +1,4 @@
-# VASP-Visualizer 项目标准规则书
+# EliangMat AI 项目标准规则书
 
 > **⚠️ 重要提示：每次开始新任务时，请先阅读本文件。**
 
@@ -6,7 +6,7 @@
 
 ## 项目基本信息
 
-| 项目名 | SCI Visualizer / VASP-Visualizer |
+| 项目名 | EliangMat AI |
 |--------|----------------------------------|
 | 域名 | https://scivisualizer.com |
 | 服务器 | 腾讯云轻量应用服务器（上海） |
