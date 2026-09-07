@@ -2,6 +2,14 @@
 
 > 本文档供新 Claude Code 会话快速了解当前工作状态。
 
+## 2026-09-07：EliangMat AI 正式平台已部署
+
+- 用户授权发布。`main` 已推送，现有生产 Git 检出 fast-forward 到 `9c9e77bb8f76`，新版 `scripts/platform/deploy-server.sh` 首次切换成功，正式网址 https://scivisualizer.com/ 。未 bootstrap、未执行旧 `deploy_to_tencent.sh`，镜像固定为 `eliangmat-platform:9c9e77bb8f76`。
+- 新平台独立容器与 `.data/platform` 持久目录；现有 Nginx HTTPS 入口切至平台并关闭 SSE 缓冲。补充生产单层代理的客户端 IP 识别，限流回归通过。
+- 发布前 90 项平台回归与 14 项登录测试通过；发布后 22 项外网 HTTP/静态资产检查、Nginx 配置、备份归档完整性、原配置与 TLS 校验通过。生产 Gemini 3 Flash 流式调用成功，16 输入 / 156 输出 Token。旧后端 health/skills 内部检查通过。
+- 原服务、账号、研究文件和数据库保留并备份至服务器 `/home/deploy/eliangmat-backups/20260907T025945Z-9c9e77bb`，附首次切换回退脚本；**旧数据未迁入新版**，本机 QA 数据未上线。没有发送真实短信，送达和正式新登录尚未实测；线上 Computer Use 连续超时，未完成线上交互复核。本机此前复测记录仍有效。
+- 充值、团队邀请、真实仿真/设备接入与模型训练按用户要求显示“待开放”。完整发布范围、运行边界与后续更新注意事项见 [生产发布记录](docs/testing/PRODUCTION_RELEASE_2026-09-07.md)。
+
 ## 2026-09-07：未开放能力保留入口与状态
 
 - 用户明确调整范围：充值、团队邀请、真实仿真与设备等接口仅显示“待开放”，本轮不继续实现这些接入。
