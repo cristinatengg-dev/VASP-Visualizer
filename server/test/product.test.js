@@ -13,6 +13,20 @@ function root(t) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
+
+test("public landing carries the filed company identity and ICP link", () => {
+  const landing = fs.readFileSync(
+    path.resolve(__dirname, "../../public/platform/hero.html"),
+    "utf8",
+  );
+  assert.match(
+    landing,
+    /<title>杭州易量芯材科技有限公司｜EliangMat AI<\/title>/,
+  );
+  assert.match(landing, /https:\/\/beian\.miit\.gov\.cn\//);
+  assert.match(landing, />浙ICP备2026000780号<\/a>/);
+});
+
 test("product excludes fake balances/models and rejects sandbox mutations in the service", (t) => {
   const dir = root(t),
     store = new KnowledgeStore(dir);
@@ -59,7 +73,7 @@ test("product HTTP serves the built app, uses OTP auth, blocks development APIs 
   fs.mkdirSync(dist);
   fs.writeFileSync(
     path.join(dist, "index.html"),
-    "<title>EliangMat AI</title>",
+    "<title>杭州易量芯材科技有限公司｜EliangMat AI</title>",
   );
   let delivered;
   const auth = new PlatformAuth(path.join(dir, "auth"), {
@@ -93,6 +107,12 @@ test("product HTTP serves the built app, uses OTP auth, blocks development APIs 
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+  const home = await request("/");
+  assert.equal(home.status, 200);
+  assert.match(
+    await home.text(),
+    /<title>杭州易量芯材科技有限公司｜EliangMat AI<\/title>/,
+  );
   assert.equal((await request("/assistant")).status, 200);
   assert.equal((await request("/api/platform")).status, 401);
   assert.equal(
