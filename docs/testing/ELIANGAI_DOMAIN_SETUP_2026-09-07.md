@@ -2,6 +2,16 @@
 
 用户要求将现有 EliangMat AI 接到新购域名 `eliangai.com`。本记录描述准备状态，**不代表新域名已上线**。
 
+## 2026-09-28 更新：DNS 与受信任 HTTPS 已就绪，等待备案通过
+
+- `eliangai.com` 与 `www.eliangai.com` 的 A 记录已在公网生效，均指向腾讯云服务器 `118.25.15.120`。权威 DNS 仍为 `dns9.hichina.com` / `dns10.hichina.com`；解析已经由域名管理员完成，后续部署无需再次登录阿里云。
+- 已通过 HTTP-01 签发覆盖主域和 www 的 Let’s Encrypt 证书，有效期至 2026-12-27。证书部署在服务器 `ssl/eliangai.com/`；`fullchain.pem` 为 644，`privkey.pem` 为 600，未提交 Git。
+- 新增 `scripts/platform/renew-eliangai-certificate.sh`，使用固定摘要的 Certbot 镜像执行 webroot 续期、安全复制证书并校验/重载 Nginx。服务器已安装 deploy 用户定时任务；完整 dry-run、Nginx 语法检查与 reload 已通过。
+- 当前入口使用 `secure-prepare` 模式。新域名 HTTP/HTTPS 普通请求均返回 503，并提供受信任 TLS 与 `Retry-After`；ACME 挑战路径正常。旧域名 `https://scivisualizer.com` 继续返回 200，未中断现有用户访问。
+- 正式环境来源白名单已追加 `https://eliangai.com` 和 `https://www.eliangai.com`。生产数据、账号、会话密钥、TLS 目录与容器保持原位，没有复制或初始化第二套平台。
+- 2026-09-28 实时检查腾讯云备案控制台，申请仍为“新增服务 - 审核中”“腾讯云审核 审核中”，尚未进入管局审核。因此没有运行 `activate`，不能将当前安全等待页称为网站正式上线。
+- 本次是现有生产 Git 检出的常规、版本感知域名预配置，不是 bootstrap，也未执行旧 `deploy_to_tencent.sh`。备案通过后再生成并校验 `activate` 配置，切换入口并复验登录、旧账号数据、Cookie、来源保护与模型流式代理。
+
 ## 已确认
 
 - 2026-09-07 权威 DNS：`dns9.hichina.com` / `dns10.hichina.com`，主域 A 查询无答案，www 为 NXDOMAIN；尚未指向现有生产服务器。
@@ -38,6 +48,6 @@
 6. `node scripts/platform/render-domain-ingress.cjs activate` 生成正式配置，校验后切换入口。`https://eliangai.com` 提供平台，www 和 HTTP 跳转主域；旧站继续兼容访问。此操作不复制数据库、不新建一套客户空间。
 7. 验证主域和 www 的公网 DNS、受信任 TLS、重定向、静态资源、匿名会话、来源保护、登录和模型流式代理。新域名 Cookie 与旧域名分离，用户需重新登录；用相同手机号进入现有账号、项目与记忆。
 
-目前仅完成配置准备；未修改 DNS、申请证书或切换生产入口。下次继续前以实际 DNS、浏览器登录状态和服务器配置为准，避免重复操作。
+目前 DNS、证书、自动续期、来源白名单与安全等待入口已完成；正式平台入口仍未切换。下次继续前先核对腾讯云现有备案申请，勿重复新建；备案通过后再执行激活步骤。
 
 参考：[阿里云网站解析说明](https://help.aliyun.com/zh/dns/pubz-add-website-parsing)、[Certbot Docker 方式](https://eff-certbot.readthedocs.io/en/stable/install.html)、[Certbot Webroot 与续期](https://eff-certbot.readthedocs.io/en/stable/using.html)。新域名现已提交腾讯云新增服务备案，正式上线前仍须核对审核结果。

@@ -2,6 +2,14 @@
 
 > 本文档供新 Claude Code 会话快速了解当前工作状态。
 
+## 2026-09-28：eliangai.com DNS、TLS 与安全等待入口已就绪
+
+- `eliangai.com` 与 `www.eliangai.com` 的 A 记录均已生效并指向腾讯云生产服务器 `118.25.15.120`；权威 DNS 仍由阿里云 `dns9.hichina.com` / `dns10.hichina.com` 托管，解析已由域名管理员完成，无需再次登录阿里云。
+- 已签发同时覆盖主域和 www 的 Let’s Encrypt 证书，有效期至 2026-12-27。服务器证书文件保持在 `ssl/eliangai.com/`，私钥权限为 600；已安装固定 Certbot 镜像的续期脚本与每日定时任务，续期 dry-run、Nginx 配置检查和 reload 均通过。
+- 新域名当前使用 `secure-prepare` 安全等待入口：HTTP/HTTPS 普通请求统一返回 503，HTTPS 证书受信任，ACME 挑战路径保留；旧域名 `https://scivisualizer.com` 继续正常提供平台。生产来源白名单已追加新域名，现有容器、数据和账号体系未迁移或重建。
+- 2026-09-28 实时查看腾讯云备案控制台，申请仍显示“新增服务 - 审核中 / 腾讯云审核 审核中”，尚未进入管局审核，故未启用新域名正式平台。通过后生成并校验 `activate` 配置，再切换新域名入口并完成登录、会话、模型流式代理和旧账号数据复验。
+- 本次为现有生产 Git 检出的常规域名入口与 TLS 预配置，不是 bootstrap，也未执行旧 `deploy_to_tencent.sh`。`server/.env`、`server/.env.local`、`server/db.json`、`ssl/`、`.data/platform` 与平台环境配置均保留。
+
 ## 2026-09-07：eliangai.com 备案已提交，腾讯云审核中
 
 - 用户授权备案，腾讯云控制台现已登录。实际确认公司主体和 `scivisualizer.com` 备案正常，新域名尚无备案号；已创建浙江省“新增服务”申请并完成主体步骤。
