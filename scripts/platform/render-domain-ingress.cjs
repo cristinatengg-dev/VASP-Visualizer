@@ -3,8 +3,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const mode = process.argv[2];
-if (!['prepare', 'activate'].includes(mode)) {
-  throw new Error('Usage: node scripts/platform/render-domain-ingress.cjs prepare|activate');
+if (!['prepare', 'secure-prepare', 'activate'].includes(mode)) {
+  throw new Error('Usage: node scripts/platform/render-domain-ingress.cjs prepare|secure-prepare|activate');
 }
 const legacy = fs.readFileSync(path.join(__dirname, 'nginx.conf'), 'utf8');
 const start = legacy.indexOf('server {\n    listen 443 ssl;');
@@ -40,4 +40,21 @@ server {
     return 308 https://eliangai.com$request_uri;
 }
 `;
-process.stdout.write(legacy + http + (mode === 'activate' ? '\n' + https + alias : ''));
+const secureHold = `
+server {
+    listen 443 ssl;
+    server_name eliangai.com www.eliangai.com;
+    ssl_certificate ${certificate};
+    ssl_certificate_key ${key};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    add_header Retry-After 86400 always;
+    return 503;
+}
+`;
+const tls = mode === 'activate'
+  ? '\n' + https + alias
+  : mode === 'secure-prepare'
+    ? secureHold
+    : '';
+process.stdout.write(legacy + http + tls);
