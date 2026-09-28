@@ -200,6 +200,7 @@ export interface ResearchWorkflow {
     at: string;
     method?: string;
     answerMode?: "recall" | "acknowledge" | "facts" | "draft" | "model";
+    modelId?: string;
     modelName?: string;
     actualModel?: string;
     tokens?: InferenceTokens;

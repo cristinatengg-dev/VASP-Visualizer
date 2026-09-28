@@ -546,7 +546,7 @@ export default function Memory() {
         )}
       </details>
       <p className="ep-memory-note">
-        账号记忆保存在平台的账号空间中；选用 Gemini
+        账号记忆保存在平台的账号空间中；选用外部模型
         时仅发送获准外部推理的相关记录。关闭记忆后不检索长期历史；当前对话仍保留连续上下文。版本记录从功能启用时开始。
       </p>
       <Link to="/assistant" className="ep-memory-back">

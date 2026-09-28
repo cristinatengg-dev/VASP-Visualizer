@@ -3,8 +3,8 @@ const { randomUUID } = require("node:crypto");
 const { fail } = require("../knowledge/store");
 const { projectIn } = require("../knowledge/service");
 const domain = require("./research-domain");
-const { createGeminiGateway } = require("./model-gateway");
-const { hydrateMessage } = require("./inference");
+const { createHunyuanGateway } = require("./model-gateway");
+const { hydrateMessage, hasModelConsent, assertConsentFingerprint } = require("./inference");
 const at = () => new Date().toISOString();
 const clean = (s, max = 1000) =>
   String(s || "")
@@ -381,7 +381,7 @@ class PlatformService {
     this.store = store;
     this.development = development;
     this.store.platformEnvironment = development ? "development" : "production";
-    this.gateway = gateway || createGeminiGateway();
+    this.gateway = gateway || createHunyuanGateway();
     this.baseModels = development
       ? modelCatalog
       : [
@@ -400,6 +400,16 @@ class PlatformService {
     this.activeInference = new Set();
     this.memory = new MemoryService(store);
   }
+  defaultsFromState(p) {
+    const model = this.resolveModel(p.defaults.model);
+    return {
+      ...p.defaults,
+      model: model.id,
+      externalConsent: hasModelConsent(p.defaults.externalConsent, model)
+        ? p.defaults.externalConsent
+        : null,
+    };
+  }
   overview(owner, role = "owner") {
     const s = this.store.read(owner);
     const p = platform(s);
@@ -417,7 +427,7 @@ class PlatformService {
         teamInvites: false,
       },
       settings: p.settings,
-      defaults: p.defaults,
+      defaults: this.defaultsFromState(p),
       projects: s.projects.map((project) => ({
         ...project,
         workflow:
@@ -437,7 +447,9 @@ class PlatformService {
       inferenceUsage: (p.inferenceCalls || [])
         .filter((c) => role !== "researcher" || c.role === role)
         .map(({ inputHash, ...c }) => c),
-      projectModels: p.models,
+      projectModels: Object.fromEntries(
+        Object.entries(p.models).map(([id, modelId]) => [id, this.resolveModel(modelId).id]),
+      ),
       externalConsent: p.externalConsent,
       wallet: !this.development || role === "researcher" ? null : balance(p),
       orders: !this.development || role === "researcher" ? [] : p.orders,
@@ -475,16 +487,17 @@ class PlatformService {
       throw fail("请用至少 8 个字符描述材料目标");
     return this.store.update(owner, (s) => {
       const p = platform(s);
+      const defaults = this.defaultsFromState(p);
       if (s.projects.length >= 30)
         throw fail("项目数量已达当前空间上限，请联系管理员");
       const project = {
         id: randomUUID(),
         name: clean(input.name, 100),
-        mode: p.defaults.mode,
-        defaultsSnapshot: structuredClone(p.defaults),
+        mode: defaults.mode,
+        defaultsSnapshot: structuredClone(defaults),
         consent:
-          p.defaults.mode === "contribute"
-            ? { ...p.defaults.consent, inherited: true }
+          defaults.mode === "contribute"
+            ? { ...defaults.consent, inherited: true }
             : null,
         createdAt: at(),
       };
@@ -494,10 +507,10 @@ class PlatformService {
         input,
         input.demo === true,
       );
-      p.models[project.id] = p.defaults.model;
-      if (p.defaults.externalConsent)
+      p.models[project.id] = defaults.model;
+      if (defaults.externalConsent)
         p.externalConsent[project.id] = structuredClone(
-          p.defaults.externalConsent,
+          defaults.externalConsent,
         );
       log(p, "创建研发项目：" + project.name, project.id);
       return project;
@@ -961,7 +974,7 @@ class PlatformService {
           : undefined,
         method: "本地记忆检索 · 未调用语言模型",
         memoryRefs: context.refs,
-        modelId: p.models[id] || "materials",
+        modelId: "materials",
         visibility: id ? undefined : role,
         threadId,
         memoryTrace: {
@@ -1004,8 +1017,12 @@ class PlatformService {
   }
   selectModel(owner, id, input, role) {
     roleCan(role, "research");
+    if (input.model === this.gateway.info.id && !this.gateway.info.connected)
+      throw fail(this.gateway.info.name + " 尚未配置", 503);
     const model = this.catalog().find((m) => m.id === input.model);
     if (!model) throw fail("未知模型");
+    if (model.id === this.gateway.info.id && (!model.connected || (model.external && !model.fingerprint)))
+      throw fail(model.name + " 尚未配置", 503);
     return this.store.update(owner, (s) => {
       projectIn(s, id);
       const p = platform(s);
@@ -1013,12 +1030,14 @@ class PlatformService {
         model.external &&
         input.externalConsent !== true &&
         (!p.externalConsent[id] ||
-          (model.id === "gemini" &&
-            p.externalConsent[id].fingerprint !== model.fingerprint))
+          (model.id === this.gateway.info.id &&
+            !hasModelConsent(p.externalConsent[id], model)))
       )
         throw fail("选择外部服务前需要明确确认数据处理范围");
-      if (model.id === "gemini" && input.externalConsent === true)
+      if (model.external && input.externalConsent === true) {
         roleCan(role, "owner");
+        assertConsentFingerprint(input, model);
+      }
       if (model.external && input.externalConsent === true)
         p.externalConsent[id] = {
           at: at(),
@@ -1040,15 +1059,21 @@ class PlatformService {
   }
   defaults(owner, input, role) {
     roleCan(role, "owner");
+    if (input.model === this.gateway.info.id && !this.gateway.info.connected)
+      throw fail(this.gateway.info.name + " 尚未配置", 503);
     const model = this.catalog().find((m) => m.id === input.model);
     if (!model || !["private", "contribute"].includes(input.mode))
       throw fail("默认选项无效");
+    if (model.id === this.gateway.info.id && (!model.connected || (model.external && !model.fingerprint)))
+      throw fail(model.name + " 尚未配置", 503);
     if (input.mode === "contribute" && input.consent !== true)
       throw fail("请确认仅新建项目默认参与优化，逐份资料仍需授权");
-    if (model.external && input.externalConsent !== true)
-      throw fail("请确认新建项目的外部模型处理范围");
     return this.store.update(owner, (s) => {
       const p = platform(s);
+      const previousConsent = p.defaults.model === model.id ? p.defaults.externalConsent : null;
+      if (model.external && input.externalConsent !== true && !hasModelConsent(previousConsent, model))
+        throw fail("请确认新建项目的外部模型处理范围");
+      assertConsentFingerprint(input, model);
       p.defaults = {
         mode: input.mode,
         model: model.id,
@@ -1058,12 +1083,12 @@ class PlatformService {
             ? { actor: owner, at: at(), version: "new-project-default-v1" }
             : null,
         externalConsent: model.external
-          ? {
+          ? input.externalConsent === true ? {
               by: owner,
               at: at(),
               scope: "new-project-inference-only",
               fingerprint: model.fingerprint || null,
-            }
+            } : previousConsent
           : null,
       };
       log(p, "更新新建项目默认设置；已有项目保持原配置");
@@ -1177,11 +1202,9 @@ class PlatformService {
           throw fail("请求标识已用于其他项目或预算", 409);
         return previous;
       }
-      const model = this.catalog().find(
-        (m) => m.id === (p.models[projectId] || "materials"),
-      );
-      if (model.id === "gemini")
-        throw fail("Gemini 用量来自真实对话调用，不支持示例 Token 结算", 409);
+      const model = this.resolveModel(p.models[projectId]);
+      if (model.id === this.gateway.info.id)
+        throw fail(model.name + " 用量来自真实对话调用，不支持示例 Token 结算", 409);
       const hold = Number(input.budget);
       if (!Number.isInteger(hold) || hold <= 0 || hold > p.settings.taskCap)
         throw fail("本次预算不能超过单任务上限");

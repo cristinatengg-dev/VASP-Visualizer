@@ -47,6 +47,28 @@ test("customer memory is inherited by private projects, persists on restart and 
   assert.equal(fresh.project("A", id, "owner").project.mode, "private");
   assert.equal(search(fresh.memory, id).trainingSubmitted, false);
 });
+test("derived model memory describes saved configuration without asserting availability or rewriting historical provenance", (t) => {
+  const { store, m, id } = setup(t);
+  const historical = {
+    id: "legacy-gemini-message", role: "assistant", text: "旧模型生成的历史回复",
+    modelId: "gemini", modelName: "Gemini", actualModel: "gemini-2.5-flash",
+    answerMode: "model", memoryRefs: [],
+  };
+  store.update("A", (s) => s.platform.workflows[id].messages.push(historical));
+  for (const modelId of ["hunyuan", "gemini"]) {
+    store.update("A", (s) => { s.platform.models[id] = modelId; });
+    const record = m.view("A", id, "owner").items.find((r) => r.id === "auto:model");
+    assert.ok(record);
+    assert.ok(record.content.includes("保存的模型标识为 " + modelId));
+    assert.match(record.content, /配置记录不代表当前服务已接通/);
+    assert.match(record.content, /实际供应商与模型以当次调用记录为准/);
+    assert.doesNotMatch(record.content, /当前选择|实际推理服务尚未接通|外部 Gemini 对话接口/);
+    assert.deepEqual(
+      store.read("A").platform.workflows[id].messages.find((message) => message.id === historical.id),
+      historical,
+    );
+  }
+});
 test("same-account project memory is recalled automatically with provenance; tenants remain isolated", (t) => {
   const { p, m, id } = setup(t);
   const other = p.createProject(

@@ -9,7 +9,7 @@ function openStream(url, init, signal, timeoutMs = 60000) {
     const req = https.request(url, {
       method: "POST",
       headers: init.headers,
-      ...(proxyAgent ? { agent: proxyAgent } : {}),
+      ...(proxyAgent && !init.direct ? { agent: proxyAgent } : {}),
     });
     let response;
     const abort = () => {
@@ -75,8 +75,13 @@ async function readChatStream(
     onConnected = () => {},
     signal,
     model,
+    providerName = "模型服务",
+    requireModel = false,
+    validateModel,
+    errorFactory = fail,
   },
 ) {
+  const fault = (message) => errorFactory(providerName + " " + message, 502);
   if (response.status < 200 || response.status >= 300) {
     const labels = {
       401: "接口鉴权失败",
@@ -84,13 +89,11 @@ async function readChatStream(
       404: "模型或接口不可用",
       429: "接口限流或额度不足",
     };
-    throw fail(
-      "Gemini " +
-        (labels[response.status] || "服务暂时不可用") +
+    throw fault(
+      (labels[response.status] || "服务暂时不可用") +
         "（HTTP " +
         response.status +
         "），未生成回复。",
-      502,
     );
   }
   onConnected();
@@ -102,14 +105,25 @@ async function readChatStream(
     bytes = 0,
     text = "",
     summary = "",
-    actualModel = model,
+    actualModel = requireModel ? null : model,
     providerRequestId = null,
     finishReason = "",
     usage = {},
     done = false;
   const receive = (data) => {
-    if (data.error) throw fail("Gemini 在生成过程中返回错误，回复未完成", 502);
-    if (typeof data.model === "string") actualModel = data.model.slice(0, 100);
+    if (signal?.aborted)
+      throw Object.assign(new Error("Aborted"), { name: "AbortError" });
+    if (!data || typeof data !== "object" || Array.isArray(data))
+      throw fault("返回格式异常");
+    if (data.error) throw fault("在生成过程中返回错误，回复未完成");
+    if (data.model !== undefined) {
+      const nextModel = validateModel
+        ? validateModel(data.model)
+        : typeof data.model === "string" ? data.model.slice(0, 100) : actualModel;
+      if (requireModel && actualModel && nextModel !== actualModel)
+        throw fault("响应中的模型身份发生变化，已停止接收");
+      actualModel = nextModel;
+    }
     if (typeof data.id === "string") providerRequestId = data.id.slice(0, 150);
     if (data.usage) usage = data.usage;
     const choice = data.choices?.[0];
@@ -117,6 +131,8 @@ async function readChatStream(
     if (choice.finish_reason)
       finishReason = String(choice.finish_reason).slice(0, 40);
     const delta = choice.delta || choice.message || {};
+    if (requireModel && !actualModel && (delta.content || delta.reasoning_summary))
+      throw fault("响应未提供实际模型标识");
     // Only a separately labelled public summary is eligible. Never forward reasoning_content,
     // analysis, thought signatures or other raw reasoning channels from a gateway.
     if (typeof delta.reasoning_summary === "string" && summary.length < 800) {
@@ -126,7 +142,7 @@ async function readChatStream(
     }
     if (typeof delta.content === "string" && delta.content) {
       if (text.length + delta.content.length > 30000)
-        throw fail("Gemini 回复超过长度限制", 502);
+        throw fault("回复超过长度限制");
       text += delta.content;
       onDelta(delta.content);
     }
@@ -147,7 +163,7 @@ async function readChatStream(
     try {
       parsed = JSON.parse(data);
     } catch {
-      throw fail("Gemini 流式回复格式异常", 502);
+      throw fault("流式回复格式异常");
     }
     receive(parsed);
   };
@@ -163,7 +179,7 @@ async function readChatStream(
     if (signal?.aborted)
       throw Object.assign(new Error("Aborted"), { name: "AbortError" });
     bytes += Buffer.byteLength(chunk);
-    if (bytes > 2000000) throw fail("Gemini 返回数据超过限制", 502);
+    if (bytes > 2000000) throw fault("返回数据超过限制");
     buffer += typeof chunk === "string" ? chunk : decoder.write(chunk);
     if (sse) drain();
   }
@@ -176,14 +192,15 @@ async function readChatStream(
     try {
       parsed = JSON.parse(buffer);
     } catch {
-      throw fail("Gemini 返回格式异常", 502);
+      throw fault("返回格式异常");
     }
     receive(parsed);
     done = true;
   }
   if (!done && !finishReason)
-    throw fail("Gemini 连接提前结束，回复未完成", 502);
-  if (!text.trim()) throw fail("Gemini 未返回有效文本", 502);
+    throw fault("连接提前结束，回复未完成");
+  if (requireModel && !actualModel) throw fault("响应未提供实际模型标识");
+  if (!text.trim()) throw fault("未返回有效文本");
   return {
     text: text.trim(),
     reasoningSummary: summary || undefined,

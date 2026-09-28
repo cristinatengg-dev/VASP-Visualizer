@@ -74,6 +74,11 @@ export default function Accounts({
   if (scope === "account" && ["privacy", "models"].includes(section))
     return <Navigate to={"/workspace/settings/" + section} replace />;
   const current = o.projectModels[projectId] || "materials";
+  const currentModel = o.models.find((m) => m.id === current);
+  const defaultChoice = o.models.find((m) => m.id === defaultModel);
+  const externalAvailable = o.models.some((m) => m.external && m.connected);
+  const currentConsent = currentModel?.external && !!currentModel.fingerprint &&
+    o.externalConsent[projectId]?.fingerprint === currentModel.fingerprint;
   return (
     <div className="ep-account">
       <div className="ep-research-head">
@@ -126,6 +131,9 @@ export default function Accounts({
                   model: defaultModel,
                   consent: f.get("consent") === "on",
                   externalConsent: f.get("externalConsent") === "on",
+                  ...(f.get("externalConsent") === "on"
+                    ? { externalFingerprint: defaultChoice?.fingerprint }
+                    : {}),
                 },
                 "PATCH",
                 "默认设置已保存，仅影响之后新建的项目。",
@@ -162,22 +170,34 @@ export default function Accounts({
                 disabled={!owner}
                 onChange={(e) => setDefaultModel(e.target.value)}
               >
+                {!defaultChoice && (
+                  <option value={defaultModel} disabled>原模型不可用 · 请重新选择</option>
+                )}
                 {o.models.map((m) => (
-                  <option value={m.id} key={m.id}>
+                  <option value={m.id} key={m.id} disabled={m.external && !m.connected}>
                     {m.name}
                     {m.connected ? "" : " · 待接通"}
                   </option>
                 ))}
               </select>
             </label>
-            {o.models.find((m) => m.id === defaultModel)?.external && (
-              <label className="ep-check-row">
-                <input name="externalConsent" type="checkbox" required />
-                我同意之后新建项目使用该外部服务进行推理，此确认不授权训练。
-              </label>
+            {!externalAvailable && (
+              <p className="ep-footnote">外部模型尚未配置或暂不可用。当前可使用账号记忆检索，不会调用外部大模型。</p>
+            )}
+            {defaultChoice?.external && (
+              <>
+                <p>
+                  之后新建项目使用「{defaultChoice.name}」时，将当前问题、允许的对话历史及获准检索的相关记忆与证据发送给第三方服务
+                  「{defaultChoice.provider}」，通过 {defaultChoice.gateway || "模型服务接口"} 生成回复；其他项目内容仍需分别确认。
+                </p>
+                <label className="ep-check-row">
+                  <input key={defaultChoice.fingerprint || defaultChoice.id} name="externalConsent" type="checkbox" required />
+                  我同意之后新建项目按上述范围使用所显示的外部服务进行推理，此确认不授权公司模型训练。
+                </label>
+              </>
             )}
             <ErrorNote message={error} />
-            <button className="ep-primary" disabled={busy || !owner}>
+            <button className="ep-primary" disabled={busy || !owner || !defaultChoice || (defaultChoice.external && !defaultChoice.connected)}>
               保存默认设置
             </button>
           </form>
@@ -311,6 +331,12 @@ export default function Accounts({
             <div className="ep-inline-note">
               选择后用于当前项目的对话。外部模型需要单独确认数据范围；账号记忆检索在平台内处理已有记录。
             </div>
+            {!currentModel && (
+              <div className="ep-inline-note">原来选择的模型当前不可用，请重新选择。历史回复与调用来源保持原记录。</div>
+            )}
+            {!externalAvailable && (
+              <div className="ep-inline-note">外部模型尚未配置或暂不可用。当前可使用账号记忆检索，不会调用外部大模型。</div>
+            )}
             <div className="ep-model-list">
               {o.models.map((m) => (
                 <article
@@ -322,11 +348,7 @@ export default function Accounts({
                   <div className="ep-model-symbol">
                     {m.id === "materials"
                       ? "E"
-                      : m.id === "gemini"
-                        ? "G"
-                        : m.id === "reasoning"
-                          ? "A"
-                          : "e"}
+                      : m.name.charAt(0)}
                   </div>
                   <div className="ep-model-detail">
                     <div className="ep-model-title">
@@ -366,19 +388,17 @@ export default function Accounts({
                     disabled={
                       busy ||
                       !projectId ||
+                      (m.external && !m.connected) ||
                       (current === m.id &&
-                        (m.id !== "gemini" ||
-                          o.externalConsent[projectId]?.fingerprint ===
-                            m.fingerprint))
+                        (!m.external || currentConsent))
                     }
                     className={current === m.id ? "ep-selected-button" : ""}
                     onClick={() => {
                       if (
                         m.external &&
                         (!o.externalConsent[projectId] ||
-                          (m.id === "gemini" &&
-                            o.externalConsent[projectId]?.fingerprint !==
-                              m.fingerprint))
+                          !m.fingerprint ||
+                          o.externalConsent[projectId]?.fingerprint !== m.fingerprint)
                       ) {
                         setSelected(m);
                         setModal("external");
@@ -393,13 +413,13 @@ export default function Accounts({
                         );
                     }}
                   >
-                    {current === m.id ? (
+                    {current === m.id && (!m.external || currentConsent) ? (
                       <>
                         <Check size={15} />
                         已选择
                       </>
                     ) : (
-                      "选择模型"
+                      m.external && !m.connected ? "待接通" : current === m.id ? "确认处理范围" : "选择模型"
                     )}
                   </button>
                 </article>
@@ -409,9 +429,9 @@ export default function Accounts({
               <div>
                 <h3>外部服务数据范围</h3>
                 <p>
-                  {o.externalConsent[projectId]
-                    ? "已记录外部推理范围。Gemini 只会带入获准交给当前网关的记忆与证据。"
-                    : "选用外部模型时单独确认数据处理范围。"}
+                  {currentConsent
+                    ? `已记录「${currentModel.name}」的外部推理范围，仅带入获准交给此服务的记忆与证据。`
+                    : "选用或更换外部模型时，需确认当前服务的数据处理范围。"}
                 </p>
               </div>
               <div className="ep-actions">
@@ -442,7 +462,7 @@ export default function Accounts({
               <div>
                 <h2>预充值，按实际用量结算</h2>
                 <p>
-                  充值和余额仍为 TEST 演练。Gemini 调用记录真实
+                  充值和余额仍为 TEST 演练。外部模型调用记录真实
                   Token，供应商费用由已配置 API
                   账号承担；平台价格未配置，暂不扣测试余额。
                 </p>
@@ -534,7 +554,7 @@ export default function Accounts({
                   </table>
                 </div>
               ) : (
-                <p>尚无真实调用。选择 Gemini 后发送研究问题即可记录。</p>
+                <p>尚无真实调用。选择可用的外部模型并确认数据范围后，发送研究问题即可记录。</p>
               )}
             </div>
             <div className="ep-panel">
@@ -548,7 +568,7 @@ export default function Accounts({
                 </div>
                 {!finance && (
                   <button
-                    disabled={!projectId || busy || current === "gemini"}
+                    disabled={!projectId || busy || !currentModel || currentModel.external}
                     onClick={() => setModal("usage")}
                   >
                     开始计费演练
@@ -755,9 +775,7 @@ export default function Accounts({
               >
                 <h3>预算控制</h3>
                 <p>
-                  以下金额预算仅控制 TEST 演练。Gemini
-                  网关费率尚未配置，暂不按人民币预算拦截；目前每次最多 2048 输出
-                  Token，每个账号每分钟最多 6 次调用。
+                  以下金额预算仅控制 TEST 演练。真实模型调用按供应商账号结算；平台价格未配置时不按人民币预算拦截。单次输出长度和调用频率受当前服务限制。
                 </p>
                 <div className="ep-form-grid">
                   {[
@@ -936,7 +954,7 @@ export default function Accounts({
           </form>
         </Dialog>
       )}
-      {modal === "external" && (
+      {modal === "external" && selected && (
         <Dialog title="确认外部模型处理范围" close={close}>
           <form
             className="ep-form"
@@ -944,7 +962,7 @@ export default function Accounts({
               e.preventDefault();
               run(
                 base + "/model",
-                { model: selected.id, externalConsent: true },
+                { model: selected.id, externalConsent: true, externalFingerprint: selected.fingerprint },
                 "PATCH",
                 "已保存模型与外部推理范围；发送问题时开始调用。",
               );
@@ -953,13 +971,13 @@ export default function Accounts({
             <ExternalLink size={23} />
             <p>
               使用「{selected.name}
-              」时，当前问题、对话历史及获准检索的项目记忆与证据会交给{" "}
-              {selected.gateway || selected.provider}{" "}
-              处理。其他项目需分别允许外部推理。
+              」时，将当前问题、允许的对话历史及获准检索的相关项目记忆与证据发送给第三方服务
+              「{selected.provider}」，通过 {selected.gateway || "模型服务接口"}{" "}
+              生成回复。其他项目内容需分别允许同一服务的外部推理。
             </p>
             <label className="ep-check-row">
               <input required type="checkbox" />
-              <span>我确认上述数据范围用于所显示网关的外部推理。</span>
+              <span>我同意将上述数据发送给所显示的第三方服务进行推理。</span>
             </label>
             <small>
               该确认不代表同意 EliangMat AI 使用项目数据训练公司模型。

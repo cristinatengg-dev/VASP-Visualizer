@@ -10,9 +10,15 @@ const SYSTEM = `你是 EliangMat AI 的材料研发助手。使用中文、简�
 严格区分依据与分析：引用只能逐字摘录当前参考资料，单独成段写成「原文片段」[来源1]，片段至少8个字符。来源编号只允许紧跟该独立原文段落。不得给解释、机理、外推或改写后的数值挂来源编号。目标记录只证明目标是什么，不能支持机理；资料题录不能支持全文结论。
 解释另起一段标为“分析：”或“待验证：”，不要将其写成实测结果；只要求基于已有记录时，没有对应证据的机理不要扩写。引用出处核对不代表材料结论已科学验证。
 你没有执行工具，不能自动创建项目、改动目标/授权/账务、运行仿真、控制设备或训练。仅给出建议与可供用户确认的草稿。DFT/CALPHAD/MD/CFD 和真实设备未接通；CSV 仅分析已有曲线。不要输出隐藏思考过程。`;
+const hasModelConsent = (consent, model) =>
+  !!(model.external && model.fingerprint && consent?.fingerprint === model.fingerprint);
+function assertConsentFingerprint(input, model) {
+  if (input.externalConsent === true && model.external && model.fingerprint && input.externalFingerprint !== model.fingerprint)
+    throw fail("模型配置已变化或确认信息不完整，请刷新后重新确认数据处理范围", 409);
+}
 const allowedProject = (s, projectId, model) =>
-  !projectId ||
-  s.platform?.externalConsent?.[projectId]?.fingerprint === model.fingerprint;
+  !projectId || !model.external ||
+  hasModelConsent(s.platform?.externalConsent?.[projectId], model);
 const refKey = (r) =>
   JSON.stringify([r.scope, r.projectId, r.id, r.version, r.range]);
 function hydrateMessage(s, id, msg, role) {
@@ -97,23 +103,29 @@ function install(Service, { platform, workflow, roleCan, log, at, clean }) {
   Service.prototype.catalog = function () {
     return [
       ...this.baseModels,
-      ...(this.development || this.gateway.info.connected
-        ? [this.gateway.info]
-        : []),
+      ...(this.development || this.gateway.info.connected ? [this.gateway.info] : []),
     ];
+  };
+  Service.prototype.resolveModel = function (modelId) {
+    const catalog = this.catalog();
+    // A retired provider selection must never silently authorize a replacement.
+    return catalog.find((m) => m.id === modelId) || catalog.find((m) => m.id === "materials");
   };
   Service.prototype.selectAssistantModel = function (owner, input, role) {
     roleCan(role, "research");
+    if (input.model === this.gateway.info.id && !this.gateway.info.connected)
+      throw fail(this.gateway.info.name + " 尚未配置", 503);
     const model = this.catalog().find((m) => m.id === input.model);
     if (!model) throw fail("未知模型");
     return this.store.update(owner, (s) => {
       const p = platform(s);
       p.assistantModels ||= {};
       p.assistantConsent ||= {};
-      if (model.id === "gemini") {
-        if (!model.connected) throw fail("Gemini 尚未配置", 503);
+      if (model.external) {
+        if (!model.connected || !model.fingerprint) throw fail(model.name + " 尚未配置", 503);
         if (input.externalConsent === true) {
           roleCan(role, "owner");
+          assertConsentFingerprint(input, model);
           p.assistantConsent[role] = {
             at: at(),
             by: owner,
@@ -121,10 +133,10 @@ function install(Service, { platform, workflow, roleCan, log, at, clean }) {
             scope: "account-conversation-and-authorized-memory",
           };
         }
-        if (p.assistantConsent[role]?.fingerprint !== model.fingerprint)
+        if (!hasModelConsent(p.assistantConsent[role], model))
           throw fail("请先确认当前网关的账号对话与记忆处理范围", 403);
       }
-      if (model.id !== "gemini") delete p.assistantConsent[role];
+      if (!model.external) delete p.assistantConsent[role];
       p.assistantModels[role] = model.id;
       log(p, "选择账号对话模型：" + model.name);
       return this.conversationFromState(s, role);
@@ -132,9 +144,7 @@ function install(Service, { platform, workflow, roleCan, log, at, clean }) {
   };
   Service.prototype.conversationFromState = function (s, role) {
     const p = platform(s),
-      model = this.catalog().find(
-        (m) => m.id === (p.assistantModels?.[role] || "materials"),
-      );
+      model = this.resolveModel(p.assistantModels?.[role]);
     return {
       messages: (p.accountMessages || [])
         .filter(
@@ -148,8 +158,7 @@ function install(Service, { platform, workflow, roleCan, log, at, clean }) {
       memoryEnabled: s.memory?.customer.settings.enabled !== false,
       modelId: model.id,
       modelConnected: model.connected,
-      externalApproved:
-        p.assistantConsent?.[role]?.fingerprint === model.fingerprint,
+      externalApproved: hasModelConsent(p.assistantConsent?.[role], model),
     };
   };
   Service.prototype.reply = async function (
@@ -166,7 +175,8 @@ function install(Service, { platform, workflow, roleCan, log, at, clean }) {
     const modelId = id
       ? p.models[id] || "materials"
       : p.assistantModels?.[role] || "materials";
-    if (modelId !== "gemini")
+    const selected = this.resolveModel(modelId);
+    if (selected.id !== this.gateway.info.id)
       return this.message(owner, id, input.message, role);
     const model = this.gateway.info,
       message = clean(input.message, 3000);
@@ -202,10 +212,10 @@ function install(Service, { platform, workflow, roleCan, log, at, clean }) {
     }
     if (!id && (input.threadId || "") !== (p.activeConversations?.[role] || ""))
       throw fail("当前对话已变更，请刷新后发送", 409);
-    if (!model.connected) throw fail("Gemini 尚未配置", 503);
+    if (!model.connected) throw fail(model.name + " 尚未配置", 503);
     const consent = id ? p.externalConsent[id] : p.assistantConsent?.[role];
-    if (consent?.fingerprint !== model.fingerprint)
-      throw fail("当前 Gemini 网关尚未获得该范围的外部推理确认", 403);
+    if (model.external && !hasModelConsent(consent, model))
+      throw fail("当前 " + model.name + " 网关尚未获得该范围的外部推理确认", 403);
     if (this.activeInference.has(owner))
       throw fail("已有模型调用进行中，请等待完成", 409);
     if (
@@ -242,7 +252,7 @@ function install(Service, { platform, workflow, roleCan, log, at, clean }) {
         ? p.externalConsent[id]
         : p.assistantConsent?.[role];
       if (
-        currentConsent?.fingerprint !== model.fingerprint ||
+        (model.external && !hasModelConsent(currentConsent, model)) ||
         context.refs.some((r) => !allowedProject(latest, r.projectId, model)) ||
         hydrate(latest, id, context.refs, role).some((r) => !r.available)
       )
@@ -336,7 +346,7 @@ function install(Service, { platform, workflow, roleCan, log, at, clean }) {
           ? `已读取 ${context.refs.length} 条获准参考的记录`
           : "自动记忆已关闭，仅使用当前对话",
       );
-      step("request", "等待 Gemini 回复");
+      step("request", "等待 " + model.name + " 回复");
       this.store.update(owner, (s) => {
         platform(s).inferenceCalls.find((c) => c.id === callId).processTrail =
           structuredClone(processTrail);
@@ -347,7 +357,7 @@ function install(Service, { platform, workflow, roleCan, log, at, clean }) {
         result = await this.gateway.complete(context.messages, {
           signal,
           maxOutputTokens: /计划|方案|清单|检查点|详细|比较|设计|继续|[十百]|\b(?:plan|compare|continue)\b/i.test(message) ? (model.maxOutputTokens || 8192) : Math.min(4096, model.maxOutputTokens || 8192),
-          onConnected: () => step("connected", "已连接 Gemini，等待模型生成"),
+          onConnected: () => step("connected", "已连接 " + model.name + "，等待模型生成"),
           onSummary: (text) => {
             assertCurrentContext();
             summaryText += text;
@@ -368,7 +378,7 @@ function install(Service, { platform, workflow, roleCan, log, at, clean }) {
       } catch (error) {
         const safe = error.status
           ? error.message
-          : "Gemini 调用失败，未生成回复；可查看调用记录后重试。";
+          : model.name + " 调用失败，未生成回复；可查看调用记录后重试。";
         this.store.update(owner, (s) => {
           const c = platform(s).inferenceCalls.find((c) => c.id === callId);
           const stopped = signal?.aborted || error.status === 499;
@@ -447,7 +457,7 @@ function install(Service, { platform, workflow, roleCan, log, at, clean }) {
             at: at(),
             enabled: context.enabled,
             trainingSubmitted: false,
-            method: "本地授权检索 + Gemini 推理",
+            method: "本地授权检索 + " + model.name + " 推理",
             excludedMemoryCount: context.omitted,
           },
         };
@@ -461,4 +471,4 @@ function install(Service, { platform, workflow, roleCan, log, at, clean }) {
     }
   };
 }
-module.exports = { install, hydrateMessage, buildContext, allowedProject };
+module.exports = { install, hydrateMessage, buildContext, allowedProject, hasModelConsent, assertConsentFingerprint };

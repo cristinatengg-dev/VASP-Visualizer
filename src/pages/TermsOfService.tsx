@@ -5,7 +5,7 @@ export default function TermsOfService() {
     <LegalDocumentLayout
       title="服务条款"
       subtitle="材料研发协作与模型使用"
-      effectiveDate="2026 年 9 月 7 日"
+      effectiveDate="2026 年 9 月 28 日"
       currentPath="/terms-of-service"
       summary={<p>请在使用 EliangMat AI 前阅读本条款。服务由 Hangzhou Yiliang Xincailiao Technology Co., Ltd. 提供；登录时的条款确认不代替公司训练授权或外部模型推理确认。</p>}
     >
@@ -23,7 +23,7 @@ export default function TermsOfService() {
       </LegalSection>
       <LegalSection title="4. 账号记忆与外部模型">
         <p>平台可自动检索同一账号内有权限的历史记录。你可在账号记忆设置中关闭自动记忆、排除项目或停止引用条目；停止引用不等于删除原始业务记录。</p>
-        <p>选择 Gemini 等外部模型时，需要确认当前网关、处理范围和用量说明。账号对话和项目分别管理该确认；私密模式不自动允许外部传输，外部推理确认也不授权公司模型训练。</p>
+        <p>选择腾讯混元等外部模型时，需要确认当前模型、第三方服务提供方、接口地址、处理范围和用量说明。账号对话和项目分别管理该确认；私密模式不自动允许外部传输，外部推理确认也不授权公司模型训练。</p>
       </LegalSection>
       <LegalSection title="5. 用量与充值">
         <p>模型调用记录供应商返回的实际 Token；供应商未返回用量时显示未返回，不按零消耗处理。停止接收或未完成的调用也可能产生供应商费用。</p>

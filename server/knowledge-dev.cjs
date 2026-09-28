@@ -14,14 +14,14 @@ const { KnowledgeStore } = require("./src/knowledge/store");
 const { KnowledgeService } = require("./src/knowledge/service");
 const { createKnowledgeRouter } = require("./src/knowledge/router");
 const { PlatformService } = require("./src/platform/service");
-const { createGeminiGateway } = require("./src/platform/model-gateway");
+const { createHunyuanGateway } = require("./src/platform/model-gateway");
 const modelConfigFile = path.join(__dirname, "../.dev/model.env");
 const modelConfig = fs.existsSync(modelConfigFile)
   ? require("dotenv").parse(fs.readFileSync(modelConfigFile))
   : {};
-const gateway = createGeminiGateway(
+const gateway = createHunyuanGateway(
   Object.fromEntries(
-    ["GEMINI_BASE_URL", "GEMINI_API_KEY", "GEMINI_TEXT_MODEL"].map((k) => [
+    ["HUNYUAN_BASE_URL", "HUNYUAN_API_KEY", "HUNYUAN_TEXT_MODEL", "HUNYUAN_MAX_OUTPUT_TOKENS"].map((k) => [
       k,
       modelConfig[k] || "",
     ]),

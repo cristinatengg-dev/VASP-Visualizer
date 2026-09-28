@@ -6,7 +6,7 @@ const path = require("node:path");
 const express = require("express");
 const { KnowledgeStore } = require("../src/knowledge/store");
 const { PlatformService } = require("../src/platform/service");
-const { createGeminiGateway } = require("../src/platform/model-gateway");
+const { createHunyuanGateway } = require("../src/platform/model-gateway");
 const { createPlatformRouter } = require("../src/platform/router");
 let seq = 0;
 const request = (message, threadId = "") => ({
@@ -16,7 +16,7 @@ const request = (message, threadId = "") => ({
 });
 const completion = {
   text: "根据提供的资料，尚需确认实际测试条件。",
-  actualModel: "gemini-test",
+  actualModel: "hy3",
   tokens: { input: 121, cached: 0, output: 32, total: 153 },
   finishReason: "stop",
 };
@@ -24,9 +24,9 @@ function setup(t, complete = async () => completion) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "eliangmat-inference-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const store = new KnowledgeStore(root);
-  const gateway = createGeminiGateway({
-    GEMINI_API_KEY: "unit-test-only",
-    GEMINI_TEXT_MODEL: "gemini-test",
+  const gateway = createHunyuanGateway({
+    HUNYUAN_API_KEY: "unit-test-only",
+    HUNYUAN_TEXT_MODEL: "hy3",
   });
   gateway.complete = complete;
   const svc = new PlatformService(store, { gateway, development: true });
@@ -38,23 +38,24 @@ function setup(t, complete = async () => completion) {
   const select = () =>
     svc.selectAssistantModel(
       "A",
-      { model: "gemini", externalConsent: true },
+      { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint },
       "owner",
     );
   return { store, svc, id, select, root, gateway };
 }
-test("Gemini transport uses scoped config, bounded output, real usage and sanitized failures", async () => {
+test("Hunyuan transport uses scoped config, bounded output, real usage and sanitized failures", async () => {
   let sent;
-  const gateway = createGeminiGateway(
-    { GEMINI_API_KEY: "secret-for-test", GEMINI_TEXT_MODEL: "gemini-test" },
+  const gateway = createHunyuanGateway(
+    { HUNYUAN_API_KEY: "secret-for-test", HUNYUAN_TEXT_MODEL: "hy3" },
     async (url, init) => {
       sent = { url, ...init };
       return {
         ok: true,
+        status: 200,
         text: async () =>
           JSON.stringify({
             id: "provider-1",
-            model: "gemini-test",
+            model: "hy3",
             choices: [
               { message: { content: "测试成功" }, finish_reason: "stop" },
             ],
@@ -79,8 +80,8 @@ test("Gemini transport uses scoped config, bounded output, real usage and saniti
   assert.equal(JSON.parse(sent.body).stream, false);
   assert.equal(sent.headers.Authorization, "Bearer secret-for-test");
   assert.ok(!JSON.stringify(gateway.info).includes("secret-for-test"));
-  const bad = createGeminiGateway(
-    { GEMINI_API_KEY: "secret-for-test" },
+  const bad = createHunyuanGateway(
+    { HUNYUAN_API_KEY: "secret-for-test" },
     async () => ({
       ok: false,
       status: 401,
@@ -95,14 +96,15 @@ test("Gemini transport uses scoped config, bounded output, real usage and saniti
       !e.message.includes("private prompt"),
   );
 });
-test("empty or invalid Gemini responses are failures, never fake success or zero usage", async () => {
+test("empty or invalid Hunyuan responses are failures, never fake success or zero usage", async () => {
   for (const raw of [
     "not json",
     '{"choices":[]}',
     '{"choices":[{"message":{"content":""}}]}',
   ]) {
-    const g = createGeminiGateway({ GEMINI_API_KEY: "test" }, async () => ({
+    const g = createHunyuanGateway({ HUNYUAN_API_KEY: "test" }, async () => ({
       ok: true,
+      status: 200,
       text: async () => raw,
     }));
     await assert.rejects(g.complete([]), { status: 502 });
@@ -120,8 +122,8 @@ test("project execution requires current gateway consent; legacy generic consent
     { model: "reasoning", externalConsent: true },
     "owner",
   );
-  assert.throws(() => svc.selectModel("A", id, { model: "gemini" }, "owner"));
-  svc.selectModel("A", id, { model: "gemini", externalConsent: true }, "owner");
+  assert.throws(() => svc.selectModel("A", id, { model: "hunyuan" }, "owner"));
+  svc.selectModel("A", id, { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "owner");
   const result = await svc.reply("A", id, request("测试接口"), "owner");
   assert.equal(result.at(-1).answerMode, "model");
   assert.equal(calls, 1);
@@ -136,7 +138,7 @@ test("project execution requires current gateway consent; legacy generic consent
     status: 403,
   });
 });
-test("account Gemini excludes private project memory until explicit gateway consent and isolates other accounts", async (t) => {
+test("account Hunyuan excludes private project memory until explicit gateway consent and isolates other accounts", async (t) => {
   let sent;
   const { svc, id, select } = setup(t, async (m) => {
     sent = JSON.stringify(m);
@@ -174,7 +176,7 @@ test("account Gemini excludes private project memory until explicit gateway cons
   assert.ok(sent.includes("account-note"));
   assert.ok(!sent.includes("PROJECT_SECRET_QA"));
   assert.ok(!sent.includes("OTHER_CUSTOMER_SECRET"));
-  svc.selectModel("A", id, { model: "gemini", externalConsent: true }, "owner");
+  svc.selectModel("A", id, { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "owner");
   const fresh = svc.selectConversation("A", "", "owner");
   await svc.reply(
     "A",
@@ -197,7 +199,7 @@ test("source revocation hides generated text and removes it from later model con
     { title: "QA_KEEP", content: "REVOKED_MATERIAL_FACT", kind: "fact" },
     "owner",
   );
-  svc.selectModel("A", id, { model: "gemini", externalConsent: true }, "owner");
+  svc.selectModel("A", id, { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "owner");
   await svc.reply("A", id, request("QA_KEEP 的事实是什么？"), "owner");
   assert.ok(sent.includes("REVOKED_MATERIAL_FACT"));
   // Use the persisted suppression mechanism, simulating a permission change during the next read.
@@ -243,7 +245,7 @@ test("same request is idempotent, in-flight duplicate cannot trigger another pai
 });
 test("failed calls keep input and failure trace without generated answer or debit; restart marks incomplete calls", async (t) => {
   const { svc, select, store, root } = setup(t, async () => {
-    throw Object.assign(new Error("Gemini 接口超时"), { status: 502 });
+    throw Object.assign(new Error("Hunyuan 接口超时"), { status: 502 });
   });
   const d = select();
   await assert.rejects(
@@ -266,7 +268,7 @@ test("failed calls keep input and failure trace without generated answer or debi
     "interrupted",
   );
 });
-test("Gemini user facts remain retrievable across conversations and memory opt-out removes long-term context", async (t) => {
+test("Hunyuan user facts remain retrievable across conversations and memory opt-out removes long-term context", async (t) => {
   let sent;
   const { svc, select } = setup(t, async (m) => {
     sent = JSON.stringify(m);
@@ -299,7 +301,7 @@ test("Gemini user facts remain retrievable across conversations and memory opt-o
   );
   assert.ok(!sent.includes("报告优先列温度和标准"));
 });
-test("HTTP conversation endpoint awaits Gemini and returns messages instead of serializing a Promise", async (t) => {
+test("HTTP conversation endpoint awaits Hunyuan and returns messages instead of serializing a Promise", async (t) => {
   const { svc, select } = setup(t);
   const d = select();
   const app = express();
@@ -357,7 +359,7 @@ test("switching a project back to local stops its use as external account contex
     { title: "GATE-QA", content: "STOP_EXPORT_FACT", kind: "fact" },
     "owner",
   );
-  svc.selectModel("A", id, { model: "gemini", externalConsent: true }, "owner");
+  svc.selectModel("A", id, { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "owner");
   select();
   svc.selectModel("A", id, { model: "materials" }, "owner");
   assert.equal(svc.overview("A").externalConsent[id], undefined);
@@ -382,7 +384,7 @@ test("stream parser handles fragmented UTF-8, usage-only tail and ignores raw re
       ],
     }) +
       event({
-        model: "gemini-test",
+        model: "hy3",
         choices: [{ delta: { content: "中文答案" } }],
       }) +
       event({ choices: [{ delta: {}, finish_reason: "stop" }] }) +
@@ -404,7 +406,7 @@ test("stream parser handles fragmented UTF-8, usage-only tail and ignores raw re
       body: Readable.from(chunks),
     },
     {
-      model: "gemini-test",
+      model: "hy3",
       onDelta: (t) => (text += t),
       onSummary: (t) => (summary += t),
     },
@@ -428,7 +430,7 @@ test("early EOF and malformed stream frames fail instead of marking a partial an
           headers: { "content-type": "text/event-stream" },
           body: Readable.from([body]),
         },
-        { model: "gemini-test" },
+        { model: "hy3" },
       ),
       { status: 502 },
     );
@@ -445,7 +447,7 @@ test("process stages and answer deltas arrive before completion, and completed t
     opts.onDelta("第二部分");
     return { ...completion, text: "第一部分第二部分" };
   };
-  svc.selectModel("A", id, { model: "gemini", externalConsent: true }, "owner");
+  svc.selectModel("A", id, { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "owner");
   const pending = svc.reply("A", id, request("阶段测试"), "owner", {
     onEvent: (e) => events.push(e),
   });
@@ -478,7 +480,7 @@ test("stopping generation preserves an explicitly incomplete reply and cancels t
       ),
     );
   };
-  svc.selectModel("A", id, { model: "gemini", externalConsent: true }, "owner");
+  svc.selectModel("A", id, { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "owner");
   const pending = svc.reply("A", id, request("停止测试"), "owner", {
     signal: controller.signal,
   });
@@ -498,7 +500,7 @@ test("source revocation during streaming stops subsequent chunks and hides the p
     { title: "LIVE-QA", content: "LIVE_PRIVATE_FACT", kind: "fact" },
     "owner",
   );
-  svc.selectModel("A", id, { model: "gemini", externalConsent: true }, "owner");
+  svc.selectModel("A", id, { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "owner");
   const deltas = [];
   gateway.complete = async (_messages, opts) => {
     opts.onDelta("before");
@@ -654,7 +656,7 @@ test("continuation cannot reuse revoked evidence or a conversation from another 
   const body={...request("继续生成",svc.conversation("A","owner").threadId),continueFrom:out.at(-1).id};
   svc.memory.remove("A",null,item.id,{version:1},"owner");
   await assert.rejects(svc.reply("A",null,body,"owner"),{status:409});
-  svc.selectAssistantModel("B",{model:"gemini",externalConsent:true},"owner");
+  svc.selectAssistantModel("B",{model:"hunyuan",externalConsent:true,externalFingerprint:svc.gateway.info.fingerprint},"owner");
   await assert.rejects(svc.reply("B",null,body,"owner"),{status:409});
   assert.equal(calls,1);
 });
@@ -671,4 +673,212 @@ test("local retrieval context survives a model switch without allowing unapprove
   const history=sent.filter(m=>m.role==="assistant");
   assert.ok(history.some(m=>m.content.includes("温度在前、标准在后")));
   assert.ok(!JSON.stringify(sent).includes("SECRET907"));
+});
+
+test("retired provider selections fall back locally without rewriting historical messages, usage or consent", async t => {
+  let calls = 0;
+  const { svc, store, id, gateway } = setup(t, async () => { calls++; return completion; });
+  const oldConsent = { fingerprint: "legacy-gemini-fingerprint", by: "A" };
+  const oldMessage = {
+    id: "legacy-answer", role: "assistant", text: "历史 Gemini 回复", answerMode: "model",
+    modelId: "gemini", modelName: "Gemini", actualModel: "gemini-2.5-flash",
+    memoryRefs: [], citationReview: { version: 1, verifiedQuotes: 0, removed: 0 },
+  };
+  const oldCall = {
+    id: "legacy-call", status: "completed", modelId: "gemini", actualModel: "gemini-2.5-flash",
+    gateway: "old-gateway.example", tokens: { input: 10, output: 2, total: 12 },
+  };
+  store.update("A", s => {
+    s.platform.assistantModels = { owner: "gemini" };
+    s.platform.assistantConsent = { owner: oldConsent };
+    s.platform.models[id] = "gemini";
+    s.platform.externalConsent[id] = oldConsent;
+    s.platform.defaults = { mode: "private", model: "gemini", externalConsent: oldConsent };
+    s.platform.accountMessages = [oldMessage];
+    s.platform.workflows[id].messages.push(oldMessage);
+    s.platform.inferenceCalls = [oldCall];
+  });
+  const current = new PlatformService(store, { gateway });
+  const conversation = current.conversation("A", "owner");
+  assert.equal(conversation.modelId, "materials");
+  assert.equal(conversation.externalApproved, false);
+  assert.equal(conversation.messages[0].actualModel, "gemini-2.5-flash");
+  assert.deepEqual(current.catalog().map(m => m.id), ["materials", "hunyuan"]);
+  assert.equal(current.overview("A").projectModels[id], "materials");
+  assert.equal(current.overview("A").defaults.model, "materials");
+  assert.equal(current.overview("A").defaults.externalConsent, null);
+  for (const projectId of [null, id]) {
+    const reply = await current.reply("A", projectId, { message: "已有记录是什么？" }, "owner");
+    assert.equal(reply.at(-1).modelId, "materials");
+    assert.notEqual(reply.at(-1).answerMode, "model");
+  }
+  const next = current.createProject("A", { name: "新项目", goal: "检查旧默认设置安全迁移情况" }, "owner");
+  const raw = store.read("A").platform;
+  assert.equal(raw.models[next.id], "materials");
+  assert.equal(raw.externalConsent[next.id], undefined);
+  assert.equal(next.defaultsSnapshot.model, "materials");
+  assert.equal(raw.assistantModels.owner, "gemini");
+  assert.equal(raw.defaults.model, "gemini");
+  assert.deepEqual(raw.assistantConsent.owner, oldConsent);
+  assert.deepEqual(raw.accountMessages[0], oldMessage);
+  assert.deepEqual(raw.workflows[id].messages.find(m => m.id === oldMessage.id), oldMessage);
+  assert.deepEqual(raw.inferenceCalls, [oldCall]);
+  assert.equal(calls, 0);
+});
+
+test("new provider and changed model fingerprints need fresh account, project and default consent", async t => {
+  let calls = 0;
+  const { svc, store, id, gateway } = setup(t, async () => { calls++; return completion; });
+  store.update("A", s => {
+    s.platform.assistantModels = { owner: "hunyuan" };
+    s.platform.assistantConsent = { owner: { fingerprint: "legacy-gemini" } };
+    s.platform.models[id] = "hunyuan";
+    s.platform.externalConsent[id] = { fingerprint: "legacy-gemini" };
+  });
+  for (const projectId of [null, id])
+    await assert.rejects(svc.reply("A", projectId, request("新供应商验证"), "owner"), { status: 403 });
+  assert.throws(() => svc.selectAssistantModel("A", { model: "hunyuan" }, "owner"), { status: 403 });
+  assert.throws(() => svc.selectModel("A", id, { model: "hunyuan" }, "owner"));
+  assert.throws(() => svc.defaults("A", { model: "hunyuan", mode: "private" }, "owner"));
+  assert.throws(() => svc.selectAssistantModel("A", { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "researcher"), { status: 403 });
+  svc.selectAssistantModel("A", { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "owner");
+  svc.selectModel("A", id, { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "owner");
+  svc.defaults("A", { model: "hunyuan", mode: "private", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "owner");
+  assert.equal(store.read("A").platform.assistantConsent.owner.fingerprint, gateway.info.fingerprint);
+  assert.equal(store.read("A").platform.externalConsent[id].fingerprint, gateway.info.fingerprint);
+  gateway.info = { ...gateway.info, fingerprint: "changed-hunyuan-model" };
+  assert.equal(svc.conversation("A", "owner").externalApproved, false);
+  for (const projectId of [null, id])
+    await assert.rejects(svc.reply("A", projectId, request("配置变化后验证"), "owner"), { status: 403 });
+  const next = svc.createProject("A", { name: "重新确认", goal: "模型配置变化不能继承旧授权" }, "owner");
+  assert.equal(store.read("A").platform.externalConsent[next.id], undefined);
+  await assert.rejects(svc.reply("A", next.id, request("不能复用旧授权"), "owner"), { status: 403 });
+  assert.equal(calls, 0);
+  svc.selectAssistantModel("A", { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "owner");
+  await svc.reply("A", null, request("已重新确认当前模型"), "owner");
+  assert.equal(calls, 1);
+});
+
+async function inferenceHttp(t, svc) {
+  const app = express();
+  app.use(express.json());
+  app.use("/api/platform", createPlatformRouter(svc, (req, _res, next) => {
+    req.knowledgeOwner = "A";
+    req.platformRole = "owner";
+    next();
+  }));
+  app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: error.message }));
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise(resolve => server.once("listening", resolve));
+  t.after(() => server.close());
+  return (route, body, stream = false, method = "POST") => fetch(
+    `http://127.0.0.1:${server.address().port}/api/platform${route}`,
+    {
+      method,
+      headers: { "Content-Type": "application/json", "X-EliangMat-Client": "knowledge-v1", Accept: stream ? "text/event-stream" : "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+test("both HTTP conversation entries stream the active gateway and preserve actual provider usage", async t => {
+  let calls = 0;
+  const { svc, id, select, gateway } = setup(t, async (_messages, options) => {
+    calls++;
+    options.onConnected();
+    options.onDelta("混元测试回复");
+    return { ...completion, text: "混元测试回复" };
+  });
+  select();
+  svc.selectModel("A", id, { model: "hunyuan", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, "owner");
+  const post = await inferenceHttp(t, svc);
+  for (const route of ["/conversation", `/projects/${id}/messages`]) {
+    for (const stream of [false, true]) {
+      const response = await post(route, request("混元双入口验证", svc.conversation("A", "owner").threadId), stream);
+      assert.equal(response.status, 200);
+      const body = await response.text();
+      const messages = stream
+        ? body.split("\n").filter(line => line.startsWith("data: ")).map(line => JSON.parse(line.slice(6))).find(e => e.type === "done").messages
+        : JSON.parse(body);
+      assert.equal(messages.at(-1).modelId, gateway.info.id);
+      assert.equal(messages.at(-1).actualModel, "hy3");
+      assert.match(messages.at(-1).memoryTrace.method, new RegExp(gateway.info.name));
+      assert.ok(!body.includes("Gemini"));
+      if (stream) {
+        assert.ok(body.includes('"type":"delta"'));
+        assert.match(response.headers.get("content-type"), /text\/event-stream/);
+      }
+    }
+  }
+  assert.equal(calls, 4);
+  assert.ok(svc.overview("A").inferenceUsage.every(c => c.modelId === "hunyuan" && c.actualModel === "hy3" && c.tokens.input === 121));
+});
+
+test("missing Hunyuan credentials cannot authorize or call any provider through either HTTP entry", async t => {
+  const { store, id } = setup(t);
+  let calls = 0;
+  const gateway = createHunyuanGateway({ GEMINI_API_KEY: "legacy-key-must-not-be-used" });
+  gateway.complete = async () => { calls++; return completion; };
+  const svc = new PlatformService(store, { gateway });
+  assert.equal(gateway.info.connected, false);
+  assert.deepEqual(svc.catalog().map(m => m.id), ["materials"]);
+  const post = await inferenceHttp(t, svc);
+  for (const route of ["/conversation/model", `/projects/${id}/model`, "/defaults"]) {
+    const response = await post(route, { model: "hunyuan", mode: "private", externalConsent: true, externalFingerprint: svc.gateway.info.fingerprint }, false, "PATCH");
+    assert.equal(response.status, 503);
+  }
+  store.update("A", s => {
+    s.platform.assistantModels = { owner: "gemini" };
+    s.platform.models[id] = "gemini";
+  });
+  for (const route of ["/conversation", `/projects/${id}/messages`]) {
+    const response = await post(route, { message: "本地查询已有记录" }, true);
+    assert.equal(response.status, 200);
+    const body = await response.text();
+    assert.ok(body.includes('"modelId":"materials"'));
+    assert.ok(!body.includes('"type":"delta"'));
+  }
+  assert.equal(calls, 0);
+  assert.equal(store.read("A").platform.inferenceCalls?.length || 0, 0);
+});
+
+test("all consent HTTP entries reject missing or stale dialog fingerprints without changing saved authorization", async t => {
+  const { svc, store, id, gateway } = setup(t);
+  const post = await inferenceHttp(t, svc);
+  const displayedFingerprint = gateway.info.fingerprint;
+  gateway.info = { ...gateway.info, fingerprint: "new-config-after-dialog-opened" };
+  for (const route of ["/conversation/model", `/projects/${id}/model`, "/defaults"]) {
+    for (const externalFingerprint of [undefined, displayedFingerprint]) {
+      const before = structuredClone(store.read("A").platform);
+      const response = await post(route, {
+        model: "hunyuan", mode: "private", externalConsent: true, externalFingerprint,
+      }, false, "PATCH");
+      assert.equal(response.status, 409, route);
+      assert.match((await response.json()).error, /重新确认/);
+      assert.deepEqual(store.read("A").platform, before);
+    }
+    const response = await post(route, {
+      model: "hunyuan", mode: "private", externalConsent: true,
+      externalFingerprint: gateway.info.fingerprint,
+    }, false, "PATCH");
+    assert.equal(response.status, 200, route);
+  }
+  const approved = store.read("A").platform;
+  assert.equal(approved.assistantConsent.owner.fingerprint, gateway.info.fingerprint);
+  assert.equal(approved.externalConsent[id].fingerprint, gateway.info.fingerprint);
+  assert.equal(approved.defaults.externalConsent.fingerprint, gateway.info.fingerprint);
+  // Reusing an unchanged saved selection does not create a fresh consent event.
+  for (const route of ["/conversation/model", `/projects/${id}/model`, "/defaults"]) {
+    const response = await post(route, { model: "hunyuan", mode: "private" }, false, "PATCH");
+    assert.equal(response.status, 200, route);
+  }
+  const reused = store.read("A").platform;
+  assert.deepEqual(reused.assistantConsent, approved.assistantConsent);
+  assert.deepEqual(reused.externalConsent, approved.externalConsent);
+  assert.deepEqual(reused.defaults.externalConsent, approved.defaults.externalConsent);
+  gateway.info = { ...gateway.info, fingerprint: "changed-again" };
+  for (const route of ["/conversation/model", `/projects/${id}/model`, "/defaults"]) {
+    const response = await post(route, { model: "hunyuan", mode: "private" }, false, "PATCH");
+    assert.ok([400, 403].includes(response.status), route);
+  }
 });

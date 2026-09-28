@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { PlatformAuth } = require("./src/auth/platform-auth");
 const { getSmsConfig, sendLoginCode } = require("./src/auth/sms-service");
-const { createGeminiGateway } = require("./src/platform/model-gateway");
+const { createHunyuanGateway } = require("./src/platform/model-gateway");
 const { createProductApp } = require("./src/platform/app");
 const root = path.resolve(__dirname, "..");
 const preview = process.argv.includes("--preview");
@@ -10,10 +10,10 @@ const read = (file) =>
   fs.existsSync(file) ? require("dotenv").parse(fs.readFileSync(file)) : {};
 // Preview reuses only explicitly allowlisted integration settings, never a production .env.
 const names = [
-  "GEMINI_BASE_URL",
-  "GEMINI_API_KEY",
-  "GEMINI_TEXT_MODEL",
-  "GEMINI_MAX_OUTPUT_TOKENS",
+  "HUNYUAN_BASE_URL",
+  "HUNYUAN_API_KEY",
+  "HUNYUAN_TEXT_MODEL",
+  "HUNYUAN_MAX_OUTPUT_TOKENS",
   "OPENALEX_API_KEY",
   "CROSSREF_EMAIL",
   "UNPAYWALL_EMAIL",
@@ -78,7 +78,7 @@ const auth = new PlatformAuth(path.join(data, "auth"), {
 const { app } = createProductApp({
   auth,
   root: path.join(data, "knowledge"),
-  gateway: createGeminiGateway(env),
+  gateway: createHunyuanGateway(env),
   env,
   origins,
   dist: path.join(root, "dist"),

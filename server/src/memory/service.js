@@ -350,7 +350,7 @@ function rawRecords(s, id, role = "owner") {
     push(
       "model",
       "项目模型选择",
-      `项目 ${proj.name} 当前选择 ${s.platform.models[id]}；${s.platform.models[id] === "gemini" ? "外部 Gemini 对话接口，实际可用性以调用状态为准，不执行设备任务。" : "实际推理服务尚未接通。"}`,
+      `项目 ${proj.name} 保存的模型标识为 ${s.platform.models[id]}。配置记录不代表当前服务已接通；实际供应商与模型以当次调用记录为准。`,
     );
   if (w) {
     push(

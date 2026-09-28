@@ -408,7 +408,7 @@ export default function Research({
                 {m.role === "assistant" && <small>{m.method}</small>}
                 <ReplyActivity message={m} />
                 <MessageText message={m} />
-                <ModelCallMeta message={m} busy={busy} onContinue={selectedModel?.id === "gemini" && m.id === w.messages.filter(m => m.role === "assistant").at(-1)?.id ? () => sendMessage(m.id) : undefined} />
+                <ModelCallMeta message={m} busy={busy} onContinue={selectedModel?.external && selectedModel.connected && !!selectedModel.fingerprint && o.externalConsent[projectId]?.fingerprint === selectedModel.fingerprint && m.modelId === selectedModel.id && m.id === w.messages.filter(m => m.role === "assistant").at(-1)?.id ? () => sendMessage(m.id) : undefined} />
                 {m.actionDraft && (
                   <button onClick={() => setModal("goal")}>
                     核对当前项目的目标与路线
@@ -445,11 +445,15 @@ export default function Research({
               />
               <footer>
                 <Link to="/workspace/settings/models">
-                  {selectedModel?.id === "gemini"
-                    ? !selectedModel.connected ? "Gemini · 待接通"
-                      : o.externalConsent[projectId]?.fingerprint !== selectedModel.fingerprint ? "Gemini · 待确认处理范围"
-                      : busy ? "Gemini 正在回复…" : "Gemini · 已启用外部推理"
-                    : "账号记忆检索 · 在账号空间处理"}
+                  {selectedModel?.external
+                    ? !selectedModel.connected ? `${selectedModel.name} · 待接通`
+                      : !selectedModel.fingerprint || o.externalConsent[projectId]?.fingerprint !== selectedModel.fingerprint ? `${selectedModel.name} · 待确认处理范围`
+                      : busy ? `${selectedModel.name} 正在回复…` : `${selectedModel.name} · 已启用外部推理`
+                    : o.projectModels[projectId] && !selectedModel
+                      ? "原模型不可用 · 请重新选择"
+                      : o.models.some((m) => m.external && m.connected)
+                        ? "账号记忆检索 · 在账号空间处理"
+                        : "当前仅本地检索 · 外部模型尚未配置或暂不可用"}
                 </Link>
                 {stream.turn?.running ? (
                   <button

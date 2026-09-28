@@ -40,19 +40,23 @@ export function ModelCallMeta({
 }
 export function AssistantModelPicker({
   current,
+  approved = false,
   onChanged,
 }: {
   current: string;
+  approved?: boolean;
   onChanged: () => Promise<void>;
 }) {
   const { overview, busy, action, error } = usePlatform();
   const [pending, setPending] = useState<Model | null>(null);
-  async function select(model: string, externalConsent = false) {
+  const models = overview.models.filter((m) => m.id === "materials" || m.external);
+  const currentModel = models.find((m) => m.id === current);
+  async function select(model: string, externalConsent = false, externalFingerprint?: string) {
     if (
       await action(async () => {
         await platformApi(
           "/api/platform/conversation/model",
-          { model, externalConsent },
+          { model, externalConsent, ...(externalConsent ? { externalFingerprint } : {}) },
           "PATCH",
         );
         await onChanged();
@@ -68,17 +72,18 @@ export function AssistantModelPicker({
         disabled={busy}
         onChange={(e) => {
           const model = overview.models.find((m) => m.id === e.target.value);
-          if (model?.id === "gemini") setPending(model);
+          if (model?.external) setPending(model);
           else select(e.target.value);
         }}
       >
-        {overview.models
-          .filter((m) => m.id === "materials" || m.id === "gemini")
-          .map((m) => (
+        {!currentModel && (
+          <option value={current} disabled>原模型不可用 · 请重新选择</option>
+        )}
+        {models.map((m) => (
             <option
               key={m.id}
               value={m.id}
-              disabled={m.id === "gemini" && !m.connected}
+              disabled={m.external && !m.connected}
             >
               {m.id === "materials"
                 ? "账号记忆检索"
@@ -86,10 +91,15 @@ export function AssistantModelPicker({
             </option>
           ))}
       </select>
+      {currentModel?.external && currentModel.connected && !approved && (
+        <button type="button" disabled={busy} onClick={() => setPending(currentModel)}>
+          确认处理范围
+        </button>
+      )}
       {pending &&
         createPortal(
           <Dialog
-            title="使用 Gemini 对话"
+            title={`使用 ${pending.name} 对话`}
             close={() => !busy && setPending(null)}
           >
             <form
@@ -97,12 +107,14 @@ export function AssistantModelPicker({
               onSubmit={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                select(pending.id, true);
+                select(pending.id, true, pending.fingerprint);
               }}
             >
               <p>
-                「{pending.name}」通过 {pending.gateway}{" "}
-                网关处理当前问题、当前对话和相关账号记忆。其他项目的记忆与证据，只有在该项目单独确认此网关后才会带入。
+                将当前问题、允许的当前对话和相关账号记忆发送给第三方服务
+                「{pending.provider}」，由「{pending.name}」通过{" "}
+                {pending.gateway || "模型服务接口"}{" "}
+                生成回复。其他项目的记忆与证据，只有在该项目单独确认同一模型服务后才会带入。
               </p>
               <p>
                 此选择用于之后的账号对话，与项目的模型选择、私密模式和公司训练授权分别管理。
@@ -114,7 +126,7 @@ export function AssistantModelPicker({
               <label className="ep-check-row">
                 <input type="checkbox" required />
                 <span>
-                  确认将上述范围用于该网关的外部推理，不授权公司模型训练。
+                  我同意将上述数据发送给所显示的第三方服务进行推理，此确认不授权公司模型训练。
                 </span>
               </label>
               <ErrorNote message={error} />

@@ -19,6 +19,7 @@ import type { ResearchWorkflow } from "./types";
 type Conversation = {
   modelId: string;
   modelConnected: boolean;
+  externalApproved?: boolean;
   messages: ResearchWorkflow["messages"];
   memoryEnabled: boolean;
   threadId: string;
@@ -30,6 +31,8 @@ export default function Assistant() {
     [message, setMessage] = useState(""),
     [error, setError] = useState("");
   const stream = useReplyStream("account");
+  const selectedModel = overview.models.find((m) => m.id === data?.modelId);
+  const externalAvailable = overview.models.some((m) => m.external && m.connected);
   const bottom = useRef<HTMLDivElement>(null),
     input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -164,7 +167,7 @@ export default function Assistant() {
             )}
             <ReplyActivity message={m} />
             <MessageText message={m} />
-            <ModelCallMeta message={m} busy={busy} onContinue={data?.modelId === "gemini" && m.id === data.messages.filter(m => m.role === "assistant").at(-1)?.id ? () => send(m.id) : undefined} />
+            <ModelCallMeta message={m} busy={busy} onContinue={selectedModel?.external && selectedModel.connected && data.externalApproved && m.modelId === selectedModel.id && m.id === data.messages.filter(m => m.role === "assistant").at(-1)?.id ? () => send(m.id) : undefined} />
             {m.actionDraft && (
               <button onClick={() => openNew(m.actionDraft.goal)}>
                 查看研究需求草稿
@@ -203,6 +206,7 @@ export default function Assistant() {
           <div className="ep-composer-model">
             <AssistantModelPicker
               current={data?.modelId || "materials"}
+              approved={data?.externalApproved}
               onChanged={async () =>
                 setData(
                   await platformApi<Conversation>("/api/platform/conversation"),
@@ -214,11 +218,19 @@ export default function Assistant() {
                 ? "自动记忆已关闭"
                 : "自动参考账号历史"}{" "}
               ·{" "}
-              {data?.modelId === "gemini"
-                ? busy
-                  ? "Gemini 正在回复…"
-                  : "仅带入获准外部推理的资料"
-                : "本地检索，未调用大模型"}
+              {selectedModel?.external
+                ? !data?.modelConnected || !selectedModel.connected
+                  ? `${selectedModel.name} · 尚不可用，请重新选择`
+                  : !data?.externalApproved
+                    ? `${selectedModel.name} · 待确认处理范围`
+                    : busy
+                    ? `${selectedModel.name} 正在回复…`
+                    : `${selectedModel.name} · 仅带入获准外部推理的资料`
+                : data && !selectedModel
+                  ? "原模型不可用，请重新选择"
+                  : externalAvailable
+                    ? "本地检索，未调用大模型"
+                    : "当前仅本地检索；外部模型尚未配置或暂不可用"}
             </span>
           </div>
           {stream.turn?.running ? (
