@@ -1,6 +1,14 @@
 # eliangai.com 域名接入准备
 
-用户要求将现有 EliangMat AI 接到新购域名 `eliangai.com`。本记录描述准备状态，**不代表新域名已上线**。
+用户要求将现有 EliangMat AI 接到新购域名 `eliangai.com`。本记录按时间记录接入状态，以最新更新为准。
+
+## 2026-09-28 更新：重新认证后确认 ICP 备案成功
+
+- 新域名现已正式上线：主域 HTTPS 返回 200，www 与 HTTP 308 跳转主域。发布镜像 `eliangmat-platform:d98284f7afbd`，完整备份、校验与后续公安备案状态见 [正式激活记录](ELIANGAI_ACTIVATION_2026-09-28.md)。下方安全等待入口是激活前的历史状态。
+- 重新登录腾讯云并刷新“我的备案”，当前实际结果为“新增服务 - 备案成功 / 管局审核通过”。`eliangai.com` 网站备案号为 `浙ICP备2026000780号-3`，状态正常；旧域 `scivisualizer.com` 为 `浙ICP备2026000780号-2`。
+- 同日早先的“腾讯云审核中”记录来自登录失效的旧页面，不是当天最新结果，已纠正并告知用户。今后查询需要重新认证或刷新确认，不能沿用失效页面的缓存。
+- 用户已授权激活网站及继续公安联网备案。使用域名映射为首页和通用合规组件悬挂正确网站备案号；公安备案号尚未获得，不预先添加。
+- 公安备案同步数据码有效期至 2026-10-20 19:10:18；码本身仅留在控制台，不记录到 Git。公安部政务服务登录页已打开，当前需用户完成实名登录和滑块验证。未提交公安备案申请。
 
 ## 2026-09-28 更新：DNS 与受信任 HTTPS 已就绪，等待备案通过
 
@@ -9,7 +17,7 @@
 - 新增 `scripts/platform/renew-eliangai-certificate.sh`，使用固定摘要的 Certbot 镜像执行 webroot 续期、安全复制证书并校验/重载 Nginx。服务器已安装 deploy 用户定时任务；完整 dry-run、Nginx 语法检查与 reload 已通过。
 - 当前入口使用 `secure-prepare` 模式。新域名 HTTP/HTTPS 普通请求均返回 503，并提供受信任 TLS 与 `Retry-After`；ACME 挑战路径正常。旧域名 `https://scivisualizer.com` 继续返回 200，未中断现有用户访问。
 - 正式环境来源白名单已追加 `https://eliangai.com` 和 `https://www.eliangai.com`。生产数据、账号、会话密钥、TLS 目录与容器保持原位，没有复制或初始化第二套平台。
-- 2026-09-28 实时检查腾讯云备案控制台，申请仍为“新增服务 - 审核中”“腾讯云审核 审核中”，尚未进入管局审核。因此没有运行 `activate`，不能将当前安全等待页称为网站正式上线。
+- 当时从登录失效的旧页面读到“审核中”，因此没有运行 `activate`；本节是激活前的历史准备记录，最新 ICP 成功结果见上方更新。
 - 本次是现有生产 Git 检出的常规、版本感知域名预配置，不是 bootstrap，也未执行旧 `deploy_to_tencent.sh`。备案通过后再生成并校验 `activate` 配置，切换入口并复验登录、旧账号数据、Cookie、来源保护与模型流式代理。
 
 ## 已确认
@@ -48,6 +56,6 @@
 6. `node scripts/platform/render-domain-ingress.cjs activate` 生成正式配置，校验后切换入口。`https://eliangai.com` 提供平台，www 和 HTTP 跳转主域；旧站继续兼容访问。此操作不复制数据库、不新建一套客户空间。
 7. 验证主域和 www 的公网 DNS、受信任 TLS、重定向、静态资源、匿名会话、来源保护、登录和模型流式代理。新域名 Cookie 与旧域名分离，用户需重新登录；用相同手机号进入现有账号、项目与记忆。
 
-目前 DNS、证书、自动续期、来源白名单与安全等待入口已完成；正式平台入口仍未切换。下次继续前先核对腾讯云现有备案申请，勿重复新建；备案通过后再执行激活步骤。
+DNS、证书、自动续期、来源白名单与正式入口均已完成，ICP 成功结果也已重新认证确认；`scripts/platform/activate-eliangai.sh` 已完成有备份与回退的当前平台更新及入口切换。勿重复新建 ICP 申请。当前剩余事项是公安联网备案，需要用户完成实名登录后继续。
 
 参考：[阿里云网站解析说明](https://help.aliyun.com/zh/dns/pubz-add-website-parsing)、[Certbot Docker 方式](https://eff-certbot.readthedocs.io/en/stable/install.html)、[Certbot Webroot 与续期](https://eff-certbot.readthedocs.io/en/stable/using.html)。新域名现已提交腾讯云新增服务备案，正式上线前仍须核对审核结果。

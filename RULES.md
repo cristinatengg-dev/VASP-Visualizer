@@ -8,7 +8,7 @@
 
 | 项目名 | EliangMat AI |
 |--------|----------------------------------|
-| 域名 | https://scivisualizer.com |
+| 域名 | https://eliangai.com（主域）；https://scivisualizer.com（原域保留） |
 | 服务器 | 腾讯云轻量应用服务器（上海） |
 | 服务器 IP | 118.25.15.120 |
 | 服务器用户 | deploy（部署）/ ubuntu（系统默认用户） |
@@ -19,6 +19,8 @@
 ---
 
 ## 技术架构
+
+> 2026-09-28 更新：当前生产使用 `Dockerfile.platform` / `docker-compose.platform.yml` 的独立 platform 服务，经 `.config/platform-nginx.conf` 代理；平台数据保存在 `.data/platform`。下方旧架构与旧部署脚本只作历史参考，不可直接用于现平台更新。新域名已激活，网站备案号为 `浙ICP备2026000780号-3`，旧域为 `浙ICP备2026000780号-2`。当前发布与回退记录见 `docs/testing/ELIANGAI_ACTIVATION_2026-09-28.md`。
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -237,6 +239,7 @@ docker compose ps
 | 日期 | 部署方式 | 结果 | 备注 |
 |------|---------|------|------|
 | 2026-07-17 | 新服务器 GitHub pull + Docker 重建 | ✅ 成功 | 118.25.15.120 三容器 Up，API 正常 |
+| 2026-09-28 | 已有 Git 快进 + platform 镜像更新 + Nginx reload | ✅ 成功 | eliangai.com 正式开通，旧域保留；配置、平台数据、证书均备份保留 |
 
 ---
 
