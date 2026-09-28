@@ -240,6 +240,7 @@ docker compose ps
 |------|---------|------|------|
 | 2026-07-17 | 新服务器 GitHub pull + Docker 重建 | ✅ 成功 | 118.25.15.120 三容器 Up，API 正常 |
 | 2026-09-28 | 已有 Git 快进 + platform 镜像更新 + Nginx reload | ✅ 成功 | eliangai.com 正式开通，旧域保留；配置、平台数据、证书均备份保留 |
+| 2026-09-28 | GitHub 同步 + 混元 Hy3 真实接入 + platform 增量发布 | ✅ 成功 | revision c1c741f9804f；两次真实短测试共 86 Token，20 项公网检查通过；数据与原配置保留，详见 docs/testing/HUNYUAN_MIGRATION_2026-09-28.md |
 
 ---
 
