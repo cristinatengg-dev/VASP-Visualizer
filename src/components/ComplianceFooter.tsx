@@ -1,7 +1,5 @@
 import React from 'react';
-
-export const ICP_RECORD_NUMBER = '浙ICP备2026000780号';
-export const ICP_RECORD_URL = 'https://beian.miit.gov.cn/';
+import { getIcpRecordNumber, ICP_RECORD_URL } from '../../public/platform/compliance.mjs';
 
 interface ComplianceFooterProps {
   className?: string;
@@ -19,7 +17,7 @@ const ComplianceFooter: React.FC<ComplianceFooterProps> = ({
       rel="noopener noreferrer"
       className={linkClassName}
     >
-      {ICP_RECORD_NUMBER}
+      {getIcpRecordNumber()}
     </a>
   </p>
 );

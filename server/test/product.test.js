@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
+const vm = require("node:vm");
 const { PlatformAuth } = require("../src/auth/platform-auth");
 const { PlatformService } = require("../src/platform/service");
 const { KnowledgeStore } = require("../src/knowledge/store");
@@ -14,7 +16,7 @@ function root(t) {
   return dir;
 }
 
-test("public landing carries the filed company identity and ICP link", () => {
+test("public landing carries the filed company identity and domain-specific ICP link", async () => {
   const landing = fs.readFileSync(
     path.resolve(__dirname, "../../public/platform/hero.html"),
     "utf8",
@@ -24,7 +26,33 @@ test("public landing carries the filed company identity and ICP link", () => {
     /<title>杭州易量芯材科技有限公司｜EliangMat AI<\/title>/,
   );
   assert.match(landing, /https:\/\/beian\.miit\.gov\.cn\//);
-  assert.match(landing, />浙ICP备2026000780号<\/a>/);
+  assert.match(landing, />浙ICP备2026000780号-3<\/a>/);
+  const { getIcpRecordNumber, ICP_RECORD_URL } = await import(
+    pathToFileURL(path.resolve(__dirname, "../../public/platform/compliance.mjs"))
+  );
+  const script = landing.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(script, "landing must select the filing for its current hostname");
+  assert.match(script, /from '\/platform\/compliance\.mjs'/);
+  for (const [hostname, expected] of [
+    ["eliangai.com", "浙ICP备2026000780号-3"],
+    ["www.eliangai.com", "浙ICP备2026000780号-3"],
+    ["scivisualizer.com", "浙ICP备2026000780号-2"],
+    ["www.scivisualizer.com", "浙ICP备2026000780号-2"],
+    ["WWW.SCIVISUALIZER.COM.", "浙ICP备2026000780号-2"],
+    ["localhost", "浙ICP备2026000780号-3"],
+    ["constructor", "浙ICP备2026000780号-3"],
+    ["scivisualizer.com.example.invalid", "浙ICP备2026000780号-3"],
+  ]) {
+    assert.equal(getIcpRecordNumber(hostname), expected, hostname);
+    const link = {};
+    vm.runInNewContext(script.replace(/^\s*import .*?;$/m, ""), {
+      document: { querySelector: () => link },
+      getIcpRecordNumber: () => getIcpRecordNumber(hostname),
+      ICP_RECORD_URL,
+    });
+    assert.equal(link.textContent, expected, hostname);
+    assert.equal(link.href, "https://beian.miit.gov.cn/");
+  }
 });
 
 test("product excludes fake balances/models and rejects sandbox mutations in the service", (t) => {
@@ -75,6 +103,12 @@ test("product HTTP serves the built app, uses OTP auth, blocks development APIs 
     path.join(dist, "index.html"),
     "<title>杭州易量芯材科技有限公司｜EliangMat AI</title>",
   );
+  fs.mkdirSync(path.join(dist, "platform"));
+  for (const asset of ["hero.html", "compliance.mjs"])
+    fs.copyFileSync(
+      path.resolve(__dirname, "../../public/platform", asset),
+      path.join(dist, "platform", asset),
+    );
   let delivered;
   const auth = new PlatformAuth(path.join(dir, "auth"), {
     mode: "tencent",
@@ -114,6 +148,11 @@ test("product HTTP serves the built app, uses OTP auth, blocks development APIs 
     /<title>杭州易量芯材科技有限公司｜EliangMat AI<\/title>/,
   );
   assert.equal((await request("/assistant")).status, 200);
+  const compliance = await request("/platform/compliance.mjs");
+  assert.equal(compliance.status, 200);
+  assert.match(compliance.headers.get("content-type"), /javascript/);
+  assert.match(await compliance.text(), /export function getIcpRecordNumber/);
+  assert.equal((await request("/platform/hero.html")).status, 200);
   assert.equal((await request("/api/platform")).status, 401);
   assert.equal(
     (await request("/api/auth/development-login", { account: "A" })).status,

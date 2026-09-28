@@ -55,7 +55,13 @@
  </div>
  <div class="em-trackrow"><label for="em-progress" class="em-sr">滑动探索材料研发过程</label><input id="em-progress" type="range" min="0" max="1000" step="1" value="0" aria-valuetext="研究目标"><output for="em-progress">01 / 05</output></div>
 </nav>
-<footer class="em-bottom"><div><p class="em-motto">软件理解材料。实验验证想法。</p><p>一个连续的研发闭环。</p></div><div class="em-compliance"><small>EliangMat AI<br>材料研发平台</small><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">浙ICP备2026000780号</a></div></footer>
+<footer class="em-bottom"><div><p class="em-motto">软件理解材料。实验验证想法。</p><p>一个连续的研发闭环。</p></div><div class="em-compliance"><small>EliangMat AI<br>材料研发平台</small><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">浙ICP备2026000780号-3</a></div></footer>
+<script type="module">
+ import { getIcpRecordNumber, ICP_RECORD_URL } from '/platform/compliance.mjs';
+ const icpLink = document.querySelector('.em-compliance a');
+ icpLink.textContent = getIcpRecordNumber();
+ icpLink.href = ICP_RECORD_URL;
+</script>
 
 <div class="em-sr em-announcement" aria-live="polite"></div>
 <script>
