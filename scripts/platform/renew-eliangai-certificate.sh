@@ -10,7 +10,7 @@ docker run --rm \
   -v "$PWD/ssl/letsencrypt:/etc/letsencrypt" \
   -v "$PWD/ssl/acme-webroot:/var/www/acme" \
   "$certbot_image" renew \
-  --webroot -w /var/www/acme --quiet "$@"
+  --webroot -w /var/www/acme --quiet --no-random-sleep-on-renew "$@"
 
 docker run --rm --entrypoint /bin/sh \
   -v "$PWD/ssl:/work" \
